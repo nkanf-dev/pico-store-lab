@@ -307,7 +307,18 @@ test('an HTTP-successful send-code business rejection is not reported as sent', 
     await withFetch(async () => Response.json({ message: 'error', data: { error_code: 1105 } }), async () => {
       const response = await worker.fetch(request('/api/account/send-code', json({ email: 'player@example.com' })), env);
       assert.equal(response.status, 502);
-      assert.deepEqual(await response.json(), { error: 'account_unavailable' });
+      assert.deepEqual(await response.json(), { error: 'account_unavailable', upstreamCode: 1105 });
+    });
+  } finally { env.DB.close(); }
+});
+
+test('send-code preserves upstream transport failures without leaking the response body', async () => {
+  const env = testEnv();
+  try {
+    await withFetch(async () => new Response('private upstream details', { status: 503 }), async () => {
+      const response = await worker.fetch(request('/api/account/send-code', json({ email: 'player@example.com' })), env);
+      assert.equal(response.status, 502);
+      assert.deepEqual(await response.json(), { error: 'upstream_unreachable', upstreamStatus: 503 });
     });
   } finally { env.DB.close(); }
 });

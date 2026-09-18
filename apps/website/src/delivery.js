@@ -85,7 +85,12 @@ async function sendJson(spec, fetchImpl) {
 export async function sendVerificationCode(email, storeOptions = {}, fetchImpl = fetch) {
   const request = makeAccountRequest('send-code', email, undefined, storeOptions);
   const response = await sendJson(request, fetchImpl);
-  if (response.data?.message !== 'success') throw new DeliveryError('account_rejected', 502);
+  if (response.data?.message !== 'success') {
+    const code = response.data?.data?.error_code;
+    // Only expose the numeric service code, never the account response body.
+    throw new DeliveryError('account_unavailable', 502,
+      Number.isInteger(code) ? { upstreamCode: code } : {});
+  }
 }
 
 export async function loginWithCode(email, code, storeOptions = {}, fetchImpl = fetch) {

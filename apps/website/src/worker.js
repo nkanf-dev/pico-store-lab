@@ -138,7 +138,8 @@ async function handleAccount(request, env, url) {
     await pruneSessions(db);
     try {
       await sendVerificationCode(email);
-    } catch {
+    } catch (error) {
+      if (error instanceof DeliveryError) throw error;
       throw new DeliveryError('account_unavailable', 502);
     }
     return apiResponse({ sent: true });
