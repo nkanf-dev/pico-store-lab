@@ -154,6 +154,7 @@ function applyLocale() {
   $('workflow-guide-link').href = guide;
   document.title = locale === 'en' ? 'PICO Store Lab — Independent PICO app catalog' : 'PICO Store Lab — 独立 PICO 应用目录';
   if (currentState) render(currentState, fromSnapshot);
+  renderAccount();
   renderDownload();
 }
 
@@ -311,8 +312,10 @@ let apk = null;
 let apkRequest = 0;
 let accountRequest = 0;
 let accountBusy = false;
+let accountStatusKey = null;
 
-const errorText = payload => t(ERROR_KEYS[payload?.error] ?? 'errGeneric');
+const errorKey = payload => ERROR_KEYS[payload?.error] ?? 'errGeneric';
+const errorText = payload => t(errorKey(payload));
 
 function formatBytes(bytes) {
   if (!Number.isFinite(bytes) || bytes <= 0) return '—';
@@ -336,9 +339,14 @@ async function api(path, options = {}) {
 }
 
 function renderAccount() {
-  $('account-status').textContent = account.authenticated
-    ? `${t('signedInAs')}${account.email ?? ''}` : t('signedOut');
+  $('account-status').textContent = accountStatusKey ? t(accountStatusKey)
+    : account.authenticated ? `${t('signedInAs')}${account.email ?? ''}` : t('signedOut');
   $('download-card').hidden = !account.authenticated;
+}
+
+function setAccountStatus(key = null) {
+  accountStatusKey = key;
+  renderAccount();
 }
 
 function renderDownload() {
@@ -432,18 +440,18 @@ async function refreshAccount() {
   if (ticket !== accountRequest) return;
   account = next;
   invalidateDownload();
-  renderAccount();
+  setAccountStatus();
   if (account.authenticated) await refreshDownload();
 }
 
 $('send-code').addEventListener('click', async () => {
-  $('account-status').textContent = t('sendingCode');
+  setAccountStatus('sendingCode');
   try {
     await api('/api/account/send-code', { method: 'POST', body: JSON.stringify({ email: $('account-email').value.trim() }) });
-    $('account-status').textContent = t('codeSent');
+    setAccountStatus('codeSent');
     $('account-code').focus();
   } catch (error) {
-    $('account-status').textContent = errorText(error.payload);
+    setAccountStatus(errorKey(error.payload));
   }
 });
 
@@ -454,14 +462,14 @@ $('account-form').addEventListener('submit', async event => {
   setAccountBusy(true);
   invalidateDownload();
   const email = $('account-email').value.trim();
-  $('account-status').textContent = t('signingIn');
+  setAccountStatus('signingIn');
   try {
     await api('/api/account/login', { method: 'POST', body: JSON.stringify({ email, code: $('account-code').value.trim() }) });
     account = { authenticated: true, email };
     $('account-code').value = '';
-    renderAccount();
+    setAccountStatus();
   } catch (error) {
-    $('account-status').textContent = errorText(error.payload);
+    setAccountStatus(errorKey(error.payload));
   } finally {
     setAccountBusy(false);
     await refreshDownload();
@@ -473,13 +481,13 @@ $('sign-out').addEventListener('click', async () => {
   accountRequest += 1;
   setAccountBusy(true);
   invalidateDownload();
-  $('account-status').textContent = t('signingOut');
+  setAccountStatus('signingOut');
   try {
     await api('/api/account/logout', { method: 'POST', body: '{}' });
     account = { authenticated: false, email: null };
-    renderAccount();
+    setAccountStatus();
   } catch {
-    $('account-status').textContent = t('errSignOutFailed');
+    setAccountStatus('errSignOutFailed');
   } finally {
     setAccountBusy(false);
     await refreshDownload();

@@ -17,7 +17,7 @@ const flush = async () => { for (let i = 0; i < 3; i++) await new Promise(resolv
 const deferred = () => { let resolve; const promise = new Promise(done => { resolve = done; }); return { promise, resolve }; };
 
 function element() {
-  return { children: [], events: {}, attrs: {}, value: '', files: [], textContent: '', hidden: false, disabled: false,
+  return { children: [], events: {}, attrs: {}, dataset: {}, value: '', files: [], textContent: '', hidden: false, disabled: false,
     addEventListener(name, handler) { this.events[name] = handler; },
     setAttribute(name, value) { this.attrs[name] = value; },
     removeAttribute(name) { delete this.attrs[name]; },
@@ -26,15 +26,26 @@ function element() {
   };
 }
 
-async function browser(override = () => undefined) {
+async function browser(override = () => undefined, href = 'https://example.test/') {
   const elements = new Map([...html.matchAll(/id="([^"]+)"/g)].map(([, id]) => [id, element()]));
+  const translated = [];
+  const placeholders = [];
+  for (const [tag] of html.matchAll(/<[^>]+>/g)) {
+    const id = tag.match(/\bid="([^"]+)"/)?.[1];
+    const node = elements.get(id) ?? element();
+    const textKey = tag.match(/\bdata-i18n="([^"]+)"/)?.[1];
+    const placeholderKey = tag.match(/\bdata-i18n-placeholder="([^"]+)"/)?.[1];
+    if (textKey) { node.dataset.i18n = textKey; translated.push(node); }
+    if (placeholderKey) { node.dataset.i18nPlaceholder = placeholderKey; placeholders.push(node); }
+  }
+  const location = { href };
   const calls = [];
   vm.runInNewContext(source, {
-    URL, URLSearchParams, Intl, location: { href: 'https://example.test/' },
-    navigator: { language: 'en' }, history: { replaceState() {} },
+    URL, URLSearchParams, Intl, location,
+    navigator: { language: 'en' }, history: { replaceState(_state, _unused, url) { location.href = String(url); } },
     localStorage: { getItem: () => null, setItem() {} },
     document: { getElementById: id => elements.get(id), createElement: element,
-      querySelectorAll: () => [], documentElement: {} },
+      querySelectorAll: selector => selector === '[data-i18n]' ? translated : placeholders, documentElement: {} },
     md5File: async () => metadata(items[0]).md5,
     fetch: async (path, init = {}) => {
       calls.push({ path, init });
@@ -52,12 +63,41 @@ async function browser(override = () => undefined) {
     },
   });
   await flush();
-  return { get: id => elements.get(id), calls,
+  return { get: id => elements.get(id), calls, location,
     select: index => elements.get('catalog-items').children[index].events.click(),
     click: id => elements.get(id).events.click(),
     login: () => elements.get('account-form').events.submit({ preventDefault() {} }),
   };
 }
+
+test('switching languages preserves the signed-in account and works after reload', async () => {
+  const page = await browser();
+  const requestCount = page.calls.length;
+  assert.equal(page.get('account-status').textContent, 'Signed in as player@example.test');
+  await page.click('language');
+  assert.equal(page.get('account-status').textContent, '已登录：player@example.test');
+  assert.equal(page.get('download-card').hidden, false);
+  assert.equal(page.get('download-apk').href, '/api/download?itemId=111');
+  assert.equal(page.calls.length, requestCount, 'changing language does not change the session');
+  const reloaded = await browser(undefined, page.location.href);
+  assert.equal(reloaded.get('account-status').textContent, '已登录：player@example.test');
+  await reloaded.click('language');
+  assert.equal(reloaded.get('account-status').textContent, 'Signed in as player@example.test');
+});
+
+test('language switches preserve account progress and failed-logout warnings', async () => {
+  const pending = deferred();
+  const page = await browser(path => path === '/api/account/logout' ? pending.promise : undefined);
+  const logout = page.click('sign-out');
+  await page.click('language');
+  assert.equal(page.get('account-status').textContent, '正在退出…');
+  pending.resolve(Response.json({ error: 'internal_error' }, { status: 500 }));
+  await logout;
+  assert.equal(page.get('account-status').textContent, '退出登录失败，会话可能仍然有效，请重试。');
+  await page.click('language');
+  assert.equal(page.get('account-status').textContent, 'Could not sign out. Your session may still be active; please retry.');
+  assert.equal(page.get('download-card').hidden, false);
+});
 
 test('failed logout retains account state and supports a successful retry', async () => {
   let attempts = 0;
