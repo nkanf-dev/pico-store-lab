@@ -12,12 +12,27 @@ An independent PICO app catalog and on-device installer, with reusable SDKs for 
 
 Explore at **[pico.kanglives.top](https://pico.kanglives.top)**. The public website offers discovery, release metadata, and an in-browser APK downloader; the headset client handles on-device download and install.
 
+![PICO Store Lab homepage with app discovery and search](assets/screenshots/website-home-en.webp)
+
 <a id="player-guide"></a>
 ## Player guide: download with your own account
 
-You need a PICO account that can obtain your chosen app from the official regional Store. Search or browse on the website, then sign in with your own account to download. Four routes are supported: the on-device client, two local CLIs, and the website's own in-browser downloader.
+You need a PICO account that can obtain your chosen app from the official regional Store. Search or browse on the website, then sign in with your own account to download. Four routes are supported: the website's in-browser downloader, the on-device client, and two local CLIs.
 
-### Option A — do everything on the headset
+### Option A — Download APK in the browser
+
+On [pico.kanglives.top](https://pico.kanglives.top), open **04 / WEB DOWNLOAD**, sign in with your PICO email code, and use **Download APK**. This is the shortest route when you just want a file on a computer:
+
+1. Enter your account email, choose **Send code**, then type the letters and digits from that mailbox's code and choose **Sign in**.
+2. If an available free app is not yet in your account, choose **Get app and prepare download** to claim it. Browsing an app does not claim it. Once owned, the panel shows its APK version, size, and MD5. Choose **Copy MD5** if you want to check the file with another tool.
+3. Choose **Download APK**. Your browser downloads it with the filename we send, and the panel tells you to keep the page open until it finishes.
+4. To confirm the file arrived intact, select it under **Verify a downloaded file**. It is hashed in 4 MiB slices, so a large APK never has to fit in memory, and the result is compared with PICO's own MD5.
+
+![Signed-in web downloader showing VRChat APK metadata, download options, and file verification](assets/screenshots/web-download-en.webp)
+
+The downloader works with apps your PICO account owns, including paid apps. Unowned paid apps and unavailable offers must be obtained through the official Store first. Free acquisition uses an explicit same-origin `POST /api/download/acquire`; the download and metadata GET routes never acquire apps. Use **PICO CDN link** for the direct upstream URL, or let the Worker stream the file with the MD5 headers attached. Either way there is no APK storage bucket. If signing out fails, the page warns that the session may still be active and lets you retry.
+
+### Option B — do everything on the headset
 
 1. Download `pico-store-android.apk` from the [latest GitHub Release](https://github.com/nkanf-dev/pico-store-lab/releases/latest). With USB debugging enabled and the headset connected to a computer:
 
@@ -34,7 +49,7 @@ You need a PICO account that can obtain your chosen app from the official region
 
 If an item has no offer for your account region, check its official listing and account region. The client cannot change account region. The Android client has been tested on a PICO headset by the project owner; each new fix still needs a fresh device check.
 
-### Option B — download on macOS with the Rust Desktop CLI
+### Option C — download on macOS with the Rust Desktop CLI
 
 Download `pico-store-desktop-macos-arm64` from the [same Release](https://github.com/nkanf-dev/pico-store-lab/releases/latest). Search by app name, then copy the exact `itemId` and `packageName` from the result into `status` and `download`. The following example uses YouTube VR; replace the app fields and email for your own choice. `login` prompts for the emailed code without echoing it.
 
@@ -50,7 +65,7 @@ adb install -r ./selected-app.apk          # optional: headset connected and USB
 
 The output path must be a new `.apk` file. The CLI checks the official MD5 before placing the verified file there. Keep `pico-auth.json` private and do not upload it, the APK, or signed CDN links to an issue. If macOS blocks the unsigned CLI, build it from source with `cargo run -p pico-store-desktop -- ...` after reviewing the repository.
 
-### Option C — Python CLI
+### Option D — Python CLI
 
 With Python 3.11+, install the Python package from this repository in a virtual environment. Use `search` to find exact item fields, then follow the same account flow. Choose a fresh `.apk` output path with enough free disk space.
 
@@ -66,17 +81,6 @@ pico-store-py download --item-id 7270207384512020485 --package com.google.androi
 ```
 
 The desktop CLIs download to your computer; use ADB or another headset-supported installer to install the verified APK. The Android client instead handles the download and system-confirmed install on the headset.
-
-### Option D — Download APK in the browser
-
-On [pico.kanglives.top](https://pico.kanglives.top), open **04 / WEB DOWNLOAD**, sign in with your PICO email code, and use **Download APK**. This is the shortest route when you just want a file on a computer:
-
-1. Enter your account email, choose **Send code**, then type the letters and digits from that mailbox's code and choose **Sign in**.
-2. If an available free app is not yet in your account, choose **Get app and prepare download** to claim it. Browsing an app does not claim it. Once owned, the panel shows its APK version, size, and MD5. Choose **Copy MD5** if you want to check the file with another tool.
-3. Choose **Download APK**. Your browser downloads it with the filename we send, and the panel tells you to keep the page open until it finishes.
-4. To confirm the file arrived intact, select it under **Verify a downloaded file**. It is hashed in 4 MiB slices, so a large APK never has to fit in memory, and the result is compared with PICO's own MD5.
-
-The downloader works with apps your PICO account owns, including paid apps. Unowned paid apps and unavailable offers must be obtained through the official Store first. Free acquisition uses an explicit same-origin `POST /api/download/acquire`; the download and metadata GET routes never acquire apps. Use **PICO CDN link** for the direct upstream URL, or let the Worker stream the file with the MD5 headers attached. Either way there is no APK storage bucket. If signing out fails, the page warns that the session may still be active and lets you retry.
 
 ## What is here
 

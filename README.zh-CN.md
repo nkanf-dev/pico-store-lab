@@ -12,12 +12,27 @@
 
 在线浏览：**[pico.kanglives.top](https://pico.kanglives.top)**。公开网页提供应用发现、版本信息，并可在浏览器里直接下载 APK；头显客户端负责端内下载与安装。
 
+![PICO Store Lab 中文首页与应用搜索入口](assets/screenshots/website-home-zh-CN.webp)
+
 <a id="player-guide"></a>
 ## 玩家指南：用自己的账号下载
 
-你需要一个能够从对应地区 PICO 官方商店获取所选应用的账号。可先在网页浏览或搜索，再用自己的账号下载：支持头显客户端、两种本机 CLI，以及网页端的浏览器下载。
+你需要一个能够从对应地区 PICO 官方商店获取所选应用的账号。可先在网页浏览或搜索，再用自己的账号下载：支持网页下载、头显客户端，以及两种本机 CLI。
 
-### 方案 A：在头显上完成下载与安装
+### 方案 A：在网页上下载 APK
+
+在 [pico.kanglives.top](https://pico.kanglives.top) 打开 **04 / 网页下载**，用 PICO 邮箱验证码登录后点击**下载 APK**。只想要一个文件到电脑时，这条路径最短：
+
+1. 填写账号邮箱，点击**发送验证码**，再填入邮件中的字母数字验证码并点击**登录**。
+2. 如果账号尚未拥有可领取的免费应用，点击**获取应用并准备下载**后领取；仅浏览应用不会自动领取。确认拥有后，面板会显示 APK 版本、大小与 MD5。想用其他工具核对，可点击**复制 MD5**。
+3. 点击**下载 APK**。浏览器按我们给出的文件名下载，面板会提示保持页面打开直到完成。
+4. 想确认文件完整，在**校验已下载的文件**里选择该文件。它按 4 MiB 分片计算，几百 MB 的包也不会占满内存，结果与 PICO 给出的 MD5 比对。
+
+![登录后的网页下载面板，展示 VRChat APK 信息、下载选项与文件校验入口](assets/screenshots/web-download-zh-CN.webp)
+
+你的 PICO 账号已拥有的应用都可在这里下载，包括付费应用。尚未拥有的付费应用及当前不可领取的商品，需要先通过官方商店获取。领取免费应用须明确触发同源 `POST /api/download/acquire`；下载与元数据 GET 接口不会领取应用。想拿 PICO 的原始直链就点 **PICO CDN 直链**，或者让 Worker 带着 MD5 响应头把文件流式传给你。两种方式均不将 APK 转存到存储桶。退出失败时，页面会提示会话可能仍有效，并允许重试。
+
+### 方案 B：在头显上完成下载与安装
 
 1. 从 [GitHub 最新 Release](https://github.com/nkanf-dev/pico-store-lab/releases/latest) 下载 `pico-store-android.apk`。头显打开 USB 调试并连接电脑后：
 
@@ -34,7 +49,7 @@
 
 若官方接口提示账号地区无商品，请检查对应商品页和账号地区；客户端不能修改账号地区。项目作者已在 PICO 头显上验证 Android 客户端；本次新增修复仍需再次实机检查。
 
-### 方案 B：在 macOS 用 Rust Desktop CLI 下载
+### 方案 C：在 macOS 用 Rust Desktop CLI 下载
 
 从[同一个 Release](https://github.com/nkanf-dev/pico-store-lab/releases/latest)下载 `pico-store-desktop-macos-arm64`。先按名称搜索，再把结果中的精确 `itemId` 和 `packageName` 填入 `status` 和 `download`。下面以 YouTube VR 为例；选择其他应用时替换商品字段，邮箱也换成你自己的。`login` 会交互式询问邮件验证码。
 
@@ -50,7 +65,7 @@ adb install -r ./selected-app.apk          # 可选：头显已连接且允许 U
 
 输出必须是尚不存在的 `.apk` 路径；CLI 校验官方 MD5 后才放到该路径。不要把 `pico-auth.json`、APK 或带签名的 CDN 链接上传到 Issue。若 macOS 阻止运行未签名 CLI，审查源码后可用 `cargo run -p pico-store-desktop -- ...` 自行编译运行。
 
-### 方案 C：Python CLI
+### 方案 D：Python CLI
 
 安装 Python 3.11+，在虚拟环境中从本仓库安装 Python 包。先用 `search` 找精确商品字段，再走同样的账号流程。输出路径请选择新的 `.apk` 文件，并确认磁盘空间足够。
 
@@ -66,17 +81,6 @@ pico-store-py download --item-id 7270207384512020485 --package com.google.androi
 ```
 
 桌面 CLI 会把包下载到电脑；再用 ADB 或头显支持的安装器安装。Android 头显客户端则在设备上完成下载，并请求系统确认安装。
-
-### 方案 D：在网页上下载 APK
-
-在 [pico.kanglives.top](https://pico.kanglives.top) 打开 **04 / 网页下载**，用 PICO 邮箱验证码登录后点击**下载 APK**。只想要一个文件到电脑时，这条路径最短：
-
-1. 填写账号邮箱，点击**发送验证码**，再填入邮件中的字母数字验证码并点击**登录**。
-2. 如果账号尚未拥有可领取的免费应用，点击**获取应用并准备下载**后领取；仅浏览应用不会自动领取。确认拥有后，面板会显示 APK 版本、大小与 MD5。想用其他工具核对，可点击**复制 MD5**。
-3. 点击**下载 APK**。浏览器按我们给出的文件名下载，面板会提示保持页面打开直到完成。
-4. 想确认文件完整，在**校验已下载的文件**里选择该文件。它按 4 MiB 分片计算，几百 MB 的包也不会占满内存，结果与 PICO 给出的 MD5 比对。
-
-你的 PICO 账号已拥有的应用都可在这里下载，包括付费应用。尚未拥有的付费应用及当前不可领取的商品，需要先通过官方商店获取。领取免费应用须明确触发同源 `POST /api/download/acquire`；下载与元数据 GET 接口不会领取应用。想拿 PICO 的原始直链就点 **PICO CDN 直链**，或者让 Worker 带着 MD5 响应头把文件流式传给你。两种方式均不将 APK 转存到存储桶。退出失败时，页面会提示会话可能仍有效，并允许重试。
 
 ## 仓库组成
 
