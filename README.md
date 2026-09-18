@@ -10,12 +10,12 @@
 
 An independent PICO app catalog and on-device installer, with reusable SDKs for developers. Browse recommended apps or search the wider PICO catalog, inspect releases, and get an app through your own PICO account. PICO Store Lab is an independent community project.
 
-Explore at **[pico.kanglives.top](https://pico.kanglives.top)**. The public website offers discovery and release metadata; account sign-in and APK installation happen in the client.
+Explore at **[pico.kanglives.top](https://pico.kanglives.top)**. The public website offers discovery, release metadata, and an in-browser APK downloader; the headset client handles on-device download and install.
 
 <a id="player-guide"></a>
 ## Player guide: download with your own account
 
-You need a PICO account that can obtain your chosen app from the official regional Store. Search or browse on the website, then use the on-device client or a local CLI for account sign-in and download. The public website does not ask for your email or verification code.
+You need a PICO account that can obtain your chosen app from the official regional Store. Search or browse on the website, then sign in with your own account to download. Four routes are supported: the on-device client, two local CLIs, and the website's own in-browser downloader.
 
 ### Option A — do everything on the headset
 
@@ -28,7 +28,7 @@ You need a PICO account that can obtain your chosen app from the official region
 
    If your PICO system offers an APK installer, you may open the downloaded file there instead. That route has not yet been tested on our headset. The debug APK is experimental and may not update a copy signed by a different key.
 2. In the headset's app library, open **PICO Store Lab** under *Unknown Sources* or the equivalent non-Store app area (the label varies by PICO OS version). Browse recommendations or search for an app, select it, and review the official version. You can save favorites for later.
-3. Enter your PICO account email, tap **Send code**, enter the alphanumeric code sent to that mailbox, and tap **Sign in**. Do not enter your code on the public website.
+3. Enter your PICO account email, tap **Send code**, enter the alphanumeric code sent to that mailbox, and tap **Sign in**. The headset client keeps the session on the device; the website's downloader keeps it on the server instead. Neither ever stores your password.
 4. Open an app and tap **Get** for a free offer or **Download** if it is already in your account. The client confirms account ownership, claims an available free offer when needed, and downloads to `Downloads/PICO Store Lab` after the entitlement appears. It checks the APK's MD5, package name, and version before opening Android's installer. If Android asks to allow installs from this source, allow **PICO Store Lab** and retry. Confirm the Android installation prompt.
 5. For an unowned paid app, **View in PICO Store** opens its official product page. Complete a purchase there, return to PICO Store Lab, and tap **Download** once account ownership is confirmed.
 
@@ -67,6 +67,17 @@ pico-store-py download --item-id 7270207384512020485 --package com.google.androi
 
 The desktop CLIs download to your computer; use ADB or another headset-supported installer to install the verified APK. The Android client instead handles the download and system-confirmed install on the headset.
 
+### Option D — Download APK in the browser
+
+On [pico.kanglives.top](https://pico.kanglives.top), open **04 / WEB DOWNLOAD**, sign in with your PICO email code, and use **Download APK**. This is the shortest route when you just want a file on a computer:
+
+1. Enter your account email, choose **Send code**, then type the letters and digits from that mailbox's code and choose **Sign in**.
+2. If an available free app is not yet in your account, choose **Get app and prepare download** to claim it. Browsing an app does not claim it. Once owned, the panel shows its APK version, size, and MD5. Choose **Copy MD5** if you want to check the file with another tool.
+3. Choose **Download APK**. Your browser downloads it with the filename we send, and the panel tells you to keep the page open until it finishes.
+4. To confirm the file arrived intact, select it under **Verify a downloaded file**. It is hashed in 4 MiB slices, so a large APK never has to fit in memory, and the result is compared with PICO's own MD5.
+
+The downloader works with apps your PICO account owns, including paid apps. Unowned paid apps and unavailable offers must be obtained through the official Store first. Free acquisition uses an explicit same-origin `POST /api/download/acquire`; the download and metadata GET routes never acquire apps. Use **PICO CDN link** for the direct upstream URL, or let the Worker stream the file with the MD5 headers attached. Either way there is no APK storage bucket. If signing out fails, the page warns that the session may still be active and lets you retry.
+
 ## What is here
 
 | Component | Language | Role | Verified in this release |
@@ -75,7 +86,7 @@ The desktop CLIs download to your computer; use ADB or another headset-supported
 | `packages/python` | Python | Typed protocol and mirror policy, small CLI | Ruff PEP checks, tests, wheel/sdist |
 | `packages/rust` | Rust | Typed protocol and mirror policy | fmt, Clippy, tests |
 | `packages/kotlin` | Kotlin | Android-compatible protocol and mirror policy | JVM unit tests and AAR build |
-| `apps/website` | TypeScript SDK + Cloudflare Worker | Bilingual public release page and monotonic version tracker | Local/fixture tests; deployed to Cloudflare |
+| `apps/website` | TypeScript SDK + Cloudflare Worker | Bilingual public release page, monotonic version tracker, and in-browser APK downloader | Local/fixture tests; deployed to Cloudflare |
 | `apps/desktop-rs` | Rust SDK | Desktop CLI for account login and verified downloads | Compiles and tests; no GUI yet |
 | `apps/android` | Kotlin SDK | PICO on-device status, sign-in and system-confirmed install | Owner-tested on headset; latest fixes build-tested |
 
@@ -159,6 +170,6 @@ The GitHub Release lists current SDK registry availability. Maven Central public
 
 ## Accounts, APKs and mirroring
 
-The Rust and Python CLIs support public status, email-code sign-in, and an explicit verified download path. Use `--help` for exact options. Never share an auth file. The default mirror policy selects free APKs below 512 MiB when a host application enables mirroring. The Cloudflare page checks public metadata daily; it does not host APKs or account sessions, and no R2 bucket is configured. This repository's MIT license covers **our code only**; it does not grant redistribution rights to third-party APKs.
+The Rust and Python CLIs support public status, email-code sign-in, and an explicit verified download path. Use `--help` for exact options. Never share an auth file. The default mirror policy selects free APKs below 512 MiB when a host application enables mirroring. The Cloudflare page checks public metadata daily; its downloader streams or redirects to PICO's own APK on request without hosting it, and keeps each signed-in visitor's PICO credentials encrypted in D1 behind an HttpOnly cookie. The account flow needs a `SESSION_SECRET` of at least 32 characters (`npx wrangler secret put SESSION_SECRET`, or `wrangler secret put` for the deployed environment); sign-in and download return `503` without it. Still no R2 bucket: nothing is stored but the session row and the release history. This repository's MIT license covers **our code only**; it does not grant redistribution rights to third-party APKs.
 
 Please report security issues privately as described in [SECURITY.md](SECURITY.md). For development and release standards, see [CONTRIBUTING.md](CONTRIBUTING.md) and [RELEASING.md](RELEASING.md).

@@ -2,6 +2,7 @@
   "name": "pico-store-release-page",
   "main": "src/worker.js",
   "compatibility_date": "2026-09-17",
+  // The downloader's account flow needs `wrangler secret put SESSION_SECRET` (32+ characters).
   "assets": { "directory": "./public", "binding": "ASSETS" },
   "routes": [{ "pattern": "pico.kanglives.top", "custom_domain": true }],
   "d1_databases": [{

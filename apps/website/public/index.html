@@ -49,12 +49,57 @@
       <section class="section-head" aria-label="Release history"><span data-i18n="historyLabel">03 / RELEASE HISTORY</span><span data-i18n="trackingLabel">MONOTONIC TRACKING</span></section>
       <ol id="releases" class="release-list"><li class="empty" data-i18n="readingHistory">Reading release history…</li></ol>
 
+      <section id="downloader" class="downloader" aria-labelledby="downloader-heading">
+        <div class="downloader-copy">
+          <p class="eyebrow"><span class="indicator"></span> <span data-i18n="downloadLabel">04 / WEB DOWNLOAD</span></p>
+          <h2 id="downloader-heading"><span data-i18n="downloadOne">Your account signs in.</span><br><em data-i18n="downloadTwo">The APK comes straight here.</em></h2>
+          <p class="intro" data-i18n="downloadIntro">Sign in with your own PICO email code, then download this app's APK in the browser. The APK comes from PICO exactly as PICO serves it.</p>
+        </div>
+        <div class="downloader-panel">
+          <form id="account-form" class="account-form" autocomplete="off">
+            <label for="account-email" data-i18n="emailLabel">PICO account email</label>
+            <div class="field-row">
+              <input id="account-email" type="email" required maxlength="254" placeholder="you@example.com" aria-describedby="account-status">
+              <button id="send-code" type="button" data-i18n="sendCode">Send code</button>
+            </div>
+            <div class="field-row">
+              <input id="account-code" inputmode="text" pattern="[A-Za-z0-9]{4,8}" maxlength="8" required placeholder="A1B2C3" data-i18n-placeholder="codePlaceholder" aria-describedby="account-status">
+              <button id="sign-in" type="submit" data-i18n="signIn">Sign in</button>
+            </div>
+            <p id="account-status" role="status" aria-live="polite" class="muted" data-i18n="signedOut">Not signed in</p>
+          </form>
+          <div id="download-card" class="download-card" hidden>
+            <p class="label" data-i18n="apkLabel">APK</p>
+            <strong id="apk-name">—</strong>
+            <dl class="apk-meta">
+              <div><dt data-i18n="apkVersionLabel">VERSION</dt><dd id="apk-version">—</dd></div>
+              <div><dt data-i18n="apkSizeLabel">SIZE</dt><dd id="apk-size">—</dd></div>
+              <div class="apk-md5-row"><dt>MD5</dt><dd><code id="apk-md5">—</code></dd></div>
+            </dl>
+            <div class="download-actions">
+              <button id="acquire-apk" type="button" hidden data-i18n="acquireApk">Get app and prepare download</button>
+              <a id="download-apk" class="action primary" href="#downloader" download><span data-i18n="downloadApk">Download APK</span> <span aria-hidden="true">↓</span></a>
+              <a id="download-direct" class="action secondary" href="#downloader" target="_blank" rel="noopener noreferrer" hidden data-i18n="directDownload">PICO CDN link ↗</a>
+              <button id="copy-md5" type="button" data-i18n="copyMd5">Copy MD5</button>
+            </div>
+            <p id="download-status" role="status" aria-live="polite" class="muted"></p>
+            <div class="verify">
+              <label for="verify-file" data-i18n="verifyLabel">Verify a downloaded file</label>
+              <input id="verify-file" type="file" accept=".apk,application/vnd.android.package-archive">
+              <p id="verify-status" role="status" aria-live="polite" class="muted"></p>
+            </div>
+            <button id="sign-out" type="button" data-i18n="signOut">Sign out</button>
+          </div>
+        </div>
+      </section>
+
       <section id="workflow" class="workflow" aria-labelledby="workflow-heading">
-        <div><p class="eyebrow" data-i18n="workflowLabel">04 / HOW IT WORKS</p><h2 id="workflow-heading"><span data-i18n="workflowOne">Your PICO account.</span><br><span data-i18n="workflowTwo">Your own download.</span></h2></div>
+        <div><p class="eyebrow" data-i18n="workflowLabel">05 / HOW IT WORKS</p><h2 id="workflow-heading"><span data-i18n="workflowOne">Your PICO account.</span><br><span data-i18n="workflowTwo">Your own download.</span></h2></div>
         <div class="workflow-steps">
           <div><span>01</span><p data-i18n="stepOne">Get our Android client from GitHub Releases and install it on your PICO headset.</p></div>
           <div><span>02</span><p data-i18n="stepTwo">Open PICO Store Lab, choose an app, and sign in with your own PICO email verification code.</p></div>
           <div><span>03</span><p data-i18n="stepThree">Choose Download and install. The client requests your entitled APK from PICO, verifies it, then asks for system installation approval.</p></div>
+          <div><span>04</span><p data-i18n="stepFour">Prefer a desktop? Sign in above and the same APK downloads in your browser, with an MD5 you can verify.</p></div>
           <nav class="workflow-actions" aria-label="Player resources"><a href="https://github.com/nkanf-dev/pico-store-lab/releases/latest" target="_blank" rel="noopener noreferrer" data-i18n="getClient">Get Android client ↗</a><a id="workflow-guide-link" href="https://github.com/nkanf-dev/pico-store-lab#player-guide" target="_blank" rel="noopener noreferrer" data-i18n="fullGuide">Full player guide ↗</a></nav>
         </div>
       </section>
