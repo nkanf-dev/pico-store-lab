@@ -3,8 +3,7 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import vm from 'node:vm';
 
-const source = readFileSync(new URL('../public/app.js', import.meta.url), 'utf8')
-  .replace(/^import \{ md5File \} from '\.\/md5.js';\n/, '');
+const source = readFileSync(new URL('../public/app.js', import.meta.url), 'utf8');
 const html = readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
 const items = [
   { itemId: '111', packageName: 'com.example.a', name: 'App A' },
@@ -46,7 +45,6 @@ async function browser(override = () => undefined, href = 'https://example.test/
     localStorage: { getItem: () => null, setItem() {} },
     document: { getElementById: id => elements.get(id), createElement: element,
       querySelectorAll: selector => selector === '[data-i18n]' ? translated : placeholders, documentElement: {} },
-    md5File: async () => metadata(items[0]).md5,
     fetch: async (path, init = {}) => {
       calls.push({ path, init });
       const custom = override(path, init);
@@ -113,17 +111,13 @@ test('failed logout retains account state and supports a successful retry', asyn
   assert.equal(page.get('account-status').textContent, 'Not signed in');
 });
 
-test('changing apps immediately disables old links and clears file verification', async () => {
+test('changing apps immediately disables old download links', async () => {
   const pending = deferred();
   const page = await browser(path => path.includes('/download/info?itemId=222') ? pending.promise : undefined);
   assert.equal(page.get('download-apk').href, '/api/download?itemId=111');
-  page.get('verify-file').value = 'old.apk';
-  page.get('verify-status').textContent = 'Checksum matches';
   page.select(1);
   assert.equal(page.get('download-apk').attrs['aria-disabled'], 'true');
   assert.equal(page.get('download-direct').hidden, true);
-  assert.equal(page.get('verify-file').value, '');
-  assert.equal(page.get('verify-status').textContent, '');
   page.select(0);
   await flush();
   pending.resolve(Response.json(metadata(items[1])));

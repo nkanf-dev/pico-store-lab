@@ -1,5 +1,3 @@
-import { md5File } from './md5.js';
-
 const $ = id => document.getElementById(id);
 const translations = {
   en: {
@@ -35,9 +33,6 @@ const translations = {
     apkLabel: 'APK', apkVersionLabel: 'VERSION', apkSizeLabel: 'SIZE', downloadApk: 'Download APK',
     directDownload: 'PICO CDN link ↗',
     copyMd5: 'Copy MD5', md5Copied: 'MD5 copied to the clipboard',
-    verifyLabel: 'Verify a downloaded file', hashProgress: 'Hashing the file… ',
-    verifyMatch: 'Checksum matches. The APK is intact.',
-    verifyMismatch: 'Checksum mismatch. Delete the file and download it again.',
     downloadHint: 'Your browser handles the download; keep this page open until it finishes.',
     selectApp: 'Choose an app above to see its APK.',
     apkUnavailable: 'This app cannot be downloaded here.',
@@ -92,9 +87,6 @@ const translations = {
     apkLabel: 'APK', apkVersionLabel: '版本', apkSizeLabel: '大小', downloadApk: '下载 APK',
     directDownload: 'PICO CDN 直链 ↗',
     copyMd5: '复制 MD5', md5Copied: 'MD5 已复制到剪贴板',
-    verifyLabel: '校验已下载的文件', hashProgress: '正在计算校验值… ',
-    verifyMatch: '校验值一致，安装包完整。',
-    verifyMismatch: '校验值不一致，请删除文件后重新下载。',
     downloadHint: '下载由浏览器负责，请保持页面打开直到完成。',
     selectApp: '请先在上方选择一个应用。',
     apkUnavailable: '该应用无法在此下载。',
@@ -357,7 +349,6 @@ function renderDownload() {
   const available = account.authenticated && !accountBusy && apk?.available;
   acquire.hidden = !(account.authenticated && !accountBusy && apk?.canAcquire);
   $('copy-md5').disabled = !available;
-  $('verify-file').disabled = !available;
   if (!available) {
     for (const id of ['apk-name', 'apk-version', 'apk-size', 'apk-md5']) $(id).textContent = '—';
     button.href = '#downloader';
@@ -384,8 +375,6 @@ function renderDownload() {
 function invalidateDownload(message) {
   apkRequest += 1;
   apk = message ? { available: false, message } : null;
-  $('verify-file').value = '';
-  $('verify-status').textContent = '';
   renderDownload();
 }
 
@@ -519,25 +508,6 @@ $('copy-md5').addEventListener('click', async () => {
     $('download-status').textContent = t('md5Copied');
   } catch {
     $('download-status').textContent = apk.md5;
-  }
-});
-
-$('verify-file').addEventListener('change', async event => {
-  const file = event.target.files?.[0];
-  const status = $('verify-status');
-  if (!file) { status.textContent = ''; return; }
-  const expected = apk?.available ? apk.md5 : null;
-  const ticket = apkRequest;
-  status.textContent = `${t('hashProgress')}0%`;
-  try {
-    const digest = await md5File(file, ratio => {
-      if (ticket === apkRequest) status.textContent = `${t('hashProgress')}${Math.round(ratio * 100)}%`;
-    });
-    if (ticket !== apkRequest) return;
-    if (!expected) { status.textContent = digest; return; }
-    status.textContent = digest === expected ? t('verifyMatch') : `${t('verifyMismatch')} (${digest})`;
-  } catch {
-    if (ticket === apkRequest) status.textContent = t('errGeneric');
   }
 });
 

@@ -3,7 +3,6 @@ import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import { PICO_ITEM_ID } from '@nkanf-dev/pico-store-sdk/pico';
-import { Md5, md5Hex } from '../public/md5.js';
 import { apkResponse } from '../src/delivery.js';
 import { openLocalD1 } from '../src/local-db.js';
 import worker, { checkForRelease } from '../src/worker.js';
@@ -17,7 +16,7 @@ const product = {
 
 const SESSION_SECRET = 'test-session-secret-with-enough-length';
 const APK_BYTES = new Uint8Array([0x50, 0x4b, 0x03, 0x04, 0x50, 0x4b, 0x01, 0x02]);
-const APK_MD5 = md5Hex(APK_BYTES);
+const APK_MD5 = createHash('md5').update(APK_BYTES).digest('hex');
 const SECOND_ITEM_ID = '7270207384512020485';
 
 function testEnv(extra = {}) {
@@ -105,12 +104,11 @@ test('player path links the website to the repo, guide, and client release', () 
 test('web downloader is wired into the page, script, and guide', () => {
   const html = readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
   const script = readFileSync(new URL('../public/app.js', import.meta.url), 'utf8');
-  for (const id of ['account-form', 'send-code', 'sign-in', 'download-card', 'download-apk', 'download-direct', 'verify-file', 'sign-out']) {
+  for (const id of ['account-form', 'send-code', 'sign-in', 'download-card', 'download-apk', 'download-direct', 'sign-out']) {
     assert.match(html, new RegExp(`id="${id}"`));
   }
   assert.match(html, /id="download-apk"[^>]*download/);
   assert.match(script, /\/api\/download\/info/);
-  assert.match(script, /md5File\(/);
   for (const readme of ['../../../README.md', '../../../README.zh-CN.md']) {
     assert.match(readFileSync(new URL(readme, import.meta.url), 'utf8'), /Download APK in the browser|网页上下载 APK/);
   }
@@ -137,29 +135,6 @@ test('the page, the script, and both locales stay in agreement', () => {
   ]);
   assert.ok(used.size > 40, `expected a meaningful key set, got ${used.size}`);
   for (const key of used) assert.ok(english.has(key), `missing translation key: ${key}`);
-});
-
-test('MD5 matches the RFC 1321 vectors and node:crypto on a large buffer', () => {
-  const encoder = new TextEncoder();
-  const vectors = [
-    ['', 'd41d8cd98f00b204e9800998ecf8427e'],
-    ['a', '0cc175b9c0f1b6a831c399e269772661'],
-    ['abc', '900150983cd24fb0d6963f7d28e17f72'],
-    ['message digest', 'f96b697d7cb7938d525a2f31aaf161d0'],
-    ['abcdefghijklmnopqrstuvwxyz', 'c3fcd3d76192e4007dfb496cca67e13b'],
-    ['ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789', 'd174ab98d277d9f5a5611c2c9f419d9f'],
-    ['12345678901234567890123456789012345678901234567890123456789012345678901234567890', '57edf4a22be3c955ac49da2e2107b67a'],
-  ];
-  for (const [input, expected] of vectors) assert.equal(md5Hex(encoder.encode(input)), expected);
-  const size = 1024 * 1024 + 37;
-  const buffer = new Uint8Array(size);
-  for (let index = 0; index < size; index++) buffer[index] = (index * 31 + (index >> 8)) & 0xff;
-  const expected = createHash('md5').update(buffer).digest('hex');
-  assert.equal(md5Hex(buffer), expected);
-  const hasher = new Md5();
-  for (let offset = 0; offset < size; offset += 999) hasher.update(buffer.subarray(offset, Math.min(offset + 999, size)));
-  assert.equal(hasher.hex(), expected);
-  assert.equal(hasher.hex(), expected, 'hex() stays repeatable');
 });
 
 function publicResponse(versionCode = 972240) {

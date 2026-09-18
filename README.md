@@ -26,9 +26,8 @@ On [pico.kanglives.top](https://pico.kanglives.top), open **04 / WEB DOWNLOAD**,
 1. Enter your account email, choose **Send code**, then type the letters and digits from that mailbox's code and choose **Sign in**.
 2. If an available free app is not yet in your account, choose **Get app and prepare download** to claim it. Browsing an app does not claim it. Once owned, the panel shows its APK version, size, and MD5. Choose **Copy MD5** if you want to check the file with another tool.
 3. Choose **Download APK**. Your browser downloads it with the filename we send, and the panel tells you to keep the page open until it finishes.
-4. To confirm the file arrived intact, select it under **Verify a downloaded file**. It is hashed in 4 MiB slices, so a large APK never has to fit in memory, and the result is compared with PICO's own MD5.
 
-![Signed-in web downloader showing VRChat APK metadata, download options, and file verification](assets/screenshots/web-download-en.webp)
+![Signed-in web downloader showing VRChat APK metadata and download options](assets/screenshots/web-download-en.webp)
 
 The downloader works with apps your PICO account owns, including paid apps. Unowned paid apps and unavailable offers must be obtained through the official Store first. Free acquisition uses an explicit same-origin `POST /api/download/acquire`; the download and metadata GET routes never acquire apps. Use **PICO CDN link** for the direct upstream URL, or let the Worker stream the file with the MD5 headers attached. Either way there is no APK storage bucket. If signing out fails, the page warns that the session may still be active and lets you retry.
 
