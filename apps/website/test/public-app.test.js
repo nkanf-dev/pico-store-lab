@@ -91,9 +91,9 @@ test('language switches preserve account progress and failed-logout warnings', a
   assert.equal(page.get('account-status').textContent, '正在退出…');
   pending.resolve(Response.json({ error: 'internal_error' }, { status: 500 }));
   await logout;
-  assert.equal(page.get('account-status').textContent, '退出登录失败，会话可能仍然有效，请重试。');
+  assert.equal(page.get('account-status').textContent, '退出失败，请重试。');
   await page.click('language');
-  assert.equal(page.get('account-status').textContent, 'Could not sign out. Your session may still be active; please retry.');
+  assert.equal(page.get('account-status').textContent, 'Could not sign out. Please try again.');
   assert.equal(page.get('download-card').hidden, false);
 });
 

@@ -9,6 +9,9 @@ const files = new Map([
   ['/style.css', ['style.css', 'text/css; charset=utf-8']],
   ['/i18n.css', ['i18n.css', 'text/css; charset=utf-8']],
   ['/catalog.json', ['catalog.json', 'application/json; charset=utf-8']],
+  ['/favicon.svg', ['favicon.svg', 'image/svg+xml']],
+  ['/favicon.ico', ['favicon.ico', 'image/x-icon']],
+  ['/apple-touch-icon.png', ['apple-touch-icon.png', 'image/png']],
 ]);
 
 export function createDevServer(env) {

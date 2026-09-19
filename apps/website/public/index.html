@@ -4,8 +4,11 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#171915">
-  <title>PICO Store Lab — Independent PICO app catalog</title>
-  <meta name="description" content="Independent PICO app catalog, on-device installer and developer SDKs.">
+  <title>PICO Store Lab — Browse and download PICO apps</title>
+  <meta name="description" content="Browse PICO apps, check versions, and download with your PICO international account. Use the website or install apps directly on your headset.">
+  <link rel="icon" href="/favicon.ico" sizes="32x32">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" sizes="any">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
   <link rel="stylesheet" href="/style.css">
   <link rel="stylesheet" href="/i18n.css">
   <script type="module" src="/app.js"></script>
@@ -14,21 +17,21 @@
   <div class="shell">
     <header class="masthead">
       <a class="brand" href="/" aria-label="PICO Store Lab home"><span class="brand-mark">P/</span><span>PICO<br>STORE LAB</span></a>
-      <div class="masthead-meta"><span data-i18n="indexLabel">INDEPENDENT RELEASE INDEX</span><a class="repository-link" href="https://github.com/nkanf-dev/pico-store-lab" target="_blank" rel="noopener noreferrer" data-i18n="repositoryLink">GitHub repo ↗</a><button id="language" class="language" aria-label="Switch to Chinese">中文</button></div>
+      <div class="masthead-meta"><span data-i18n="indexLabel">PICO APP CATALOG</span><a class="repository-link" href="https://github.com/nkanf-dev/pico-store-lab" target="_blank" rel="noopener noreferrer" data-i18n="repositoryLink">GitHub ↗</a><button id="language" class="language" aria-label="Switch to Chinese">中文</button></div>
     </header>
 
     <main>
       <section class="hero" aria-labelledby="hero-title">
         <div class="hero-copy">
           <p class="eyebrow"><span class="indicator"></span> PICO GLOBAL / ANDROID XR</p>
-          <h1 id="hero-title"><span data-i18n="heroLine">Beyond the store,</span><br><em data-i18n="heroAccent">see every release.</em></h1>
-          <p class="intro" data-i18n="intro">Explore PICO apps and their releases. Choose an app, then get it through your own account on your headset.</p>
+          <h1 id="hero-title"><span data-i18n="heroLine">Find PICO apps.</span><br><em data-i18n="heroAccent">Download and install.</em></h1>
+          <p class="intro" data-i18n="intro">Search for apps, check their versions, and download with your PICO international account. Use the website to save an APK, or install apps directly on your headset with our Android app.</p>
           <div class="hero-actions">
-            <a id="guide-link" class="action primary" href="https://github.com/nkanf-dev/pico-store-lab#player-guide" target="_blank" rel="noopener noreferrer"><span data-i18n="playerGuide">Get the app &amp; player guide</span> <span aria-hidden="true">↗</span></a>
-            <a class="action secondary" href="#catalog" data-i18n="exploreCatalog">Explore catalog ↓</a>
+            <a id="guide-link" class="action primary" href="https://github.com/nkanf-dev/pico-store-lab#player-guide" target="_blank" rel="noopener noreferrer"><span data-i18n="playerGuide">How to download</span> <span aria-hidden="true">↗</span></a>
+            <a class="action secondary" href="#catalog" data-i18n="exploreCatalog">Browse apps ↓</a>
           </div>
         </div>
-        <div class="hero-art" aria-hidden="true"><div class="orbit orbit-one"></div><div class="orbit orbit-two"></div><div class="hero-glyph">P<span>/</span></div><div class="art-caption">PICO APP CATALOG<br>PUBLIC INDEX / ON-DEVICE DOWNLOAD</div></div>
+        <div class="hero-art" aria-hidden="true"><div class="orbit orbit-one"></div><div class="orbit orbit-two"></div><div class="hero-glyph">P<span>/</span></div><div class="art-caption">PICO APP CATALOG<br><span data-i18n="artCaption">BROWSE / DOWNLOAD / INSTALL</span></div></div>
       </section>
 
       <section id="discovery" class="discovery" aria-label="Find apps">
@@ -36,34 +39,39 @@
         <p id="search-status" role="status" aria-live="polite"></p>
         <div id="search-results" class="search-results"></div>
       </section>
-      <section id="catalog" class="section-head" aria-label="Recommended apps"><span data-i18n="catalogLabel">01 / RECOMMENDED</span><span data-i18n="catalogHint">START EXPLORING</span></section>
+      <section id="catalog" class="section-head" aria-label="Recommended apps"><span data-i18n="catalogLabel">01 / RECOMMENDED</span><span data-i18n="catalogHint">CHOOSE AN APP</span></section>
       <div id="catalog-items" class="catalog-items" role="group" aria-label="Available apps"></div>
       <section class="section-head" aria-label="Favorites"><span data-i18n="favoritesLabel">FAVORITES</span><span data-i18n="favoritesHint">SAVED ON THIS DEVICE</span></section>
       <div id="favorite-items" class="catalog-items"></div>
-      <section class="section-head" aria-label="Current release"><span data-i18n="currentLabel">02 / SELECTED RELEASE</span><span id="status-pill" class="status" data-i18n="loading">Loading</span></section>
+      <section class="section-head" aria-label="Current release"><span data-i18n="currentLabel">02 / APP DETAILS</span><span id="status-pill" class="status" data-i18n="loading">Loading</span></section>
       <section class="release-grid" aria-labelledby="release-heading">
-        <div class="release-main"><p class="label" data-i18n="packageLabel">PACKAGE</p><h2 id="release-heading">—</h2><p class="package-name" id="package-name">—</p><p class="release-note" data-i18n="nativeNote">Official PICO app listing.</p><div class="detail-actions"><a id="official-link" href="https://store-global.picoxr.com/global" target="_blank" rel="noopener noreferrer" data-i18n="official">Official listing ↗</a><button id="favorite-toggle" type="button" data-i18n="favoriteAdd">Save favorite ☆</button></div></div>
-        <div class="release-number"><p class="label" data-i18n="versionLabel">LATEST VERSION CODE</p><strong id="version-code">—</strong><p id="last-check" class="muted" data-i18n="reading">Reading release data</p></div>
+        <div class="release-main"><p class="label" data-i18n="packageLabel">APP</p><h2 id="release-heading">—</h2><p class="package-name" id="package-name">—</p><p class="release-note" data-i18n="nativeNote">App information from PICO Store.</p><div class="detail-actions"><a id="official-link" href="https://store-global.picoxr.com/global" target="_blank" rel="noopener noreferrer" data-i18n="official">View in PICO Store ↗</a><button id="favorite-toggle" type="button" data-i18n="favoriteAdd">Add to favorites ☆</button></div></div>
+        <div class="release-number"><p class="label" data-i18n="versionLabel">LATEST VERSION CODE</p><strong id="version-code">—</strong><p id="last-check" class="muted" data-i18n="reading">Loading app information</p></div>
       </section>
 
-      <section class="section-head" aria-label="Release history"><span data-i18n="historyLabel">03 / RELEASE HISTORY</span><span data-i18n="trackingLabel">MONOTONIC TRACKING</span></section>
-      <ol id="releases" class="release-list"><li class="empty" data-i18n="readingHistory">Reading release history…</li></ol>
+      <section class="section-head" aria-label="Release history"><span data-i18n="historyLabel">03 / VERSION HISTORY</span><span data-i18n="trackingLabel">RECENT UPDATES</span></section>
+      <ol id="releases" class="release-list"><li class="empty" data-i18n="readingHistory">Loading version history…</li></ol>
 
       <section id="downloader" class="downloader" aria-labelledby="downloader-heading">
         <div class="downloader-copy">
           <p class="eyebrow"><span class="indicator"></span> <span data-i18n="downloadLabel">04 / WEB DOWNLOAD</span></p>
-          <h2 id="downloader-heading"><span data-i18n="downloadOne">Your account signs in.</span><br><em data-i18n="downloadTwo">The APK comes straight here.</em></h2>
-          <p class="intro" data-i18n="downloadIntro">Sign in with your own PICO email code, then download this app's APK in the browser. The APK comes from PICO exactly as PICO serves it.</p>
+          <h2 id="downloader-heading"><span data-i18n="downloadOne">Sign in to PICO.</span><br><em data-i18n="downloadTwo">Download this app.</em></h2>
+          <p class="intro" data-i18n="downloadIntro">Use your PICO international account to download the selected app. For paid apps, purchase them in PICO Store first.</p>
         </div>
         <div class="downloader-panel">
+          <p id="account-register" class="account-register">
+            <span data-i18n="registerIntro">Need a PICO international account?</span>
+            <a href="https://sso-global.picoxr.com/" target="_blank" rel="noopener noreferrer" data-i18n="registerLink">Register on PICO’s website ↗</a>
+            <span class="register-hint" data-i18n="registerHint">Choose “Sign Up”, then return here to sign in.</span>
+          </p>
           <form id="account-form" class="account-form" autocomplete="off">
-            <label for="account-email" data-i18n="emailLabel">PICO account email</label>
+            <label for="account-email" data-i18n="emailLabel">PICO international account email</label>
             <div class="field-row">
-              <input id="account-email" type="email" required maxlength="254" placeholder="you@example.com" aria-describedby="account-status">
+              <input id="account-email" type="email" required maxlength="254" placeholder="you@example.com" aria-describedby="account-register account-status">
               <button id="send-code" type="button" data-i18n="sendCode">Send code</button>
             </div>
             <div class="field-row">
-              <input id="account-code" inputmode="text" pattern="[A-Za-z0-9]{4,8}" maxlength="8" required placeholder="A1B2C3" data-i18n-placeholder="codePlaceholder" aria-describedby="account-status">
+              <input id="account-code" inputmode="text" pattern="[A-Za-z0-9]{4,8}" maxlength="8" required placeholder="Email verification code" data-i18n-placeholder="codePlaceholder" aria-describedby="account-status">
               <button id="sign-in" type="submit" data-i18n="signIn">Sign in</button>
             </div>
             <p id="account-status" role="status" aria-live="polite" class="muted">Not signed in</p>
@@ -77,9 +85,9 @@
               <div class="apk-md5-row"><dt>MD5</dt><dd><code id="apk-md5">—</code></dd></div>
             </dl>
             <div class="download-actions">
-              <button id="acquire-apk" type="button" hidden data-i18n="acquireApk">Get app and prepare download</button>
+              <button id="acquire-apk" type="button" hidden data-i18n="acquireApk">Get free app</button>
               <a id="download-apk" class="action primary" href="#downloader" download><span data-i18n="downloadApk">Download APK</span> <span aria-hidden="true">↓</span></a>
-              <a id="download-direct" class="action secondary" href="#downloader" target="_blank" rel="noopener noreferrer" hidden data-i18n="directDownload">PICO CDN link ↗</a>
+              <a id="download-direct" class="action secondary" href="#downloader" target="_blank" rel="noopener noreferrer" hidden data-i18n="directDownload">Download from PICO ↗</a>
               <button id="copy-md5" type="button" data-i18n="copyMd5">Copy MD5</button>
             </div>
             <p id="download-status" role="status" aria-live="polite" class="muted"></p>
@@ -89,18 +97,18 @@
       </section>
 
       <section id="workflow" class="workflow" aria-labelledby="workflow-heading">
-        <div><p class="eyebrow" data-i18n="workflowLabel">05 / HOW IT WORKS</p><h2 id="workflow-heading"><span data-i18n="workflowOne">Your PICO account.</span><br><span data-i18n="workflowTwo">Your own download.</span></h2></div>
+        <div><p class="eyebrow" data-i18n="workflowLabel">05 / GETTING STARTED</p><h2 id="workflow-heading"><span data-i18n="workflowOne">Download an app.</span><br><span data-i18n="workflowTwo">Install it on your headset.</span></h2></div>
         <div class="workflow-steps">
-          <div><span>01</span><p data-i18n="stepOne">Get our Android client from GitHub Releases and install it on your PICO headset.</p></div>
-          <div><span>02</span><p data-i18n="stepTwo">Open PICO Store Lab, choose an app, and sign in with your own PICO email verification code.</p></div>
-          <div><span>03</span><p data-i18n="stepThree">Choose Download and install. The client requests your entitled APK from PICO, verifies it, then asks for system installation approval.</p></div>
-          <div><span>04</span><p data-i18n="stepFour">Prefer a desktop? Sign in above and the same APK downloads in your browser, with an MD5 you can verify.</p></div>
-          <nav class="workflow-actions" aria-label="Player resources"><a href="https://github.com/nkanf-dev/pico-store-lab/releases/latest" target="_blank" rel="noopener noreferrer" data-i18n="getClient">Get Android client ↗</a><a id="workflow-guide-link" href="https://github.com/nkanf-dev/pico-store-lab#player-guide" target="_blank" rel="noopener noreferrer" data-i18n="fullGuide">Full player guide ↗</a></nav>
+          <div><span>01</span><p data-i18n="stepOne">Search by name or choose an app from the recommendations above.</p></div>
+          <div><span>02</span><p data-i18n="stepTwo">Sign in with your PICO international account email and the verification code sent to your inbox.</p></div>
+          <div><span>03</span><p data-i18n="stepThree">Choose Download APK. For a free app you haven’t added to your account yet, choose Get free app first. Buy paid apps in PICO Store before downloading.</p></div>
+          <div><span>04</span><p data-i18n="stepFour">Install the downloaded APK on your headset. You can also use our headset app to download and install without a computer.</p></div>
+          <nav class="workflow-actions" aria-label="Player resources"><a href="https://github.com/nkanf-dev/pico-store-lab/releases/latest" target="_blank" rel="noopener noreferrer" data-i18n="getClient">Download headset app ↗</a><a id="workflow-guide-link" href="https://github.com/nkanf-dev/pico-store-lab#player-guide" target="_blank" rel="noopener noreferrer" data-i18n="fullGuide">Read the guide ↗</a></nav>
         </div>
       </section>
     </main>
 
-    <footer><span data-i18n="communityLabel">PICO STORE LAB / COMMUNITY EXPERIMENT</span><span data-i18n="disclaimer">Independent project. App rights belong to their owners.</span></footer>
+    <footer><span data-i18n="communityLabel">PICO STORE LAB / OPEN SOURCE</span><span data-i18n="disclaimer">An independent community project, not affiliated with PICO.</span></footer>
   </div>
 </body>
 </html>
