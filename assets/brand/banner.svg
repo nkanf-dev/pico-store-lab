@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1440" height="480" viewBox="0 0 1440 480" role="img" aria-labelledby="title desc">
   <title id="title">PICO Store Lab</title>
-  <desc id="desc">Open-source tools for the PICO ecosystem. An editorial grid in warm ivory, ink black, and brick red with an angular P emblem.</desc>
+  <desc id="desc">Browse and download PICO apps. An editorial grid in warm ivory, ink black, and brick red with an angular P emblem.</desc>
   <defs>
     <!-- The wordmark is vector geometry, so its appearance does not depend on fonts. -->
     <g id="p" fill-rule="evenodd"><path d="M0 0h38l16 16v22L38 54H16v26H0V0Zm16 16v22h16l6-6V22l-6-6H16Z"/></g>
@@ -33,11 +33,11 @@
     <use href="#s"/><use href="#t" x="67"/><use href="#o" x="136"/><use href="#r" x="205"/><use href="#e" x="276"/>
     <use href="#l" x="367"/><use href="#a" x="430"/><use href="#b" x="499"/>
   </g>
-  <text x="48" y="365" fill="#484b44" font-family="Arial, Helvetica, sans-serif" font-size="21">Open-source tools for the PICO ecosystem.</text>
+  <text x="48" y="365" fill="#484b44" font-family="Arial, Helvetica, sans-serif" font-size="21">Browse and download PICO apps.</text>
   <g fill="#171915" font-family="Arial, Helvetica, sans-serif" font-size="12" font-weight="700" letter-spacing="1.8">
     <text x="72" y="447">DISCOVER.</text>
-    <text x="304" y="447">BUILD.</text>
-    <text x="536" y="447">RELEASE.</text>
+    <text x="304" y="447">DOWNLOAD.</text>
+    <text x="536" y="447">INSTALL.</text>
   </g>
   <path fill="#b13a22" d="M819 428h16v-8l20 20-20 20v-8h-16v-24Z"/>
   <g fill="none" stroke="#f1f0e8" opacity=".3">

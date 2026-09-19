@@ -110,7 +110,7 @@ test('web downloader is wired into the page, script, and guide', () => {
   assert.match(html, /id="download-apk"[^>]*download/);
   assert.match(script, /\/api\/download\/info/);
   for (const readme of ['../../../README.md', '../../../README.zh-CN.md']) {
-    assert.match(readFileSync(new URL(readme, import.meta.url), 'utf8'), /Download APK in the browser|网页上下载 APK/);
+    assert.match(readFileSync(new URL(readme, import.meta.url), 'utf8'), /### 1\. (?:Download from the website|在网页下载)/);
   }
 });
 
