@@ -43,18 +43,30 @@
       <div id="catalog-items" class="catalog-items" role="group" aria-label="Available apps"></div>
       <section class="section-head" aria-label="Favorites"><span data-i18n="favoritesLabel">FAVORITES</span><span data-i18n="favoritesHint">SAVED ON THIS DEVICE</span></section>
       <div id="favorite-items" class="catalog-items"></div>
-      <section class="section-head" aria-label="Current release"><span data-i18n="currentLabel">02 / APP DETAILS</span><span id="status-pill" class="status" data-i18n="loading">Loading</span></section>
-      <section class="release-grid" aria-labelledby="release-heading">
-        <div class="release-main"><p class="label" data-i18n="packageLabel">APP</p><h2 id="release-heading">—</h2><p class="package-name" id="package-name">—</p><p class="release-note" data-i18n="nativeNote">App information from PICO Store.</p><div class="detail-actions"><a id="official-link" href="https://store-global.picoxr.com/global" target="_blank" rel="noopener noreferrer" data-i18n="official">View in PICO Store ↗</a><button id="favorite-toggle" type="button" data-i18n="favoriteAdd">Add to favorites ☆</button></div></div>
-        <div class="release-number"><p class="label" data-i18n="versionLabel">LATEST VERSION CODE</p><strong id="version-code">—</strong><p id="last-check" class="muted" data-i18n="reading">Loading app information</p></div>
+      <section id="app-details" class="app-detail" aria-labelledby="release-heading" tabindex="-1">
+        <div class="detail-heading-row"><p class="eyebrow"><span class="indicator"></span><span data-i18n="currentLabel">02 / APP DETAILS</span></p><span id="status-pill" class="status" role="status"></span></div>
+        <div class="app-overview">
+          <div id="app-cover-frame" class="app-cover-frame" hidden><img id="app-cover" alt="" loading="lazy" referrerpolicy="no-referrer"></div>
+          <div class="app-overview-copy">
+            <div class="app-identity"><img id="app-icon" alt="" width="72" height="72" hidden referrerpolicy="no-referrer"><div><p id="app-publisher" class="app-publisher"></p><h2 id="release-heading">—</h2></div></div>
+            <p id="app-summary" class="app-summary"></p>
+            <p id="app-price" class="app-price"></p>
+            <a id="detail-download" class="action primary" href="#downloader"><span data-i18n="goDownload">Download this app</span><span aria-hidden="true">↓</span></a>
+            <div class="detail-actions"><a id="official-link" href="https://store-global.picoxr.com/global" target="_blank" rel="noopener noreferrer" data-i18n="official">View in PICO Store ↗</a><button id="favorite-toggle" type="button" data-i18n="favoriteAdd">Add to favorites ☆</button></div>
+          </div>
+        </div>
+        <div id="app-gallery" class="app-gallery" aria-label="App screenshots" hidden></div>
+        <div class="app-reading">
+          <div id="app-about" hidden><h3 data-i18n="aboutApp">About this app</h3><div id="app-description" class="app-description"></div></div>
+          <dl id="app-facts" class="app-facts"></dl>
+        </div>
+        <details class="version-history"><summary data-i18n="historyLabel">Version history</summary><p id="last-check" class="muted"></p><ol id="releases" class="release-list"></ol></details>
       </section>
-
-      <section class="section-head" aria-label="Release history"><span data-i18n="historyLabel">03 / VERSION HISTORY</span><span data-i18n="trackingLabel">RECENT UPDATES</span></section>
-      <ol id="releases" class="release-list"><li class="empty" data-i18n="readingHistory">Loading version history…</li></ol>
 
       <section id="downloader" class="downloader" aria-labelledby="downloader-heading">
         <div class="downloader-copy">
-          <p class="eyebrow"><span class="indicator"></span> <span data-i18n="downloadLabel">04 / WEB DOWNLOAD</span></p>
+          <p class="eyebrow"><span class="indicator"></span> <span data-i18n="downloadLabel">03 / WEB DOWNLOAD</span></p>
+          <p id="download-selected-name" class="download-selected-name"></p>
           <h2 id="downloader-heading"><span data-i18n="downloadOne">Sign in to PICO.</span><br><em data-i18n="downloadTwo">Download this app.</em></h2>
           <p class="intro" data-i18n="downloadIntro">Use your PICO international account to download the selected app. For paid apps, purchase them in PICO Store first.</p>
         </div>
@@ -82,14 +94,15 @@
             <dl class="apk-meta">
               <div><dt data-i18n="apkVersionLabel">VERSION</dt><dd id="apk-version">—</dd></div>
               <div><dt data-i18n="apkSizeLabel">SIZE</dt><dd id="apk-size">—</dd></div>
-              <div class="apk-md5-row"><dt>MD5</dt><dd><code id="apk-md5">—</code></dd></div>
+
             </dl>
             <div class="download-actions">
               <button id="acquire-apk" type="button" hidden data-i18n="acquireApk">Get free app</button>
               <a id="download-apk" class="action primary" href="#downloader" download><span data-i18n="downloadApk">Download APK</span> <span aria-hidden="true">↓</span></a>
               <a id="download-direct" class="action secondary" href="#downloader" target="_blank" rel="noopener noreferrer" hidden data-i18n="directDownload">Download from PICO ↗</a>
-              <button id="copy-md5" type="button" data-i18n="copyMd5">Copy MD5</button>
+
             </div>
+            <details class="file-details"><summary data-i18n="fileDetails">File details</summary><p>MD5 <code id="apk-md5">—</code></p><button id="copy-md5" type="button" data-i18n="copyMd5">Copy MD5</button></details>
             <p id="download-status" role="status" aria-live="polite" class="muted"></p>
             <button id="sign-out" type="button" data-i18n="signOut">Sign out</button>
           </div>
@@ -97,7 +110,7 @@
       </section>
 
       <section id="workflow" class="workflow" aria-labelledby="workflow-heading">
-        <div><p class="eyebrow" data-i18n="workflowLabel">05 / GETTING STARTED</p><h2 id="workflow-heading"><span data-i18n="workflowOne">Download an app.</span><br><span data-i18n="workflowTwo">Install it on your headset.</span></h2></div>
+        <div><p class="eyebrow" data-i18n="workflowLabel">04 / GETTING STARTED</p><h2 id="workflow-heading"><span data-i18n="workflowOne">Download an app.</span><br><span data-i18n="workflowTwo">Install it on your headset.</span></h2></div>
         <div class="workflow-steps">
           <div><span>01</span><p data-i18n="stepOne">Search by name or choose an app from the recommendations above.</p></div>
           <div><span>02</span><p data-i18n="stepTwo">Sign in with your PICO international account email and the verification code sent to your inbox.</p></div>

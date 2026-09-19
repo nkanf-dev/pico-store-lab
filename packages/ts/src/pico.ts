@@ -54,6 +54,16 @@ export interface PublicItem {
   price: string;
   currency: string;
   iconUrl: string | null;
+  coverUrl?: string | null;
+  summary?: string;
+  description?: string;
+  screenshots?: string[];
+  publisher?: string;
+  genres?: string;
+  ageRating?: string;
+  supportedPlatforms?: string;
+  appVersion?: string;
+  score?: number | null;
   officialUrl: string;
   entitlementStatus: number | null;
   offerExists: boolean | null;
@@ -209,6 +219,18 @@ export function parsePublicItem(response: unknown, target: StoreTarget = DEFAULT
   if (!Number.isSafeInteger(data.version_code) || (data.version_code as number) <= 0) {
     throw new Error('PICO returned an invalid version code');
   }
+  const cover = data.cover && typeof data.cover === 'object' ? data.cover as Record<string, unknown> : {};
+  const detail = data.detail && typeof data.detail === 'object' ? data.detail as Record<string, unknown> : {};
+  const description = data.description && typeof data.description === 'object' ? data.description as Record<string, unknown> : {};
+  const ageRating = data.age_rating && typeof data.age_rating === 'object' ? data.age_rating as Record<string, unknown> : {};
+  const imageUrl = (value: unknown): string | null => {
+    if (typeof value !== 'string') return null;
+    try {
+      const url = new URL(value);
+      return url.protocol === 'https:' && !url.username && !url.password &&
+        ['picoxr.com', 'picovr.com'].some(host => url.hostname === host || url.hostname.endsWith(`.${host}`)) ? url.href : null;
+    } catch { return null; }
+  };
   return {
     itemId: target.itemId,
     packageName: target.packageName,
@@ -216,7 +238,20 @@ export function parsePublicItem(response: unknown, target: StoreTarget = DEFAULT
     versionCode: data.version_code as number,
     price: String(data.price ?? ''),
     currency: String(data.currency ?? ''),
-    iconUrl: typeof data.icon === 'string' && data.icon.startsWith('https://') ? data.icon : null,
+    iconUrl: imageUrl(data.icon),
+    coverUrl: imageUrl(cover.landscape) ?? imageUrl(cover.square),
+    summary: typeof data.abstract === 'string' ? data.abstract : '',
+    description: typeof description.app_description === 'string' ? description.app_description : '',
+    screenshots: Array.isArray(data.images) ? data.images.flatMap(image => {
+      const url = imageUrl(image && typeof image === 'object' ? (image as Record<string, unknown>).image_url : null);
+      return url ? [url] : [];
+    }).slice(0, 24) : [],
+    publisher: String(detail.app_publisher ?? ''),
+    genres: String(detail.app_genres ?? ''),
+    ageRating: String(ageRating.name ?? ''),
+    supportedPlatforms: String(detail.app_supported_platforms ?? ''),
+    appVersion: String(detail.app_version ?? ''),
+    score: typeof data.score === 'number' && Number.isFinite(data.score) && data.score > 0 ? data.score : null,
     officialUrl: `${(options.webStoreHost ?? 'https://store-global.picoxr.com').replace(/\/$/, '')}/${options.webRegion ?? 'global'}/detail/1/${target.itemId}`,
     entitlementStatus: Number.isInteger(data.entitlement_status) ? data.entitlement_status as number : null,
     offerExists: typeof data.is_offer_exist === 'boolean' ? data.is_offer_exist : null,

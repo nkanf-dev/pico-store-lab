@@ -1,6 +1,6 @@
 {
   "name": "@pico-store/shared",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "type": "module",
   "exports": {
     "./pico": "./src/pico.js",

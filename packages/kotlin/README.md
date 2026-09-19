@@ -1,6 +1,6 @@
 # PICO Store Lab — Kotlin SDK
 
-Android-compatible Kotlin client for search, item lookup, email sign-in, authenticated download metadata and verified APK acquisition. Protocol builders, validators, mirror policy and a replaceable transport are public. The PICO Android client includes this module directly. Maven publication is planned for a later release pass; the first source release is on GitHub.
+Android-compatible Kotlin client for search, item lookup, email sign-in, authenticated download metadata and verified APK acquisition. Protocol builders, validators, mirror policy and a replaceable transport are public. The PICO Android client includes this module directly. Download the AAR from [GitHub Releases](https://github.com/nkanf-dev/pico-store-lab/releases/latest), or include this module in your Gradle build.
 
 ```kotlin
 val client = PicoStoreClient()

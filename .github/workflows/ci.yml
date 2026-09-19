@@ -32,6 +32,7 @@ jobs:
         with:
           python-version: '3.11'
       - run: python -m pip install ruff==0.15.22 build hatchling
+      - run: python -m pip install -e packages/python
       - run: ruff check packages/python tools
       - run: ruff format --check packages/python tools
       - run: PYTHONPATH=packages/python/src python -m unittest discover -s packages/python/tests -v
@@ -42,6 +43,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: ./.github/actions/linux-desktop
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy

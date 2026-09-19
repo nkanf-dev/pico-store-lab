@@ -21,7 +21,7 @@ function element() {
     setAttribute(name, value) { this.attrs[name] = value; },
     removeAttribute(name) { delete this.attrs[name]; },
     append(...children) { this.children.push(...children); },
-    replaceChildren(...children) { this.children = children; }, focus() {},
+    replaceChildren(...children) { this.children = children; }, focus() {}, scrollIntoView() {},
   };
 }
 
@@ -40,7 +40,7 @@ async function browser(override = () => undefined, href = 'https://example.test/
   const location = { href };
   const calls = [];
   vm.runInNewContext(source, {
-    URL, URLSearchParams, Intl, location,
+    URL, URLSearchParams, Intl, location, matchMedia: () => ({ matches: true }),
     navigator: { language: 'en' }, history: { replaceState(_state, _unused, url) { location.href = String(url); } },
     localStorage: { getItem: () => null, setItem() {} },
     document: { getElementById: id => elements.get(id), createElement: element,
@@ -50,6 +50,10 @@ async function browser(override = () => undefined, href = 'https://example.test/
       const custom = override(path, init);
       if (custom !== undefined) return custom;
       if (path === '/api/catalog') return Response.json(items.map(item => ({ ...item, state: { ...item, releases: [] } })));
+      if (path.startsWith('/api/item?')) {
+        const item = items.find(item => new URL(path, 'https://example.test').searchParams.get('itemId') === item.itemId);
+        return Response.json({ ...item, versionCode: 1 });
+      }
       if (path === '/api/account/session') return Response.json({ authenticated: true, email: 'player@example.test' });
       if (path === '/api/account/logout') return Response.json({ authenticated: false });
       if (path === '/api/account/login') return Response.json({ authenticated: true });

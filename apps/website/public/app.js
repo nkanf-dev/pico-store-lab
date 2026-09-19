@@ -17,9 +17,9 @@ const translations = {
     "favoriteRemove": "Remove from favorites ★",
     "packageLabel": "APP",
     "versionLabel": "LATEST VERSION CODE",
-    "historyLabel": "03 / VERSION HISTORY",
+    "historyLabel": "Version history",
     "trackingLabel": "RECENT UPDATES",
-    "workflowLabel": "05 / GETTING STARTED",
+    "workflowLabel": "04 / GETTING STARTED",
     "communityLabel": "PICO STORE LAB / OPEN SOURCE",
     "heroLine": "Find PICO apps.",
     "heroAccent": "Download and install.",
@@ -42,7 +42,7 @@ const translations = {
     "stepThree": "Choose Download APK. For a free app you haven’t added to your account yet, choose Get free app first. Buy paid apps in PICO Store before downloading.",
     "stepFour": "Install the downloaded APK on your headset. You can also use our headset app to download and install without a computer.",
     "disclaimer": "An independent community project, not affiliated with PICO.",
-    "downloadLabel": "04 / WEB DOWNLOAD",
+    "downloadLabel": "03 / WEB DOWNLOAD",
     "downloadOne": "Sign in to PICO.",
     "downloadTwo": "Download this app.",
     "downloadIntro": "Use your PICO international account to download the selected app. For paid apps, purchase them in PICO Store first.",
@@ -98,7 +98,20 @@ const translations = {
     "unavailable": "Unavailable",
     "unable": "Could not load app information. Please try again later.",
     "language": "中文",
-    "languageLabel": "Switch to Chinese"
+    "languageLabel": "Switch to Chinese",
+    "goDownload": "Download this app",
+    "aboutApp": "About this app",
+    "free": "Free",
+    "publisher": "Publisher",
+    "genres": "Category",
+    "ageRating": "Age rating",
+    "platforms": "Headsets",
+    "version": "Version",
+    "rating": "Rating",
+    "viewApp": "View app →",
+    "detailUnavailable": "Details could not be loaded. View this app in PICO Store for more information.",
+    "screenshot": "App screenshot",
+    "fileDetails": "File details"
   },
   "zh-CN": {
     "indexLabel": "PICO 应用目录",
@@ -117,9 +130,9 @@ const translations = {
     "favoriteRemove": "取消收藏 ★",
     "packageLabel": "应用",
     "versionLabel": "最新版本码",
-    "historyLabel": "03 / 版本记录",
+    "historyLabel": "版本记录",
     "trackingLabel": "近期更新",
-    "workflowLabel": "05 / 使用指南",
+    "workflowLabel": "04 / 开始使用",
     "communityLabel": "PICO STORE LAB / 开源项目",
     "heroLine": "浏览 PICO 应用，",
     "heroAccent": "下载你需要的。",
@@ -142,7 +155,7 @@ const translations = {
     "stepThree": "点击「下载 APK」。尚未领取的免费应用，先点击「领取免费应用」；付费应用请先在 PICO 商店购买。",
     "stepFour": "把下载好的 APK 安装到头显。也可以使用头显客户端，在头显上直接下载并安装，无需电脑。",
     "disclaimer": "独立社区项目，与 PICO 无隶属关系。",
-    "downloadLabel": "04 / 网页下载",
+    "downloadLabel": "03 / 网页下载",
     "downloadOne": "登录 PICO 账号，",
     "downloadTwo": "下载所选应用。",
     "downloadIntro": "使用 PICO 国际区账号下载所选应用。付费应用请先在 PICO 商店购买。",
@@ -198,7 +211,20 @@ const translations = {
     "unavailable": "暂不可用",
     "unable": "无法加载应用信息，请稍后重试。",
     "language": "EN",
-    "languageLabel": "Switch to English"
+    "languageLabel": "Switch to English",
+    "goDownload": "下载此应用",
+    "aboutApp": "应用介绍",
+    "free": "免费",
+    "publisher": "开发商",
+    "genres": "类型",
+    "ageRating": "年龄分级",
+    "platforms": "支持的头显",
+    "version": "版本",
+    "rating": "评分",
+    "viewApp": "查看应用 →",
+    "detailUnavailable": "暂时无法加载完整介绍，可以前往 PICO 商店查看。",
+    "screenshot": "应用截图",
+    "fileDetails": "文件信息"
   }
 };
 
@@ -210,6 +236,8 @@ let catalogItems = [];
 let searchItems = [];
 let selectedId = null;
 let fromSnapshot = false;
+const itemDetails = new Map();
+let detailRequest = 0;
 let favorites = [];
 try { favorites = JSON.parse(localStorage.getItem('pico-store-favorites') || '[]'); } catch { favorites = []; }
 if (!Array.isArray(favorites)) favorites = [];
@@ -251,11 +279,10 @@ function renderCards(container, items) {
     button.setAttribute('aria-pressed', String(item.itemId === selectedId));
     const name = document.createElement('strong');
     name.textContent = item.name;
-    const version = document.createElement('span');
-    const versionCode = item.state?.latestVersionCode ?? item.versionCode;
-    version.textContent = versionCode ? `BUILD ${versionCode}` : '—';
-    button.append(name, version);
-    button.addEventListener('click', () => selectItem(item.itemId));
+    const subtitle = document.createElement('span');
+    subtitle.textContent = t('viewApp');
+    button.append(name, subtitle);
+    button.addEventListener('click', () => selectItem(item.itemId, true));
     container.append(button);
   }
 }
@@ -266,33 +293,103 @@ function renderCatalog() {
   renderCards($('favorite-items'), favorites);
 }
 
-async function selectItem(itemId) {
-  selectedId = itemId;
-  invalidateDownload();
+async function selectItem(itemId, scroll = false) {
   const item = [...catalogItems, ...searchItems, ...favorites].find(entry => entry.itemId === itemId);
   if (!item) return;
+  selectedId = itemId;
+  const request = ++detailRequest;
+  invalidateDownload();
   renderCatalog();
-  render(item.state ?? { ...item, latestVersionCode: item.versionCode, releases: [], stale: true }, !item.state);
-  if (!item.state) {
-    try {
-      const url = `/api/item?itemId=${encodeURIComponent(item.itemId)}&package=${encodeURIComponent(item.packageName)}`;
-      const response = await fetch(url);
-      if (!response.ok) throw new Error('item unavailable');
-      const detail = await response.json();
-      item.versionCode = detail.versionCode;
-      renderCatalog();
-      if (selectedId === itemId) render({ ...detail, latestVersionCode: detail.versionCode, releases: [] });
-    } catch { /* Search result remains selectable with its public summary. */ }
+  const base = item.state ?? { ...item, latestVersionCode: item.versionCode, releases: [], stale: true };
+  render({ ...base, ...itemDetails.get(itemId) }, !item.state);
+  if (scroll) {
+    $('app-details').scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' });
+    $('app-details').focus({ preventScroll: true });
   }
   refreshDownload();
+  try {
+    const url = `/api/item?itemId=${encodeURIComponent(item.itemId)}&package=${encodeURIComponent(item.packageName)}`;
+    const response = await fetch(url);
+    if (!response.ok) throw new Error('item unavailable');
+    const detail = await response.json();
+    itemDetails.set(itemId, detail);
+    if (selectedId === itemId && request === detailRequest) render({ ...base, ...detail, latestVersionCode: detail.versionCode });
+  } catch {
+    if (selectedId === itemId && request === detailRequest && !itemDetails.has(itemId)) {
+      $('app-summary').textContent = t('detailUnavailable');
+      $('status-pill').textContent = '';
+    }
+  }
+}
+
+function safeImage(value) {
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:' && !url.username && !url.password &&
+      ['picoxr.com', 'picovr.com'].some(host => url.hostname === host || url.hostname.endsWith(`.${host}`)) ? url.href : null;
+  } catch { return null; }
+}
+
+function setImage(id, url) {
+  const element = $(id);
+  const source = safeImage(url);
+  element.hidden = !source;
+  if (source) element.src = source;
+  else element.removeAttribute('src');
+  return !!source;
+}
+
+function readableText(value) {
+  if (!value) return '';
+  const document = new DOMParser().parseFromString(String(value || ''), 'text/html');
+  document.querySelectorAll('script,style,iframe,object').forEach(node => node.remove());
+  document.querySelectorAll('br').forEach(node => node.replaceWith('\n'));
+  document.querySelectorAll('p,div,li').forEach(node => node.append('\n'));
+  return document.body.textContent.trim();
+}
+
+function renderDetails(state) {
+  $('app-cover-frame').hidden = !setImage('app-cover', state.coverUrl);
+  setImage('app-icon', state.iconUrl);
+  $('app-publisher').textContent = state.publisher || '';
+  $('app-summary').textContent = readableText(state.summary);
+  $('app-price').textContent = state.price !== undefined && state.price !== ''
+    ? Number(state.price) === 0 ? t('free') : `${state.price} ${state.currency || ''}` : '';
+  $('download-selected-name').textContent = state.name || '';
+  const description = readableText(state.description);
+  $('app-about').hidden = !description;
+  $('app-description').textContent = description;
+  const gallery = $('app-gallery');
+  gallery.replaceChildren();
+  for (const [index, source] of (state.screenshots || []).entries()) {
+    const url = safeImage(source);
+    if (!url) continue;
+    const link = document.createElement('a');
+    link.href = url; link.target = '_blank'; link.rel = 'noopener noreferrer';
+    const image = document.createElement('img');
+    image.src = url; image.alt = `${state.name || ''} — ${t('screenshot')} ${index + 1}`;
+    image.loading = 'lazy'; image.referrerPolicy = 'no-referrer';
+    link.append(image); gallery.append(link);
+  }
+  gallery.hidden = !gallery.children.length;
+  const facts = $('app-facts');
+  facts.replaceChildren();
+  const values = { publisher: state.publisher, genres: state.genres, ageRating: state.ageRating,
+    platforms: state.supportedPlatforms, rating: state.score, version: state.appVersion || state.latestVersionCode };
+  for (const [key, value] of Object.entries(values)) {
+    if (!value) continue;
+    const row = document.createElement('div');
+    const label = document.createElement('dt'); label.textContent = t(key);
+    const text = document.createElement('dd'); text.textContent = String(value);
+    row.append(label, text); facts.append(row);
+  }
 }
 
 function render(state, snapshot = false) {
   currentState = state;
   fromSnapshot = snapshot;
-  $('version-code').textContent = state.latestVersionCode ?? '—';
+  renderDetails(state);
   $('release-heading').textContent = state.name ?? state.packageName ?? '—';
-  $('package-name').textContent = state.packageName ?? '—';
   $('favorite-toggle').textContent = t(favorites.some(item => item.itemId === state.itemId) ? 'favoriteRemove' : 'favoriteAdd');
   $('last-check').textContent = state.lastSuccessfulCheckAt
     ? `${t('lastCheck')}${formatTime(state.lastSuccessfulCheckAt)}` : t('catalogLookup');
@@ -453,7 +550,7 @@ function renderDownload() {
     return;
   }
   $('apk-name').textContent = apk.name ?? apk.packageName;
-  $('apk-version').textContent = `BUILD ${apk.versionCode}${apk.version ? ` / ${apk.version}` : ''}`;
+  $('apk-version').textContent = apk.version || String(apk.versionCode);
   $('apk-size').textContent = formatBytes(apk.size);
   $('apk-md5').textContent = apk.md5;
   button.href = apk.downloadUrl;

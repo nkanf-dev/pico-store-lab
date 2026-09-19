@@ -4,10 +4,11 @@ build-backend = "hatchling.build"
 
 [project]
 name = "pico-store-lab"
-version = "0.1.1"
-description = "Typed PICO store protocol SDK and small CLI"
+version = "0.1.2"
+description = "PICO app search, sign-in, and downloads for Python and the command line"
 readme = "README.md"
 requires-python = ">=3.11"
+dependencies = ["keyring>=25.6,<26"]
 license = "MIT"
 authors = [{ name = "PICO Store Lab contributors" }]
 keywords = ["pico", "vr", "sdk", "store"]

@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=PICO Store Lab
+Comment=Browse and download PICO apps
+Comment[zh_CN]=浏览和下载 PICO 应用
+Exec=pico-store-desktop
+Icon=dev.nkanf.picostore
+Terminal=false
+Categories=Network;Utility;
+StartupWMClass=dev.nkanf.picostore.desktop

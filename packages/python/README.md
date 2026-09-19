@@ -1,6 +1,8 @@
 # PICO Store Lab — Python SDK
 
-Typed, standard-library-only PICO store client and `pico-store-py` CLI. This package is part of [PICO Store Lab](https://github.com/nkanf-dev/pico-store-lab).
+PICO app search, sign-in, and downloads for Python, with a `pico-store-py` command-line tool for Windows, macOS, and Linux. This package is part of [PICO Store Lab](https://github.com/nkanf-dev/pico-store-lab).
+
+Install with `python -m pip install pico-store-lab`.
 
 ```python
 from pathlib import Path

@@ -18,7 +18,7 @@ class MainActivity : ComponentActivity() {
     private val client = PicoStoreClient()
     private val worker = Executors.newSingleThreadExecutor()
     private val prefs by lazy { getSharedPreferences("store", MODE_PRIVATE) }
-    private val account by lazy { getSharedPreferences("pico_account", MODE_PRIVATE) }
+    private val account by lazy { AccountStore(this) }
     private val auth = mutableStateOf<PicoAuth?>(null)
     private val email = mutableStateOf("")
     private val items = mutableStateOf<List<StoreEntry>>(emptyList())
@@ -26,6 +26,7 @@ class MainActivity : ComponentActivity() {
     private val busy = mutableStateOf(false)
     private val downloadProgress = mutableStateOf<Pair<Long, Long?>?>(null)
     private val themeMode = mutableStateOf(ThemeMode.SYSTEM)
+    private val updateVersion = mutableStateOf<String?>(null)
     private val message = mutableStateOf("")
     private val favorites = mutableStateOf<Set<String>>(emptySet())
     private var seedEntries: List<StoreEntry> = emptyList()
@@ -56,6 +57,9 @@ class MainActivity : ComponentActivity() {
                 email = email.value,
                 signedIn = auth.value != null,
                 favorites = favorites.value,
+                updateVersion = updateVersion.value,
+                onCheckUpdate = ::checkUpdate,
+                onOpenUpdate = { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(ReleaseUpdates.DOWNLOAD_URL))) },
                 onSearch = ::search,
                 onSelect = ::select,
                 onFavorite = ::toggleFavorite,
@@ -74,14 +78,16 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun restoreSession() {
-        val raw = account.getString("session", null) ?: return
         runCatching {
+            val raw = account.load() ?: return
             val data = JSONObject(raw)
             val cookies = data.getJSONObject("cookies")
-            auth.value = PicoAuth(data.getString("uid"), data.getString("token"),
+            val session = PicoAuth(data.getString("uid"), data.getString("token"),
                 cookies.keys().asSequence().associateWith { cookies.getString(it) })
+            require(session.token.isNotEmpty() || session.cookies.isNotEmpty())
+            auth.value = session
             email.value = data.optString("email")
-        }.onFailure { account.edit().remove("session").apply() }
+        }.onFailure { message.value = getString(R.string.session_unavailable) }
     }
 
     private fun work(block: () -> Unit) {
@@ -129,6 +135,17 @@ class MainActivity : ComponentActivity() {
         runOnUiThread { selected.value = detail }
     }
 
+    private fun checkUpdate() = work {
+        try {
+            val version = ReleaseUpdates.newerVersion(BuildConfig.VERSION_NAME)
+            runOnUiThread {
+                updateVersion.value = version
+                message.value = if (version == null) getString(R.string.up_to_date)
+                    else getString(R.string.update_available, version)
+            }
+        } catch (_: Exception) { error(getString(R.string.update_check_failed)) }
+    }
+
     private fun toggleFavorite(itemId: String) {
         favorites.value = if (itemId in favorites.value) favorites.value - itemId else favorites.value + itemId
         prefs.edit().putStringSet("favorites", favorites.value).apply()
@@ -143,7 +160,8 @@ class MainActivity : ComponentActivity() {
         val session = client.login(address, code)
         val data = JSONObject().put("uid", session.uid).put("token", session.token)
             .put("cookies", JSONObject(session.cookies)).put("email", address)
-        check(account.edit().putString("session", data.toString()).commit()) { "Unable to save session" }
+        try { account.save(data.toString()) }
+        catch (_: Exception) { error(getString(R.string.session_save_failed)) }
         val previous = selected.value
         val refreshed = previous?.let {
             runCatching { client.item(StoreTarget(it.itemId, it.packageName, it.name), session) }.getOrNull()
@@ -154,11 +172,14 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun logout() {
-        account.edit().remove("session").apply()
-        auth.value = null
-        email.value = ""
-        selected.value = null
+    private fun logout() = work {
+        try { account.clear() }
+        catch (_: Exception) { error(getString(R.string.sign_out_failed)) }
+        runOnUiThread {
+            auth.value = null
+            email.value = ""
+            selected.value = null
+        }
     }
 
     private fun getApp(detail: PublicItem) {

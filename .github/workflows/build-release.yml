@@ -1,0 +1,56 @@
+name: Build release downloads
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  desktop:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: windows-x64
+            runner: windows-2025
+            target: x86_64-pc-windows-msvc
+          - name: windows-arm64
+            runner: windows-11-arm
+            target: aarch64-pc-windows-msvc
+          - name: macos-x64
+            runner: macos-15-intel
+            target: x86_64-apple-darwin
+          - name: macos-arm64
+            runner: macos-15
+            target: aarch64-apple-darwin
+          - name: linux-x64
+            runner: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+          - name: linux-arm64
+            runner: ubuntu-22.04-arm
+            target: aarch64-unknown-linux-gnu
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/linux-desktop
+        if: runner.os == 'Linux'
+      - name: Install Windows packager
+        if: runner.os == 'Windows'
+        run: choco install nsis --yes --no-progress
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: cargo build --release --locked --package pico-store-desktop --target ${{ matrix.target }}
+      - name: Package download
+        run: python tools/package_desktop.py --target ${{ matrix.target }} --name ${{ matrix.name }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pico-store-desktop-${{ matrix.name }}
+          path: dist/*
+          retention-days: 3
+          if-no-files-found: error

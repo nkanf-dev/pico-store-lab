@@ -1,8 +1,8 @@
 # PICO Store Lab — Rust SDK
 
-Typed PICO store client for search, item lookup, email sign-in, authenticated download metadata and verified APK acquisition. Protocol builders, response validators, mirror policy and a replaceable transport are public. The Desktop CLI calls this SDK.
+Typed PICO store client for search, item lookup, email sign-in, authenticated download metadata and verified APK acquisition. Protocol builders, response validators, mirror policy and a replaceable transport are public. The GPUI desktop app uses this SDK.
 
-Source and build artifacts are available from GitHub. Registry availability is listed in the repository release notes.
+Add the SDK with `cargo add pico-store-lab`. For the command-line app, use `cargo install pico-store-desktop --locked`.
 
 ```rust
 use pico_store_lab::{PicoStoreClient, StoreTarget};
