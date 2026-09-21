@@ -16,6 +16,14 @@ export function validateTarget(target) {
 const STORE_VERSION = '401200000';
 const DEVICE_NAME = 'A9210';
 
+function parseImageUrl(value) {
+  if (typeof value !== 'string' || !value.trim()) return null;
+  try {
+    const url = new URL(value);
+    return ['http:', 'https:'].includes(url.protocol) && url.hostname ? url.href : null;
+  } catch { return null; }
+}
+
 export function parseOfficialJson(text) {
   // PICO's item_id is above Number.MAX_SAFE_INTEGER. Preserve its decimal source.
   return JSON.parse(text, (key, value, context) => {
@@ -111,7 +119,7 @@ export function parseSearchResults(response) {
       items.push({ itemId, packageName: item.package_name, name: String(item.name || item.package_name),
         versionCode: Number.isSafeInteger(item.version_code) ? item.version_code : null,
         price: String(item.price ?? ''),
-        iconUrl: typeof item.cover?.square === 'string' && item.cover.square.startsWith('https://') ? item.cover.square : null });
+        iconUrl: parseImageUrl(item.cover?.square) });
     }
     if (group.has_more && Number.isSafeInteger(group.next_id) && group.next_id > 0) nextId ??= group.next_id;
   }
@@ -139,7 +147,7 @@ export function parsePublicItem(response, target = DEFAULT_TARGET, options = {})
     versionCode: data.version_code,
     price: String(data.price ?? ''),
     currency: String(data.currency ?? ''),
-    iconUrl: typeof data.icon === 'string' && data.icon.startsWith('https://') ? data.icon : null,
+    iconUrl: parseImageUrl(data.icon),
     officialUrl: `${(options.webStoreHost ?? 'https://store-global.picoxr.com').replace(/\/$/, '')}/${options.webRegion ?? 'global'}/detail/1/${target.itemId}`,
     entitlementStatus: Number.isInteger(data.entitlement_status) ? data.entitlement_status : null,
     offerExists: typeof data.is_offer_exist === 'boolean' ? data.is_offer_exist : null,

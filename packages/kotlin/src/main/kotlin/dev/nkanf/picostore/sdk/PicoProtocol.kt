@@ -1,6 +1,7 @@
 package dev.nkanf.picostore.sdk
 
 import java.math.BigInteger
+import java.net.URI
 import java.net.URLEncoder
 import org.json.JSONObject
 
@@ -94,7 +95,13 @@ enum class MirrorReason { ELIGIBLE, DISABLED, NOT_FREE, OVER_SIZE_LIMIT }
 
 object PicoProtocol {
     private fun encode(value: String): String = URLEncoder.encode(value, "UTF-8")
-    private fun imageUrl(value: String?): String? = value?.takeIf { it.startsWith("https://") }
+    private fun imageUrl(value: String?): String? {
+        if (value.isNullOrBlank()) return null
+        val uri = runCatching { URI(value) }.getOrNull() ?: return null
+        return value.takeIf {
+            uri.scheme?.lowercase() in setOf("http", "https") && !uri.host.isNullOrBlank()
+        }
+    }
     private fun authHeaders(auth: PicoAuth, config: PicoStoreConfig): Map<String, String> {
         require(auth.token.isNotEmpty() || auth.cookies.isNotEmpty()) { "authenticated PICO session required" }
         return buildMap {

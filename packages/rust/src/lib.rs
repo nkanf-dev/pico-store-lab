@@ -122,8 +122,10 @@ pub struct PublicItem {
     pub price: String,
     pub currency: String,
     pub icon_url: Option<String>,
+    pub cover_url: Option<String>,
     pub summary: String,
     pub description: String,
+    pub screenshots: Vec<String>,
     pub publisher: String,
     pub genres: String,
     pub app_version: String,
@@ -149,6 +151,7 @@ pub struct SearchItem {
     pub package_name: String,
     pub name: String,
     pub version_code: Option<u64>,
+    pub cover_url: Option<String>,
     pub price: String,
 }
 
@@ -226,6 +229,15 @@ fn store_url(path: &str, uid: &str, timestamp: u64, config: &StoreConfig) -> Str
         .append_pair("zone_name", &config.zone)
         .append_pair("timestamp", &timestamp.to_string());
     url.into()
+}
+
+fn parse_image_url(value: Option<&Value>) -> Option<String> {
+    let raw = value?.as_str()?;
+    let url = Url::parse(raw).ok()?;
+    if !matches!(url.scheme(), "http" | "https") || url.host_str().is_none() {
+        return None;
+    }
+    Some(url.to_string())
 }
 
 pub fn make_public_item_request() -> RequestSpec {
@@ -404,6 +416,10 @@ pub fn parse_search_results(text: &str) -> Result<SearchResults, SdkError> {
                     package_name: package.into(),
                     name: text_or(entry.get("name"), package),
                     version_code: entry["version_code"].as_u64(),
+                    cover_url: entry.get("cover").and_then(|cover| {
+                        parse_image_url(cover.get("landscape"))
+                            .or_else(|| parse_image_url(cover.get("square")))
+                    }),
                     price: text_or(entry.get("price"), ""),
                 });
             }
@@ -462,10 +478,20 @@ pub fn parse_public_item_with_config(
         .as_u64()
         .filter(|value| *value > 0)
         .ok_or_else(|| SdkError("PICO returned an invalid version code".into()))?;
-    let icon = data["icon"]
-        .as_str()
-        .filter(|value| value.starts_with("https://"))
-        .map(str::to_owned);
+    let icon = parse_image_url(data.get("icon"));
+    let cover_url = data.get("cover").and_then(|cover| {
+        parse_image_url(cover.get("landscape")).or_else(|| parse_image_url(cover.get("square")))
+    });
+    let screenshots = data
+        .get("images")
+        .and_then(Value::as_array)
+        .map(|images| {
+            images
+                .iter()
+                .filter_map(|image| parse_image_url(image.get("image_url")))
+                .collect()
+        })
+        .unwrap_or_default();
     Ok(PublicItem {
         item_id: target.item_id.clone(),
         package_name: target.package_name.clone(),
@@ -474,8 +500,10 @@ pub fn parse_public_item_with_config(
         price: text_or(data.get("price"), ""),
         currency: text_or(data.get("currency"), ""),
         icon_url: icon,
+        cover_url,
         summary: text_or(data.get("abstract"), ""),
         description: text_or(data["description"].get("app_description"), ""),
+        screenshots,
         publisher: text_or(data["detail"].get("app_publisher"), ""),
         genres: text_or(data["detail"].get("app_genres"), ""),
         app_version: text_or(data["detail"].get("app_version"), ""),
@@ -689,12 +717,92 @@ mod tests {
     }
 
     #[test]
+    fn extracts_valid_media_urls() {
+        let target = StoreTarget::new(
+            "7270207384512020485",
+            "com.google.android.apps.youtube.vr.pico",
+            "YouTube VR",
+        )
+        .unwrap();
+        let response = r#"{
+            "code":0,
+            "data":{
+                "item_id":7270207384512020485,
+                "package_name":"com.google.android.apps.youtube.vr.pico",
+                "name":"YouTube VR",
+                "version_code":18713000,
+                "icon":"https://zstatic.us-appstore.picovr.com/icon.jpg",
+                "cover":{"landscape":"https://zstatic.us-appstore.picovr.com/cover.jpg"},
+                "images":[
+                    {"image_url":"https://zstatic.us-appstore.picovr.com/shot.jpg"},
+                    {"image_url":"https://example.com/allowed.jpg"},
+                    {"image_url":"http://cdn.example.net/insecure.jpg"},
+                    {"image_url":"file:///tmp/not-supported.jpg"}
+                ]
+            }
+        }"#;
+        let item = parse_public_item_for(response, &target).unwrap();
+        assert_eq!(
+            item.cover_url.as_deref(),
+            Some("https://zstatic.us-appstore.picovr.com/cover.jpg")
+        );
+        assert_eq!(
+            item.screenshots,
+            vec![
+                "https://zstatic.us-appstore.picovr.com/shot.jpg",
+                "https://example.com/allowed.jpg",
+                "http://cdn.example.net/insecure.jpg"
+            ]
+        );
+
+        let untrusted = response.replace(
+            "https://zstatic.us-appstore.picovr.com/icon.jpg",
+            "https://example.com/icon.jpg",
+        );
+        assert_eq!(
+            parse_public_item_for(&untrusted, &target)
+                .unwrap()
+                .icon_url
+                .as_deref(),
+            Some("https://example.com/icon.jpg")
+        );
+    }
+
+    #[test]
+    fn preserves_all_supported_screenshots() {
+        let target = StoreTarget::new(
+            "7270207384512020485",
+            "com.google.android.apps.youtube.vr.pico",
+            "YouTube VR",
+        )
+        .unwrap();
+        let images = (0..25)
+            .map(|index| format!(r#"{{"image_url":"https://cdn.example.com/{index}.jpg"}}"#))
+            .collect::<Vec<_>>()
+            .join(",");
+        let response = format!(
+            r#"{{"code":0,"data":{{"item_id":7270207384512020485,"package_name":"com.google.android.apps.youtube.vr.pico","version_code":1,"images":[{images}]}}}}"#
+        );
+
+        let item = parse_public_item_for(&response, &target).unwrap();
+        assert_eq!(item.screenshots.len(), 25);
+        assert_eq!(
+            item.screenshots.last().map(String::as_str),
+            Some("https://cdn.example.com/24.jpg")
+        );
+    }
+
+    #[test]
     fn search_preserves_non_seed_item_id() {
         let request = make_search_request("YouTube", 1).unwrap();
         assert!(request.url.contains("/api/app/v2/search/aggregation"));
-        let response = r#"{"code":0,"data":{"search_list":[{"items":[{"item_id":7270207384512020485,"package_name":"com.google.android.apps.youtube.vr.pico","name":"YouTube VR"},{"item_id":7574402934302343167,"name":"Bundle"}]}]}}"#;
+        let response = r#"{"code":0,"data":{"search_list":[{"items":[{"item_id":7270207384512020485,"package_name":"com.google.android.apps.youtube.vr.pico","name":"YouTube VR","cover":{"square":"https://zstatic.us-appstore.picovr.com/search.jpg"}},{"item_id":7574402934302343167,"name":"Bundle"}]}]}}"#;
         let result = parse_search_results(response).unwrap();
         assert_eq!(result.items.len(), 1);
         assert_eq!(result.items[0].item_id, "7270207384512020485");
+        assert_eq!(
+            result.items[0].cover_url.as_deref(),
+            Some("https://zstatic.us-appstore.picovr.com/search.jpg")
+        );
     }
 }

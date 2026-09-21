@@ -63,6 +63,7 @@ struct Desktop {
     is_error: bool,
     downloaded: Option<PathBuf>,
     available_update: Option<String>,
+    settings_open: bool,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -91,6 +92,7 @@ impl Desktop {
                     package_name: entry.package_name,
                     name: entry.name,
                     version_code: None,
+                    cover_url: None,
                     price: String::new(),
                 })
                 .collect();
@@ -110,6 +112,7 @@ impl Desktop {
             is_error: false,
             downloaded: None,
             available_update: None,
+            settings_open: false,
             _subscriptions: vec![subscription, login_subscription],
         };
         view.run(
@@ -445,6 +448,100 @@ impl Desktop {
         }
         panel.into_any_element()
     }
+
+    fn image_placeholder(label: &str) -> AnyElement {
+        div()
+            .size_full()
+            .flex()
+            .items_center()
+            .justify_center()
+            .bg(rgb(0xe7e7dd))
+            .text_color(rgb(MUTED))
+            .child(label.to_owned())
+            .into_any_element()
+    }
+
+    fn media_panel(
+        url: Option<&String>,
+        label: &str,
+        width: Option<f32>,
+        height: f32,
+    ) -> AnyElement {
+        let mut panel = div().h(px(height)).rounded_lg().overflow_hidden();
+        if let Some(width) = width {
+            panel = panel.w(px(width));
+        } else {
+            panel = panel.w_full();
+        }
+        let Some(url) = url else {
+            return panel
+                .child(Self::image_placeholder(label))
+                .into_any_element();
+        };
+        let loading_label = label.to_owned();
+        let fallback_label = label.to_owned();
+        panel
+            .child(
+                img(url.clone())
+                    .size_full()
+                    .object_fit(ObjectFit::Cover)
+                    .with_loading(move || Self::image_placeholder(&loading_label))
+                    .with_fallback(move || Self::image_placeholder(&fallback_label)),
+            )
+            .into_any_element()
+    }
+
+    fn settings_panel(&self, cx: &mut Context<Self>) -> AnyElement {
+        div()
+            .flex()
+            .flex_col()
+            .gap_5()
+            .max_w(px(720.))
+            .child(
+                Button::new("settings-back")
+                    .label(self.text("Back to store", "返回商店"))
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        this.settings_open = false;
+                        cx.notify();
+                    })),
+            )
+            .child(
+                div()
+                    .text_3xl()
+                    .font_weight(FontWeight::BOLD)
+                    .child(self.text("Settings", "设置")),
+            )
+            .child(
+                div()
+                    .text_color(rgb(MUTED))
+                    .child(self.text("Configure local display preferences.", "配置本地显示偏好。")),
+            )
+            .child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap_2()
+                    .child(
+                        div()
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .child(self.text("Language", "语言")),
+                    )
+                    .child(
+                        Button::new("settings-language")
+                            .label(if self.chinese { "中文" } else { "English" })
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.chinese = !this.chinese;
+                                gpui_kit::component::set_locale(if this.chinese {
+                                    "zh-CN"
+                                } else {
+                                    "en"
+                                });
+                                cx.notify();
+                            })),
+                    ),
+            )
+            .into_any_element()
+    }
 }
 
 impl Render for Desktop {
@@ -467,8 +564,20 @@ impl Render for Desktop {
                     .border_color(rgb(if selected { ACCENT } else { 0xe0e1d7 }))
                     .child(
                         div()
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .child(item.name.clone()),
+                            .flex()
+                            .items_center()
+                            .gap_3()
+                            .child(Self::media_panel(
+                                item.cover_url.as_ref(),
+                                &item.name,
+                                Some(52.),
+                                52.,
+                            ))
+                            .child(
+                                div()
+                                    .font_weight(FontWeight::SEMIBOLD)
+                                    .child(item.name.clone()),
+                            ),
                     )
                     .on_click(cx.listener(move |this, _, _, cx| {
                         if let Some(target) = &target {
@@ -477,15 +586,50 @@ impl Render for Desktop {
                     }))
             })
             .collect::<Vec<_>>();
-        let mut detail = div().flex().flex_col().gap_5().flex_1().min_w_0();
+        let mut detail = div()
+            .id("detail")
+            .flex()
+            .flex_col()
+            .gap_5()
+            .flex_1()
+            .min_w_0()
+            .min_h_0()
+            .overflow_y_scroll();
         if let Some(target) = &self.selected {
-            detail = detail.child(
-                div()
-                    .text_3xl()
-                    .font_weight(FontWeight::BOLD)
-                    .child(target.name.clone()),
-            );
             if let Some(item) = &self.detail {
+                detail = detail
+                    .child(Self::media_panel(
+                        item.cover_url.as_ref().or(item.icon_url.as_ref()),
+                        &item.name,
+                        None,
+                        230.,
+                    ))
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap_4()
+                            .child(Self::media_panel(
+                                item.icon_url.as_ref(),
+                                &item.name,
+                                Some(76.),
+                                76.,
+                            ))
+                            .child(
+                                div()
+                                    .flex_1()
+                                    .min_w_0()
+                                    .child(
+                                        div()
+                                            .text_3xl()
+                                            .font_weight(FontWeight::BOLD)
+                                            .child(item.name.clone()),
+                                    )
+                                    .child(
+                                        div().text_color(rgb(MUTED)).child(item.publisher.clone()),
+                                    ),
+                            ),
+                    );
                 let free = item.price.parse::<f64>().is_ok_and(|price| price == 0.0);
                 let owned = item.entitlement_status == Some(1);
                 let unavailable = item.offer_exists == Some(false) && !owned;
@@ -497,7 +641,6 @@ impl Render for Desktop {
                     format!("{} {}", item.price, item.currency)
                 };
                 detail = detail
-                    .child(div().text_color(rgb(MUTED)).child(item.publisher.clone()))
                     .child(div().text_lg().child(item.summary.clone()))
                     .child(
                         div()
@@ -552,10 +695,30 @@ impl Render for Desktop {
                             .child(item.description.clone()),
                     );
                 }
+                if !item.screenshots.is_empty() {
+                    detail = detail.child(div().flex().gap_3().children(
+                        item.screenshots.iter().enumerate().map(|(index, url)| {
+                            Self::media_panel(
+                                Some(url),
+                                &format!("Screenshot {}", index + 1),
+                                Some(220.),
+                                124.,
+                            )
+                        }),
+                    ));
+                }
                 detail = detail.child(
                     Button::new("official-store")
                         .label(self.text("View in PICO Store ↗", "在 PICO 商店查看 ↗"))
                         .on_click(move |_, _, cx| cx.open_url(&official_url)),
+                );
+            }
+            if self.detail.is_none() {
+                detail = detail.child(
+                    div()
+                        .text_3xl()
+                        .font_weight(FontWeight::BOLD)
+                        .child(target.name.clone()),
                 );
             }
             detail = detail.child(
@@ -645,6 +808,14 @@ impl Render for Desktop {
                                         });
                                         cx.notify();
                                     })),
+                            )
+                            .child(
+                                Button::new("settings")
+                                    .label(self.text("Settings", "设置"))
+                                    .on_click(cx.listener(|this, _, _, cx| {
+                                        this.settings_open = !this.settings_open;
+                                        cx.notify();
+                                    })),
                             ),
                     ),
             )
@@ -703,17 +874,24 @@ impl Render for Desktop {
                             .id("content")
                             .flex_1()
                             .min_w_0()
-                            .overflow_y_scroll()
+                            .min_h_0()
                             .p_6()
                             .flex()
                             .gap_6()
-                            .child(detail)
-                            .child(
-                                div()
-                                    .w(px(310.))
-                                    .flex_shrink_0()
-                                    .child(self.account_panel(cx)),
-                            ),
+                            .when(!self.settings_open, |element| {
+                                element
+                                    .child(detail)
+                                    .child(
+                                        div()
+                                            .id("account-panel")
+                                            .w(px(310.))
+                                            .flex_shrink_0()
+                                            .min_h_0()
+                                            .overflow_y_scroll()
+                                            .child(self.account_panel(cx)),
+                                    )
+                            })
+                            .when(self.settings_open, |element| element.child(self.settings_panel(cx))),
                     ),
             )
             .child(

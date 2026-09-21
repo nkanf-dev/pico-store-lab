@@ -325,8 +325,7 @@ async function selectItem(itemId, scroll = false) {
 function safeImage(value) {
   try {
     const url = new URL(value);
-    return url.protocol === 'https:' && !url.username && !url.password &&
-      ['picoxr.com', 'picovr.com'].some(host => url.hostname === host || url.hostname.endsWith(`.${host}`)) ? url.href : null;
+    return ['http:', 'https:'].includes(url.protocol) && url.hostname ? url.href : null;
   } catch { return null; }
 }
 

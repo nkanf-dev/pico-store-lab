@@ -18,6 +18,7 @@ class MainActivity : ComponentActivity() {
     private val client = PicoStoreClient()
     private val worker = Executors.newSingleThreadExecutor()
     private val prefs by lazy { getSharedPreferences("store", MODE_PRIVATE) }
+    private val imageLoader by lazy { StoreImageLoader(this) }
     private val account by lazy { AccountStore(this) }
     private val auth = mutableStateOf<PicoAuth?>(null)
     private val email = mutableStateOf("")
@@ -53,6 +54,7 @@ class MainActivity : ComponentActivity() {
                 busy = busy.value,
                 downloadProgress = downloadProgress.value,
                 themeMode = themeMode.value,
+                imageLoader = imageLoader,
                 message = message.value,
                 email = email.value,
                 signedIn = auth.value != null,
@@ -68,9 +70,9 @@ class MainActivity : ComponentActivity() {
                 onLogout = ::logout,
                 onGet = ::getApp,
                 onBack = { selected.value = null },
-                onThemeChange = {
-                    themeMode.value = ThemeMode.entries[(themeMode.value.ordinal + 1) % ThemeMode.entries.size]
-                    prefs.edit().putString("theme", themeMode.value.name).apply()
+                onThemeChange = { mode ->
+                    themeMode.value = mode
+                    prefs.edit().putString("theme", mode.name).apply()
                 },
             )
         }
@@ -227,6 +229,7 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
+        imageLoader.close()
         installer.close()
         worker.shutdown()
         super.onDestroy()

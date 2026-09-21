@@ -33,6 +33,9 @@
     <string name="theme_system">主题：跟随系统</string>
     <string name="theme_light">主题：浅色</string>
     <string name="theme_dark">主题：深色</string>
+    <string name="settings">设置</string>
+    <string name="settings_description">配置此应用的本地显示偏好。</string>
+    <string name="theme">主题</string>
     <string name="ready_to_install">下载完成，正在打开安装器…</string>
     <string name="installed">应用已安装。</string>
     <string name="install_failed">安装失败。</string>

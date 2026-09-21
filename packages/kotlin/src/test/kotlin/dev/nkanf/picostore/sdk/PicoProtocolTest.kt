@@ -38,23 +38,25 @@ class PicoProtocolTest {
         assertEquals("7270207384512020485", results[0].itemId)
     }
 
-    @Test fun officialArtworkAndDescriptionRemainAvailable() {
+    @Test fun genericHttpArtworkAndDescriptionRemainAvailable() {
         val target = StoreTarget("7270207384512020485", "com.google.android.apps.youtube.vr.pico")
         val payload = JSONObject().put("code", 0).put("data", JSONObject()
             .put("item_id", target.itemId).put("package_name", target.packageName)
             .put("name", "YouTube VR").put("version_code", 18713000).put("price", "0")
-            .put("icon", "https://zstatic.us-appstore.picovr.com/icon.jpg")
-            .put("cover", JSONObject().put("landscape", "https://zstatic.us-appstore.picovr.com/cover.jpg"))
+            .put("icon", "http://cdn.example.com/icon.jpg")
+            .put("cover", JSONObject().put("landscape", "https://images.example.net/cover.jpg"))
             .put("abstract", "Watch in VR")
             .put("description", JSONObject().put("app_description", "Full description"))
-            .put("images", org.json.JSONArray().put(JSONObject().put("image_url", "https://zstatic.us-appstore.picovr.com/shot.jpg")))
+            .put("images", org.json.JSONArray()
+                .put(JSONObject().put("image_url", "https://images.example.net/shot.jpg"))
+                .put(JSONObject().put("image_url", "http://cdn.example.com/shot-2.jpg")))
             .put("detail", JSONObject().put("app_publisher", "Google LLC").put("app_genres", "Video"))
             .put("age_rating", JSONObject().put("name", "12+")))
         val item = PicoProtocol.parsePublicItem(payload.toString(), target)
-        assertEquals("https://zstatic.us-appstore.picovr.com/icon.jpg", item.iconUrl)
-        assertEquals("https://zstatic.us-appstore.picovr.com/cover.jpg", item.coverUrl)
+        assertEquals("http://cdn.example.com/icon.jpg", item.iconUrl)
+        assertEquals("https://images.example.net/cover.jpg", item.coverUrl)
         assertEquals("Full description", item.description)
-        assertEquals(1, item.screenshots.size)
+        assertEquals(2, item.screenshots.size)
         assertEquals("12+", item.ageRating)
         assertEquals("Google LLC", item.publisher)
     }

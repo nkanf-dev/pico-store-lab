@@ -36,9 +36,11 @@ test('public item response accepts only the requested product', () => {
   const item = parsePublicItem({ code: 0, data: {
     item_id: PICO_ITEM_ID, package_name: PICO_PACKAGE, name: 'VRChat',
     version_code: 972240, price: '0', is_offer_exist: true,
+    icon: 'http://cdn.example.com/icon.jpg',
   }});
   assert.equal(item.versionCode, 972240);
   assert.equal(item.price, '0');
+  assert.equal(item.iconUrl, 'http://cdn.example.com/icon.jpg');
   assert.throws(() => parsePublicItem({ code: 0, data: { ...item, item_id: 42 } }));
 });
 

@@ -1,6 +1,5 @@
 package dev.nkanf.picostore
 
-import android.graphics.BitmapFactory
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
@@ -32,9 +31,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.nkanf.picostore.sdk.PublicItem
 import dev.nkanf.picostore.sdk.StoreTarget
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
-import java.net.URL
 
 enum class ThemeMode { SYSTEM, LIGHT, DARK }
 
@@ -63,36 +59,49 @@ private val darkScheme = darkColorScheme(
 fun StoreScreen(
     entries: List<StoreEntry>, selected: PublicItem?, busy: Boolean, message: String,
     downloadProgress: Pair<Long, Long?>?, themeMode: ThemeMode,
+    imageLoader: StoreImageLoader,
     email: String, signedIn: Boolean, favorites: Set<String>,
     updateVersion: String?, onCheckUpdate: () -> Unit, onOpenUpdate: () -> Unit,
     onSearch: (String) -> Unit, onSelect: (StoreTarget) -> Unit,
     onFavorite: (String) -> Unit, onSendCode: (String) -> Unit,
     onLogin: (String, String) -> Unit, onLogout: () -> Unit,
-    onGet: (PublicItem) -> Unit, onBack: () -> Unit, onThemeChange: () -> Unit,
+    onGet: (PublicItem) -> Unit, onBack: () -> Unit, onThemeChange: (ThemeMode) -> Unit,
 ) {
     var query by remember { mutableStateOf("") }
     var onlyFavorites by remember { mutableStateOf(false) }
     var accountOpen by remember { mutableStateOf(false) }
+    var settingsOpen by remember { mutableStateOf(false) }
     val dark = when (themeMode) {
         ThemeMode.SYSTEM -> isSystemInDarkTheme()
         ThemeMode.LIGHT -> false
         ThemeMode.DARK -> true
     }
     LaunchedEffect(signedIn) { if (signedIn) accountOpen = false }
-    BackHandler(selected != null && !accountOpen) { if (!busy) onBack() }
+    BackHandler((selected != null || settingsOpen) && !accountOpen) {
+        if (!busy) {
+            if (settingsOpen) settingsOpen = false else onBack()
+        }
+    }
     MaterialTheme(colorScheme = if (dark) darkScheme else lightScheme) {
         Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
             BoxWithConstraints(Modifier.fillMaxSize().safeDrawingPadding()) {
                 val wide = maxWidth >= 820.dp
                 val gutter = if (wide) 36.dp else 20.dp
+                val settingsLabel = stringResource(R.string.settings)
                 Column(Modifier.fillMaxSize()) {
                     Row(Modifier.fillMaxWidth().padding(horizontal = gutter, vertical = 14.dp),
                         verticalAlignment = Alignment.CenterVertically) {
                         Brand(Modifier.weight(1f))
                         val themeDescription = themeLabel(themeMode)
-                        IconButton(onClick = onThemeChange,
+                        IconButton(onClick = {
+                            onThemeChange(ThemeMode.entries[(themeMode.ordinal + 1) % ThemeMode.entries.size])
+                        },
                             modifier = Modifier.semantics { contentDescription = themeDescription }) {
                             Text(if (dark) "◑" else "◐", fontSize = 24.sp)
+                        }
+                        IconButton(onClick = { settingsOpen = true },
+                            modifier = Modifier.semantics { contentDescription = settingsLabel }) {
+                            Text("⚙", fontSize = 22.sp)
                         }
                         OutlinedButton(onClick = { accountOpen = true }, shape = Edge,
                             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)) {
@@ -101,7 +110,9 @@ fun StoreScreen(
                         }
                     }
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                    if (selected == null) {
+                    if (settingsOpen) {
+                        SettingsPage(themeMode, onThemeChange, { settingsOpen = false }, gutter, Modifier.weight(1f))
+                    } else if (selected == null) {
                         val visible = if (onlyFavorites) entries.filter { it.target.itemId in favorites } else entries
                         LazyVerticalGrid(
                             columns = GridCells.Adaptive(if (wide) 260.dp else 220.dp),
@@ -133,7 +144,7 @@ fun StoreScreen(
                                 }
                             }
                             items(visible, key = { it.target.itemId }) { entry ->
-                                AppCard(entry, entry.target.itemId in favorites, !busy,
+                                AppCard(entry, entry.target.itemId in favorites, !busy, imageLoader,
                                     onOpen = { onSelect(entry.target) },
                                     onFavorite = { onFavorite(entry.target.itemId) })
                             }
@@ -153,7 +164,7 @@ fun StoreScreen(
                             TextButton(onClick = onBack, enabled = !busy, contentPadding = PaddingValues(0.dp)) {
                                 Text("←  ${stringResource(R.string.back_to_store)}", fontWeight = FontWeight.SemiBold)
                             }
-                            AppDetail(selected, selected.itemId in favorites, wide, signedIn,
+                            AppDetail(selected, selected.itemId in favorites, wide, signedIn, imageLoader,
                                 onFavorite = { onFavorite(selected.itemId) },
                                 onGet = { if (signedIn) onGet(selected) else accountOpen = true }, busy = busy)
                         }
@@ -233,12 +244,13 @@ private fun SectionTab(text: String, selected: Boolean, action: () -> Unit) {
 }
 
 @Composable
-private fun AppCard(entry: StoreEntry, favorite: Boolean, enabled: Boolean, onOpen: () -> Unit, onFavorite: () -> Unit) {
+private fun AppCard(entry: StoreEntry, favorite: Boolean, enabled: Boolean, imageLoader: StoreImageLoader,
+    onOpen: () -> Unit, onFavorite: () -> Unit) {
     Surface(onClick = onOpen, enabled = enabled, shape = Edge,
         color = MaterialTheme.colorScheme.surface,
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)) {
         Column {
-            StoreImage(entry.info?.coverUrl, Modifier.fillMaxWidth().aspectRatio(16f / 9f), entry.target.name)
+            StoreImage(imageLoader, entry.info?.coverUrl, Modifier.fillMaxWidth().aspectRatio(16f / 9f), entry.target.name)
             Column(Modifier.padding(start = 18.dp, end = 18.dp, bottom = 18.dp, top = 10.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -277,13 +289,13 @@ private fun FavoriteButton(favorite: Boolean, action: () -> Unit) {
 }
 
 @Composable
-private fun AppDetail(item: PublicItem, favorite: Boolean, wide: Boolean, signedIn: Boolean,
+private fun AppDetail(item: PublicItem, favorite: Boolean, wide: Boolean, signedIn: Boolean, imageLoader: StoreImageLoader,
     onFavorite: () -> Unit, onGet: () -> Unit, busy: Boolean) {
     var expanded by remember(item.itemId) { mutableStateOf(false) }
     Column(verticalArrangement = Arrangement.spacedBy(24.dp)) {
-        StoreImage(item.coverUrl, Modifier.fillMaxWidth().height(if (wide) 260.dp else 180.dp), item.name)
+        StoreImage(imageLoader, item.coverUrl, Modifier.fillMaxWidth().height(if (wide) 260.dp else 180.dp), item.name)
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            StoreImage(item.iconUrl, Modifier.size(72.dp), item.name)
+            StoreImage(imageLoader, item.iconUrl, Modifier.size(72.dp), item.name)
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(item.name, fontSize = if (wide) 36.sp else 28.sp, lineHeight = 39.sp, fontWeight = FontWeight.Black)
                 if (item.publisher.isNotBlank()) Text(item.publisher, fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -314,7 +326,9 @@ private fun AppDetail(item: PublicItem, favorite: Boolean, wide: Boolean, signed
         }
         if (item.summary.isNotBlank()) Text(item.summary, fontSize = 18.sp, lineHeight = 28.sp, fontWeight = FontWeight.Medium)
         if (item.screenshots.isNotEmpty()) LazyRow(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-            rowItems(item.screenshots.take(8)) { screenshot -> StoreImage(screenshot, Modifier.width(280.dp).aspectRatio(16f / 9f), item.name) }
+            rowItems(item.screenshots) { screenshot ->
+                StoreImage(imageLoader, screenshot, Modifier.width(280.dp).aspectRatio(16f / 9f), item.name)
+            }
         }
         if (item.description.isNotBlank()) {
             Text(item.description, maxLines = if (expanded) Int.MAX_VALUE else 5, overflow = TextOverflow.Ellipsis,
@@ -415,25 +429,50 @@ private fun themeLabel(mode: ThemeMode): String = stringResource(when (mode) {
 })
 
 @Composable
-private fun StoreImage(url: String?, modifier: Modifier, name: String) {
+private fun StoreImage(imageLoader: StoreImageLoader, url: String?, modifier: Modifier, name: String) {
     val bitmap by produceState<android.graphics.Bitmap?>(null, url) {
-        value = withContext(Dispatchers.IO) {
-            runCatching {
-                val uri = android.net.Uri.parse(url ?: return@runCatching null)
-                val host = uri.host.orEmpty()
-                if (uri.scheme != "https" || !(host == "picovr.com" || host.endsWith(".picovr.com") ||
-                    host == "picoxr.com" || host.endsWith(".picoxr.com"))) return@runCatching null
-                val connection = URL(url).openConnection()
-                connection.connectTimeout = 10_000
-                connection.readTimeout = 10_000
-                connection.getInputStream().use { BitmapFactory.decodeStream(it, null,
-                    BitmapFactory.Options().apply { inSampleSize = 4 }) }
-            }.getOrNull()
-        }
+        value = imageLoader.load(url)
     }
     Box(modifier.background(MaterialTheme.colorScheme.surfaceVariant), contentAlignment = Alignment.Center) {
         if (bitmap != null) Image(bitmap!!.asImageBitmap(), null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
         else Text(name.take(1).uppercase(), color = MaterialTheme.colorScheme.primary.copy(alpha = .5f),
             fontSize = 42.sp, fontWeight = FontWeight.Black)
+    }
+}
+
+@Composable
+private fun SettingsPage(themeMode: ThemeMode, onThemeChange: (ThemeMode) -> Unit, onBack: () -> Unit,
+    gutter: androidx.compose.ui.unit.Dp, modifier: Modifier) {
+    Column(modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(gutter),
+        verticalArrangement = Arrangement.spacedBy(22.dp)) {
+        TextButton(onClick = onBack, contentPadding = PaddingValues(0.dp)) {
+            Text("←  ${stringResource(R.string.back_to_store)}", fontWeight = FontWeight.SemiBold)
+        }
+        Eyebrow("PICO STORE LAB")
+        Text(stringResource(R.string.settings), fontSize = 36.sp, fontWeight = FontWeight.Black)
+        Text(stringResource(R.string.settings_description), color = MaterialTheme.colorScheme.onSurfaceVariant,
+            fontSize = 15.sp, lineHeight = 24.sp)
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text(stringResource(R.string.theme), fontWeight = FontWeight.Bold, fontSize = 18.sp)
+            ThemeMode.entries.forEach { mode ->
+                OutlinedButton(
+                    onClick = { onThemeChange(mode) },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = Edge,
+                    border = BorderStroke(
+                        if (mode == themeMode) 2.dp else 1.dp,
+                        if (mode == themeMode) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
+                    ),
+                ) {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Text(themeLabel(mode))
+                        if (mode == themeMode) Text("✓", color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+        Text("PICO Store Lab  ${BuildConfig.VERSION_NAME}", fontSize = 12.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }

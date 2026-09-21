@@ -17,6 +17,14 @@ export function validateTarget(target: StoreTarget): StoreTarget {
 const STORE_VERSION = '401200000';
 const DEVICE_NAME = 'A9210';
 
+function parseImageUrl(value: unknown): string | null {
+  if (typeof value !== 'string' || !value.trim()) return null;
+  try {
+    const url = new URL(value);
+    return ['http:', 'https:'].includes(url.protocol) && url.hostname ? url.href : null;
+  } catch { return null; }
+}
+
 export interface RequestSpec {
   url: string;
   method: 'POST';
@@ -196,7 +204,7 @@ export function parseSearchResults(response: unknown): SearchResults {
       items.push({ itemId, packageName, name: String(item.name || packageName),
         versionCode: Number.isSafeInteger(item.version_code) ? item.version_code as number : null,
         price: String(item.price ?? ''),
-        iconUrl: typeof cover?.square === 'string' && cover.square.startsWith('https://') ? cover.square : null });
+        iconUrl: parseImageUrl(cover?.square) });
     }
     if (group.has_more && Number.isSafeInteger(group.next_id) && (group.next_id as number) > 0)
       nextId ??= group.next_id as number;
@@ -223,14 +231,6 @@ export function parsePublicItem(response: unknown, target: StoreTarget = DEFAULT
   const detail = data.detail && typeof data.detail === 'object' ? data.detail as Record<string, unknown> : {};
   const description = data.description && typeof data.description === 'object' ? data.description as Record<string, unknown> : {};
   const ageRating = data.age_rating && typeof data.age_rating === 'object' ? data.age_rating as Record<string, unknown> : {};
-  const imageUrl = (value: unknown): string | null => {
-    if (typeof value !== 'string') return null;
-    try {
-      const url = new URL(value);
-      return url.protocol === 'https:' && !url.username && !url.password &&
-        ['picoxr.com', 'picovr.com'].some(host => url.hostname === host || url.hostname.endsWith(`.${host}`)) ? url.href : null;
-    } catch { return null; }
-  };
   return {
     itemId: target.itemId,
     packageName: target.packageName,
@@ -238,14 +238,14 @@ export function parsePublicItem(response: unknown, target: StoreTarget = DEFAULT
     versionCode: data.version_code as number,
     price: String(data.price ?? ''),
     currency: String(data.currency ?? ''),
-    iconUrl: imageUrl(data.icon),
-    coverUrl: imageUrl(cover.landscape) ?? imageUrl(cover.square),
+    iconUrl: parseImageUrl(data.icon),
+    coverUrl: parseImageUrl(cover.landscape) ?? parseImageUrl(cover.square),
     summary: typeof data.abstract === 'string' ? data.abstract : '',
     description: typeof description.app_description === 'string' ? description.app_description : '',
     screenshots: Array.isArray(data.images) ? data.images.flatMap(image => {
-      const url = imageUrl(image && typeof image === 'object' ? (image as Record<string, unknown>).image_url : null);
+      const url = parseImageUrl(image && typeof image === 'object' ? (image as Record<string, unknown>).image_url : null);
       return url ? [url] : [];
-    }).slice(0, 24) : [],
+    }) : [],
     publisher: String(detail.app_publisher ?? ''),
     genres: String(detail.app_genres ?? ''),
     ageRating: String(ageRating.name ?? ''),

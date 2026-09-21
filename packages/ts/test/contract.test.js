@@ -24,3 +24,22 @@ test('search uses official aggregation and preserves a non-seed app ID', () => {
   const response = parseOfficialJson('{"code":0,"data":{"search_list":[{"items":[{"item_id":7270207384512020485,"package_name":"com.google.android.apps.youtube.vr.pico","name":"YouTube VR"}]}]}}');
   assert.equal(parseSearchResults(response).items[0].itemId, '7270207384512020485');
 });
+
+test('media URLs are not restricted to a product domain or HTTPS', () => {
+  const item = parsePublicItem({ code: 0, data: {
+    item_id: fixtures.itemId, package_name: fixtures.packageName, name: 'VRChat',
+    version_code: fixtures.versionCode, icon: 'http://cdn.example.com/icon.jpg',
+    cover: { landscape: 'https://images.example.net/cover.jpg' },
+    images: [
+      { image_url: 'https://images.example.net/shot.jpg' },
+      { image_url: 'http://cdn.example.com/shot-2.jpg' },
+      { image_url: 'file:///tmp/not-supported.jpg' },
+    ],
+  }});
+  assert.equal(item.iconUrl, 'http://cdn.example.com/icon.jpg');
+  assert.equal(item.coverUrl, 'https://images.example.net/cover.jpg');
+  assert.deepEqual(item.screenshots, [
+    'https://images.example.net/shot.jpg',
+    'http://cdn.example.com/shot-2.jpg',
+  ]);
+});
