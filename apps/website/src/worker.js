@@ -8,6 +8,7 @@ import {
   pruneSessions, readSession, scopeHash, sessionCookie, clearedSessionCookie,
 } from './session.js';
 import { readReleaseState, recordReleaseFailure, recordReleaseSuccess } from './store.js';
+import { recordMetric } from './metrics.js';
 
 const ACCOUNT_WINDOW_SECONDS = 600;
 const LIMITS = {
@@ -222,6 +223,16 @@ export default {
 
   async fetch(request, env) {
     const url = new URL(request.url);
+    if (url.pathname === '/api/metrics') return recordMetric(request, env);
+    if (!url.pathname.startsWith('/api/') && ['GET', 'HEAD'].includes(request.method)) {
+      const language = url.searchParams.get('lang');
+      if (language === 'en' || language === 'zh-CN') {
+        const path = url.pathname.replace(/^\/en(?=\/|$)/, '') || '/';
+        url.pathname = `${language === 'en' ? '/en' : ''}${path}`;
+        url.searchParams.delete('lang');
+        return Response.redirect(url.href, 301);
+      }
+    }
     if (url.pathname === '/api/account/session') {
       try {
         return await handleSession(request, env);

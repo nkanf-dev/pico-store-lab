@@ -2,9 +2,9 @@ const $ = id => document.getElementById(id);
 const translations = {
   "en": {
     "indexLabel": "PICO APP CATALOG",
-    "catalogLabel": "01 / RECOMMENDED",
+    "catalogLabel": "MORE APPS",
     "catalogHint": "CHOOSE AN APP",
-    "currentLabel": "02 / APP DETAILS",
+    "currentLabel": "APP DETAILS",
     "searchLabel": "Search PICO apps",
     "searchPlaceholder": "App name",
     "searchButton": "Search",
@@ -19,7 +19,7 @@ const translations = {
     "versionLabel": "LATEST VERSION CODE",
     "historyLabel": "Version history",
     "trackingLabel": "RECENT UPDATES",
-    "workflowLabel": "04 / GETTING STARTED",
+    "workflowLabel": "GETTING STARTED",
     "communityLabel": "PICO STORE LAB / OPEN SOURCE",
     "heroLine": "Find PICO apps.",
     "heroAccent": "Download and install.",
@@ -42,7 +42,7 @@ const translations = {
     "stepThree": "Choose Download APK. For a free app you haven’t added to your account yet, choose Get free app first. Buy paid apps in PICO Store before downloading.",
     "stepFour": "Install the downloaded APK on your headset. You can also use our headset app to download and install without a computer.",
     "disclaimer": "An independent community project, not affiliated with PICO.",
-    "downloadLabel": "03 / WEB DOWNLOAD",
+    "downloadLabel": "WEB DOWNLOAD",
     "downloadOne": "Sign in to PICO.",
     "downloadTwo": "Download this app.",
     "downloadIntro": "Use your PICO international account to download the selected app. For paid apps, purchase them in PICO Store first.",
@@ -115,9 +115,9 @@ const translations = {
   },
   "zh-CN": {
     "indexLabel": "PICO 应用目录",
-    "catalogLabel": "01 / 推荐应用",
+    "catalogLabel": "更多应用",
     "catalogHint": "选择应用",
-    "currentLabel": "02 / 应用详情",
+    "currentLabel": "应用详情",
     "searchLabel": "搜索 PICO 应用",
     "searchPlaceholder": "输入应用名称",
     "searchButton": "搜索",
@@ -132,7 +132,7 @@ const translations = {
     "versionLabel": "最新版本码",
     "historyLabel": "版本记录",
     "trackingLabel": "近期更新",
-    "workflowLabel": "04 / 开始使用",
+    "workflowLabel": "开始使用",
     "communityLabel": "PICO STORE LAB / 开源项目",
     "heroLine": "浏览 PICO 应用，",
     "heroAccent": "下载你需要的。",
@@ -155,7 +155,7 @@ const translations = {
     "stepThree": "点击「下载 APK」。尚未领取的免费应用，先点击「领取免费应用」；付费应用请先在 PICO 商店购买。",
     "stepFour": "把下载好的 APK 安装到头显。也可以使用头显客户端，在头显上直接下载并安装，无需电脑。",
     "disclaimer": "独立社区项目，与 PICO 无隶属关系。",
-    "downloadLabel": "03 / 网页下载",
+    "downloadLabel": "网页下载",
     "downloadOne": "登录 PICO 账号，",
     "downloadTwo": "下载所选应用。",
     "downloadIntro": "使用 PICO 国际区账号下载所选应用。付费应用请先在 PICO 商店购买。",
@@ -229,12 +229,18 @@ const translations = {
 };
 
 const requested = new URL(location.href).searchParams.get('lang');
+const pageContext = document.documentElement.dataset ?? {};
+const publicPaths = { '7288745304105664518': 'vrchat', '7270207384512020485': 'youtube-vr' };
+let initialCatalog = [];
+try { initialCatalog = JSON.parse($('catalog-data')?.textContent || '[]'); } catch { initialCatalog = []; }
+if (!Array.isArray(initialCatalog)) initialCatalog = [];
 let locale = requested === 'en' || requested === 'zh-CN'
-  ? requested : navigator.language.startsWith('zh') ? 'zh-CN' : 'en';
+  ? requested : pageContext.seo ? document.documentElement.lang : navigator.language.startsWith('zh') ? 'zh-CN' : 'en';
 let currentState = null;
-let catalogItems = [];
+let catalogItems = initialCatalog;
 let searchItems = [];
-let selectedId = null;
+const selectedQuery = new URL(location.href).searchParams;
+let selectedId = pageContext.itemId || (/^[0-9]{1,20}$/.test(selectedQuery.get('itemId') || '') ? selectedQuery.get('itemId') : null);
 let fromSnapshot = false;
 const itemDetails = new Map();
 let detailRequest = 0;
@@ -259,12 +265,10 @@ function applyLocale() {
   for (const element of document.querySelectorAll('[data-i18n-placeholder]')) element.placeholder = t(element.dataset.i18nPlaceholder);
   $('language').textContent = t('language');
   $('language').setAttribute('aria-label', t('languageLabel'));
-  const guide = locale === 'zh-CN'
-    ? 'https://github.com/nkanf-dev/pico-store-lab/blob/main/README.zh-CN.md#player-guide'
-    : 'https://github.com/nkanf-dev/pico-store-lab#player-guide';
-  $('guide-link').href = guide;
+  const guide = `${locale === 'en' ? '/en' : ''}/guides/install-global-apps/`;
+  if ($('guide-link')) $('guide-link').href = guide;
   $('workflow-guide-link').href = guide;
-  document.title = locale === 'en' ? 'PICO Store Lab — Browse and download PICO apps' : 'PICO Store Lab — 浏览与下载 PICO 应用';
+  if (!pageContext.seo) document.title = locale === 'en' ? 'PICO Store Lab — Browse and download PICO apps' : 'PICO Store Lab — 浏览与下载 PICO 应用';
   if (currentState) render(currentState, fromSnapshot);
   renderAccount();
   renderDownload();
@@ -273,16 +277,22 @@ function applyLocale() {
 function renderCards(container, items) {
   container.replaceChildren();
   for (const item of items) {
-    const button = document.createElement('button');
-    button.type = 'button';
+    const button = document.createElement('a');
+    const base = locale === 'en' ? '/en' : '';
+    const slug = publicPaths[item.itemId];
+    button.href = slug ? `${base}/apps/${slug}/` : `${base}/?itemId=${encodeURIComponent(item.itemId)}&package=${encodeURIComponent(item.packageName)}#app-details`;
     button.className = `catalog-item${item.itemId === selectedId ? ' selected' : ''}`;
-    button.setAttribute('aria-pressed', String(item.itemId === selectedId));
+    if (item.itemId === selectedId) button.setAttribute('aria-current', 'page');
     const name = document.createElement('strong');
     name.textContent = item.name;
     const subtitle = document.createElement('span');
     subtitle.textContent = t('viewApp');
     button.append(name, subtitle);
-    button.addEventListener('click', () => selectItem(item.itemId, true));
+    button.addEventListener('click', event => {
+      if (pageContext.seo && event) return; // Real links preserve shareable URLs and normal browser navigation.
+      event?.preventDefault();
+      selectItem(item.itemId, true);
+    });
     container.append(button);
   }
 }
@@ -297,6 +307,7 @@ async function selectItem(itemId, scroll = false) {
   const item = [...catalogItems, ...searchItems, ...favorites].find(entry => entry.itemId === itemId);
   if (!item) return;
   selectedId = itemId;
+  document.body?.classList.add('has-selection');
   const request = ++detailRequest;
   invalidateDownload();
   renderCatalog();
@@ -312,11 +323,13 @@ async function selectItem(itemId, scroll = false) {
     const response = await fetch(url);
     if (!response.ok) throw new Error('item unavailable');
     const detail = await response.json();
-    itemDetails.set(itemId, detail);
-    if (selectedId === itemId && request === detailRequest) render({ ...base, ...detail, latestVersionCode: detail.versionCode });
+    const curated = initialCatalog.find(entry => entry.itemId === itemId)?.state;
+    const resolved = { ...base, ...detail, ...(curated ? { summary: curated.summary, description: curated.description, supportedPlatforms: curated.supportedPlatforms } : {}), latestVersionCode: detail.versionCode };
+    itemDetails.set(itemId, resolved);
+    if (selectedId === itemId && request === detailRequest) render(resolved);
   } catch {
     if (selectedId === itemId && request === detailRequest && !itemDetails.has(itemId)) {
-      $('app-summary').textContent = t('detailUnavailable');
+      if (!base.summary) $('app-summary').textContent = t('detailUnavailable');
       $('status-pill').textContent = '';
     }
   }
@@ -448,13 +461,43 @@ $('favorite-toggle').addEventListener('click', () => {
 });
 
 async function loadState() {
+  // Curated public content is immediately useful even when an upstream lookup fails.
+  if (pageContext.seo && selectedId) {
+    const initial = initialCatalog.find(item => item.itemId === selectedId);
+    if (initial?.state) {
+      render(initial.state, true);
+      document.body?.classList.add('has-selection');
+    }
+  }
+  function chooseSelection() {
+    renderCatalog();
+    if (selectedId && !catalogItems.some(item => item.itemId === selectedId)) {
+      const packageName = selectedQuery.get('package') || '';
+      if (/^[A-Za-z0-9_]+(?:\.[A-Za-z0-9_]+)+$/.test(packageName)) {
+        catalogItems.push({ itemId: selectedId, packageName });
+      }
+    }
+    if (pageContext.page === 'home' && !selectedId) return;
+    const target = catalogItems.find(item => item.itemId === selectedId) ?? catalogItems[0];
+    if (target) selectItem(target.itemId);
+  }
   try {
     const response = await fetch('/api/catalog', { cache: 'no-store' });
     if (!response.ok) throw new Error(`release API ${response.status}`);
     catalogItems = await response.json();
     if (!Array.isArray(catalogItems) || !catalogItems.length) throw new Error('catalog unavailable');
-    selectItem(selectedId ?? catalogItems[0].itemId);
+    catalogItems = catalogItems.map(item => {
+      const initial = initialCatalog.find(entry => entry.itemId === item.itemId);
+      return { ...item, state: { ...initial?.state, ...item.state } };
+    });
+    for (const initial of initialCatalog) if (!catalogItems.some(item => item.itemId === initial.itemId)) catalogItems.push(initial);
+    chooseSelection();
   } catch {
+    if (initialCatalog.length) {
+      catalogItems = initialCatalog;
+      chooseSelection();
+      return;
+    }
     try {
       const response = await fetch('/catalog.json');
       if (!response.ok) throw new Error('snapshot unavailable');
@@ -468,7 +511,19 @@ async function loadState() {
   }
 }
 
-$('language').addEventListener('click', () => {
+$('language').addEventListener('click', event => {
+  if (pageContext.seo) {
+    const target = new URL($('language').href, location.href);
+    if (!pageContext.itemId && selectedId) {
+      target.searchParams.set('itemId', selectedId);
+      const packageName = selectedPackage();
+      if (packageName) target.searchParams.set('package', packageName);
+    }
+    target.hash = new URL(location.href).hash;
+    $('language').href = target.href;
+    return;
+  }
+  event?.preventDefault();
   locale = locale === 'en' ? 'zh-CN' : 'en';
   const url = new URL(location.href);
   url.searchParams.set('lang', locale);
@@ -643,6 +698,7 @@ $('account-form').addEventListener('submit', async event => {
   try {
     await api('/api/account/login', { method: 'POST', body: JSON.stringify({ email, code: $('account-code').value.trim() }) });
     account = { authenticated: true, email };
+    if (pageContext.seo) window.picoTrack?.('login_success');
     $('account-code').value = '';
     setAccountStatus();
   } catch (error) {

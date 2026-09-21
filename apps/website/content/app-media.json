@@ -1,0 +1,36 @@
+[
+  {
+    "itemId": "7288745304105664518",
+    "packageName": "com.vrchat.android",
+    "name": "VRChat",
+    "iconUrl": "https://zstatic.us-appstore.picovr.com/developer-platform/submission/assets/icon/2023-10-11/afc2df42f047a2ebbb1ea26606136c54.png",
+    "coverUrl": "https://zstatic.us-appstore.picovr.com/developer-platform/submission/assets/cover_art/landscape/2023-10-11/dc4ca233090042e89bb7f1337cfdd080.png",
+    "screenshots": [
+      "https://zstatic.us-appstore.picovr.com/developer-platform/submission/assets/detail_image/2023-10-11/200f98041a6b997d39c2fa0bd7026ff9.png",
+      "https://zstatic.us-appstore.picovr.com/developer-platform/submission/assets/detail_image/2023-10-11/7d40bb7dfa1221dba76836e72df33fa7.png",
+      "https://zstatic.us-appstore.picovr.com/developer-platform/submission/assets/detail_image/2023-10-11/9283afebfbe10bad3edf58ad43a78dc0.png",
+      "https://zstatic.us-appstore.picovr.com/developer-platform/submission/assets/detail_image/2023-10-11/51a60f3f5a2fc1f5fd66a2f8d67bebf2.png",
+      "https://zstatic.us-appstore.picovr.com/developer-platform/submission/assets/detail_image/2023-10-11/7e4581d6bc0c890dadbac0121c7ab309.png"
+    ],
+    "publisher": "VRChat",
+    "genres": "カジュアル, 探検, アクション",
+    "ageRating": "12+"
+  },
+  {
+    "itemId": "7270207384512020485",
+    "packageName": "com.google.android.apps.youtube.vr.pico",
+    "name": "YouTube VR",
+    "iconUrl": "https://zstatic.us-appstore.picovr.com/developer-platform/submission/assets/icon/2023-11-28/b77c95c53865e994bfcbdf400cac47e6.jpg",
+    "coverUrl": "https://zstatic.us-appstore.picovr.com/developer-platform/submission/assets/cover_art/landscape/2023-09-08/f80528f3b6ba458ee6faa64ac3d8cdb5.jpg",
+    "screenshots": [
+      "https://zstatic.us-appstore.picovr.com/developer-platform/submission/assets/detail_image/2023-09-08/7dd3128f58b90d2c3226220ed9c7abe4.jpg",
+      "https://zstatic.us-appstore.picovr.com/developer-platform/submission/assets/detail_image/2023-09-08/24c3581863f8f9c8adbe48638cdc4c8e.jpg",
+      "https://zstatic.us-appstore.picovr.com/developer-platform/submission/assets/detail_image/2023-09-08/a00f4762583061dfaf2582c7b6cfa2f4.jpg",
+      "https://zstatic.us-appstore.picovr.com/developer-platform/submission/assets/detail_image/2023-09-08/b1cce62536cae5d12aa6bb2a6d96a352.jpg",
+      "https://zstatic.us-appstore.picovr.com/developer-platform/submission/assets/detail_image/2023-09-08/f7f194cf8107487265905c55e4eb7130.jpg"
+    ],
+    "publisher": "Google LLC",
+    "genres": "ビデオ, 音楽, ソーシャル",
+    "ageRating": "12+"
+  }
+]

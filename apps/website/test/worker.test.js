@@ -84,15 +84,15 @@ async function signIn(env, email = 'player@example.com') {
   return response.headers.get('set-cookie').split(';')[0];
 }
 
-test('player path links the website to the repo, guide, and client release', () => {
-  const html = readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
+test('player path links the website to the repo, guide, and clients', () => {
+  const html = readFileSync(new URL('../dist/index.html', import.meta.url), 'utf8');
   const script = readFileSync(new URL('../public/app.js', import.meta.url), 'utf8');
   const english = readFileSync(new URL('../../../README.md', import.meta.url), 'utf8');
   const chinese = readFileSync(new URL('../../../README.zh-CN.md', import.meta.url), 'utf8');
   assert.match(html, /href="https:\/\/github\.com\/nkanf-dev\/pico-store-lab"/);
   assert.match(html, /id="guide-link"/);
-  assert.match(html, /href="https:\/\/github\.com\/nkanf-dev\/pico-store-lab\/releases\/latest"/);
-  assert.match(script, /README\.zh-CN\.md#player-guide/);
+  assert.match(html, /href="\/download\/"/);
+  assert.match(script, /\/guides\/install-global-apps\//);
   for (const guide of [english, chinese]) {
     assert.match(guide, /<a id="player-guide"><\/a>/);
     assert.match(guide, /send-code --email you@example\.com/);
@@ -115,7 +115,7 @@ test('web downloader is wired into the page, script, and guide', () => {
 });
 
 test('the page, the script, and both locales stay in agreement', () => {
-  const html = readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
+  const html = readFileSync(new URL('../dist/index.html', import.meta.url), 'utf8');
   const source = readFileSync(new URL('../public/app.js', import.meta.url), 'utf8');
   const htmlIds = new Set([...html.matchAll(/id="([^"]+)"/g)].map(match => match[1]));
   for (const [, name] of source.matchAll(/\$\('([^']+)'\)/g)) {

@@ -3,7 +3,8 @@
   "main": "src/worker.js",
   "compatibility_date": "2026-09-17",
   // The downloader's account flow needs `wrangler secret put SESSION_SECRET` (32+ characters).
-  "assets": { "directory": "./public", "binding": "ASSETS" },
+  "assets": { "directory": "./dist", "binding": "ASSETS", "not_found_handling": "404-page", "run_worker_first": ["/", "/en/", "/apps/*", "/en/apps/*", "/guides/*", "/en/guides/*", "/download/", "/en/download/", "/about/", "/en/about/", "/api/*"] },
+  "build": { "command": "npm run build:ts --prefix ../.. && npm run build" },
   "routes": [{ "pattern": "pico.kanglives.top", "custom_domain": true }],
   "d1_databases": [{
     "binding": "DB",
