@@ -4,5 +4,9 @@
   "private": true,
   "type": "module",
   "dependencies": { "@nkanf-dev/pico-store-sdk": "0.1.2" },
-  "scripts": { "dev": "node src/dev.js" }
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "predev": "npm run build",
+    "dev": "node src/dev.js"
+  }
 }

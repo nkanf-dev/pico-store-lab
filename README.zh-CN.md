@@ -6,11 +6,13 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-b13a22.svg)](LICENSE)
 [![Release](https://img.shields.io/github/v/release/nkanf-dev/pico-store-lab?include_prereleases&color=b13a22)](https://github.com/nkanf-dev/pico-store-lab/releases)
 
-[English](README.md) · [在线使用](https://pico.kanglives.top) · [下载客户端](https://github.com/nkanf-dev/pico-store-lab/releases/latest)
+[English](README.md) · [在线使用](https://pico.kanglives.top/) · [安装指南](https://pico.kanglives.top/guides/install-global-apps/) · [下载客户端](https://pico.kanglives.top/download/)
 
-浏览 PICO 应用、查看版本，用 PICO 国际区账号下载。你可以在网页把安装包保存到电脑，也可以使用 Android 客户端，在头显上直接下载并安装。
+想在国区 PICO 上装 VRChat、YouTube VR，商店里却搜不到？PICO Store Lab 可以帮你找到应用的 PICO 版本，用自己的 PICO 国际区账号下载，再安装到头显，不需要先给头显转区。
 
-**[打开 PICO Store Lab →](https://pico.kanglives.top)**
+你可以在网页把安装包保存到电脑，也可以使用 Android 客户端，在头显上直接下载并安装。
+
+**[VRChat PICO 版](https://pico.kanglives.top/apps/vrchat/)** · **[YouTube VR PICO 版](https://pico.kanglives.top/apps/youtube-vr/)** · [浏览全部应用](https://pico.kanglives.top/)
 
 ![PICO Store Lab 中文首页与应用搜索](assets/screenshots/website-home-zh-CN.webp)
 
@@ -19,11 +21,13 @@
 
 你需要一个 **PICO 国际区账号**。还没有账号？[前往 PICO 官网](https://sso-global.picoxr.com/)，选择 **Sign Up** 注册，完成后回到这里登录。
 
+注册、下载、安装的完整步骤和常见问题，都在[安装指南](https://pico.kanglives.top/guides/install-global-apps/)中。下载前看看应用页的适用设备；装好后，按应用自己的账号和网络要求使用。
+
 不同账号地区可获取的应用可能不同。付费应用请先在 PICO 商店购买，再下载。
 
 ### 1. 在网页下载
 
-1. 打开 [pico.kanglives.top](https://pico.kanglives.top)，搜索应用名称，或从推荐列表中选择一款应用。
+1. 打开 [VRChat](https://pico.kanglives.top/apps/vrchat/) 或 [YouTube VR](https://pico.kanglives.top/apps/youtube-vr/) 页面，也可以[搜索其他应用](https://pico.kanglives.top/)。
 2. 在**网页下载**区域填写 PICO 账号邮箱，点击**发送验证码**，输入收到的邮件验证码后点击**登录**。
 3. 尚未领取的免费应用，先点击**领取免费应用**。
 4. 点击**下载 APK**。下载完成后，使用头显的 APK 安装器或 ADB 安装。

@@ -5,7 +5,8 @@
   "workspaces": ["packages/*", "apps/*"],
   "scripts": {
     "build:ts": "npm run build -w @nkanf-dev/pico-store-sdk",
-    "test": "npm run build:ts && node --test packages/shared/test/*.test.js packages/ts/test/*.test.js apps/website/test/*.test.js"
+    "build:website": "npm run build -w @pico-store/website",
+    "test": "npm run build:ts && npm run build:website && node --test packages/shared/test/*.test.js packages/ts/test/*.test.js apps/website/test/*.test.js"
   },
   "engines": { "node": ">=25" }
 }

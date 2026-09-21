@@ -6,11 +6,13 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-b13a22.svg)](LICENSE)
 [![Release](https://img.shields.io/github/v/release/nkanf-dev/pico-store-lab?include_prereleases&color=b13a22)](https://github.com/nkanf-dev/pico-store-lab/releases)
 
-[简体中文](README.zh-CN.md) · [Website](https://pico.kanglives.top) · [Downloads](https://github.com/nkanf-dev/pico-store-lab/releases/latest)
+[简体中文](README.zh-CN.md) · [Website](https://pico.kanglives.top/en/) · [Installation guide](https://pico.kanglives.top/en/guides/install-global-apps/) · [Download a client](https://pico.kanglives.top/en/download/)
 
-Browse PICO apps, check versions, and download with your PICO international account. Use the website to save an APK to your computer, or use the Android app to download and install on your headset.
+Looking for VRChat or YouTube VR on a PICO headset with the China-region store? PICO Store Lab helps you find the PICO version, download it with your PICO international account, and install it without changing the headset's region.
 
-**[Open PICO Store Lab →](https://pico.kanglives.top)**
+Use the website to save an APK to your computer, or use the Android app to download and install on your headset.
+
+**[VRChat for PICO](https://pico.kanglives.top/en/apps/vrchat/)** · **[YouTube VR for PICO](https://pico.kanglives.top/en/apps/youtube-vr/)** · [Browse all apps](https://pico.kanglives.top/en/)
 
 ![PICO Store Lab homepage with app search](assets/screenshots/website-home-en.webp)
 
@@ -19,11 +21,13 @@ Browse PICO apps, check versions, and download with your PICO international acco
 
 You’ll need a **PICO international account**. Don’t have one? [Register on PICO’s website](https://sso-global.picoxr.com/) by choosing **Sign Up**, then return here to sign in.
 
+The [installation guide](https://pico.kanglives.top/en/guides/install-global-apps/) covers account registration, downloading, installing, and common questions. Check the supported devices on the app page before downloading. Each app has its own sign-in and network requirements.
+
 App availability depends on your account’s region. For paid apps, purchase them in PICO Store before downloading.
 
 ### 1. Download from the website
 
-1. Open [pico.kanglives.top](https://pico.kanglives.top), search by name or browse the recommendations, and select an app.
+1. Open the [VRChat](https://pico.kanglives.top/en/apps/vrchat/) or [YouTube VR](https://pico.kanglives.top/en/apps/youtube-vr/) page, or [search for another app](https://pico.kanglives.top/en/).
 2. In **Web download**, enter your PICO account email, choose **Send code**, then enter the code from your inbox and choose **Sign in**.
 3. For a free app you haven’t added to your account yet, choose **Get free app**.
 4. Choose **Download APK**. Once it finishes, install the file on your headset using its APK installer or ADB.
