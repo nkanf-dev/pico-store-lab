@@ -9,3 +9,13 @@ rootProject.name = 'PicoStore'
 include ':app'
 include ':sdk'
 project(':sdk').projectDir = file('../../packages/kotlin')
+
+// Private development integration is explicit; ordinary source builds need no private checkout.
+def bridgeDir = providers.gradleProperty('matrixBridgeDir').orNull
+if (bridgeDir != null) {
+    includeBuild(file(bridgeDir)) {
+        dependencySubstitution {
+            substitute module('org.picomatrix.bridge:installer-android') using project(':installer-android')
+        }
+    }
+}

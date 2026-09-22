@@ -33,6 +33,7 @@ import dev.nkanf.picostore.sdk.PublicItem
 import dev.nkanf.picostore.sdk.StoreTarget
 
 enum class ThemeMode { SYSTEM, LIGHT, DARK }
+private enum class CatalogFilter { ALL, FAVORITES, UPDATES }
 
 private val Brick = Color(0xFFB43B23)
 private val Paper = Color(0xFFF2F0E8)
@@ -61,14 +62,18 @@ fun StoreScreen(
     downloadProgress: Pair<Long, Long?>?, themeMode: ThemeMode,
     imageLoader: StoreImageLoader,
     email: String, signedIn: Boolean, favorites: Set<String>,
+    compatibility: AppCompatibility, installedCopies: InstalledCopies, installPromptName: String?,
     updateVersion: String?, onCheckUpdate: () -> Unit, onOpenUpdate: () -> Unit,
     onSearch: (String) -> Unit, onSelect: (StoreTarget) -> Unit,
     onFavorite: (String) -> Unit, onSendCode: (String) -> Unit,
     onLogin: (String, String) -> Unit, onLogout: () -> Unit,
-    onGet: (PublicItem) -> Unit, onBack: () -> Unit, onThemeChange: (ThemeMode) -> Unit,
+    onGet: (PublicItem, InstallVariant?) -> Unit,
+    onOpenApp: (PublicItem, InstallVariant) -> Unit, onCheckAppUpdates: () -> Unit,
+    onInstallChoice: (InstallVariant) -> Unit, onDismissInstallChoice: () -> Unit,
+    onBack: () -> Unit, onThemeChange: (ThemeMode) -> Unit,
 ) {
     var query by remember { mutableStateOf("") }
-    var onlyFavorites by remember { mutableStateOf(false) }
+    var catalogFilter by remember { mutableStateOf(CatalogFilter.ALL) }
     var accountOpen by remember { mutableStateOf(false) }
     var settingsOpen by remember { mutableStateOf(false) }
     val dark = when (themeMode) {
@@ -77,7 +82,7 @@ fun StoreScreen(
         ThemeMode.DARK -> true
     }
     LaunchedEffect(signedIn) { if (signedIn) accountOpen = false }
-    BackHandler((selected != null || settingsOpen) && !accountOpen) {
+    BackHandler((selected != null || settingsOpen) && !accountOpen && installPromptName == null) {
         if (!busy) {
             if (settingsOpen) settingsOpen = false else onBack()
         }
@@ -113,7 +118,13 @@ fun StoreScreen(
                     if (settingsOpen) {
                         SettingsPage(themeMode, onThemeChange, { settingsOpen = false }, gutter, Modifier.weight(1f))
                     } else if (selected == null) {
-                        val visible = if (onlyFavorites) entries.filter { it.target.itemId in favorites } else entries
+                        val visible = when (catalogFilter) {
+                            CatalogFilter.ALL -> entries
+                            CatalogFilter.FAVORITES -> entries.filter { it.target.itemId in favorites }
+                            CatalogFilter.UPDATES -> entries.filter { entry ->
+                                entry.info?.let { entry.installed.hasUpdate(it.versionCode) } == true
+                            }
+                        }
                         LazyVerticalGrid(
                             columns = GridCells.Adaptive(if (wide) 260.dp else 220.dp),
                             modifier = Modifier.weight(1f),
@@ -133,13 +144,19 @@ fun StoreScreen(
                                             keyboardActions = KeyboardActions(onSearch = { if (!busy) onSearch(query) }))
                                         ActionButton(stringResource(R.string.search), !busy) { onSearch(query) }
                                     }
-                                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(24.dp)) {
-                                        SectionTab(stringResource(R.string.all_apps), !onlyFavorites) { onlyFavorites = false }
-                                        SectionTab(stringResource(R.string.favorites), onlyFavorites) { onlyFavorites = true }
-                                        Spacer(Modifier.weight(1f))
-                                        Text(visible.size.toString().padStart(2, '0'), fontSize = 13.sp,
+                                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                                        Row(Modifier.weight(1f).horizontalScroll(rememberScrollState()),
+                                            horizontalArrangement = Arrangement.spacedBy(24.dp)) {
+                                            SectionTab(stringResource(R.string.all_apps), catalogFilter == CatalogFilter.ALL) { catalogFilter = CatalogFilter.ALL }
+                                            SectionTab(stringResource(R.string.favorites), catalogFilter == CatalogFilter.FAVORITES) { catalogFilter = CatalogFilter.FAVORITES }
+                                            SectionTab(stringResource(R.string.updates), catalogFilter == CatalogFilter.UPDATES) { catalogFilter = CatalogFilter.UPDATES }
+                                        }
+                                        Text(visible.size.toString().padStart(2, '0'), Modifier.padding(start = 16.dp), fontSize = 13.sp,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }
+                                    if (catalogFilter == CatalogFilter.UPDATES) OutlinedButton(
+                                        onClick = onCheckAppUpdates, enabled = !busy, shape = Edge) {
+                                        Text(stringResource(R.string.check_update), fontWeight = FontWeight.SemiBold)
                                     }
                                 }
                             }
@@ -151,9 +168,17 @@ fun StoreScreen(
                             if (visible.isEmpty()) item(span = { GridItemSpan(maxLineSpan) }) {
                                 Column(Modifier.fillMaxWidth().padding(vertical = 48.dp),
                                     verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                                    Text(stringResource(if (onlyFavorites) R.string.empty_favorites else R.string.empty_search),
+                                    Text(stringResource(when (catalogFilter) {
+                                        CatalogFilter.FAVORITES -> R.string.empty_favorites
+                                        CatalogFilter.UPDATES -> R.string.empty_updates
+                                        CatalogFilter.ALL -> R.string.empty_search
+                                    }),
                                         fontSize = 24.sp, fontWeight = FontWeight.Bold)
-                                    Text(stringResource(if (onlyFavorites) R.string.empty_favorites_hint else R.string.empty_search_hint),
+                                    Text(stringResource(when (catalogFilter) {
+                                        CatalogFilter.FAVORITES -> R.string.empty_favorites_hint
+                                        CatalogFilter.UPDATES -> R.string.empty_updates_hint
+                                        CatalogFilter.ALL -> R.string.empty_search_hint
+                                    }),
                                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
                             }
@@ -164,9 +189,10 @@ fun StoreScreen(
                             TextButton(onClick = onBack, enabled = !busy, contentPadding = PaddingValues(0.dp)) {
                                 Text("←  ${stringResource(R.string.back_to_store)}", fontWeight = FontWeight.SemiBold)
                             }
-                            AppDetail(selected, selected.itemId in favorites, wide, signedIn, imageLoader,
+                            AppDetail(selected, selected.itemId in favorites, wide, signedIn, compatibility, installedCopies, imageLoader,
                                 onFavorite = { onFavorite(selected.itemId) },
-                                onGet = { if (signedIn) onGet(selected) else accountOpen = true }, busy = busy)
+                                onGet = { variant -> if (signedIn) onGet(selected, variant) else accountOpen = true },
+                                onOpen = { variant -> onOpenApp(selected, variant) }, busy = busy)
                         }
                     }
                     if (message.isNotBlank() || busy) StatusStrip(message, busy, downloadProgress, gutter)
@@ -175,6 +201,8 @@ fun StoreScreen(
                     onDismiss = { accountOpen = false }, onSendCode = onSendCode,
                     onLogin = onLogin, onLogout = onLogout, updateVersion = updateVersion,
                     onCheckUpdate = onCheckUpdate, onOpenUpdate = onOpenUpdate)
+                else if (installPromptName != null) InstallChoiceDialog(installPromptName, busy,
+                    onChoice = onInstallChoice, onDismiss = onDismissInstallChoice)
             }
         }
     }
@@ -264,7 +292,12 @@ private fun AppCard(entry: StoreEntry, favorite: Boolean, enabled: Boolean, imag
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically) {
-                    Text(price(entry.info), fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(price(entry.info), fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                        if (entry.info?.let { entry.installed.hasUpdate(it.versionCode) } == true)
+                            Text(stringResource(R.string.app_update_available), fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.primary)
+                    }
                     Text("↗", fontSize = 22.sp, color = MaterialTheme.colorScheme.primary)
                 }
             }
@@ -289,15 +322,28 @@ private fun FavoriteButton(favorite: Boolean, action: () -> Unit) {
 }
 
 @Composable
-private fun AppDetail(item: PublicItem, favorite: Boolean, wide: Boolean, signedIn: Boolean, imageLoader: StoreImageLoader,
-    onFavorite: () -> Unit, onGet: () -> Unit, busy: Boolean) {
+private fun AppDetail(item: PublicItem, favorite: Boolean, wide: Boolean, signedIn: Boolean,
+    compatibility: AppCompatibility, installedCopies: InstalledCopies, imageLoader: StoreImageLoader,
+    onFavorite: () -> Unit, onGet: (InstallVariant?) -> Unit, onOpen: (InstallVariant) -> Unit, busy: Boolean) {
     var expanded by remember(item.itemId) { mutableStateOf(false) }
+    val supportsAccount = compatibility == AppCompatibility.PROFILE || compatibility == AppCompatibility.MATRIX
+    val needsPurchase = item.entitlementStatus != 1 && (item.price.toDoubleOrNull() ?: 0.0) > 0.0
+    val showInstallChoices = supportsAccount || installedCopies.adapted != null
+    val original = installedCopies.original
+    val originalUpdate = original != null && original.versionCode < item.versionCode
     Column(verticalArrangement = Arrangement.spacedBy(24.dp)) {
         StoreImage(imageLoader, item.coverUrl, Modifier.fillMaxWidth().height(if (wide) 260.dp else 180.dp), item.name)
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             StoreImage(imageLoader, item.iconUrl, Modifier.size(72.dp), item.name)
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(item.name, fontSize = if (wide) 36.sp else 28.sp, lineHeight = 39.sp, fontWeight = FontWeight.Black)
+                if (compatibility == AppCompatibility.PROFILE) Surface(shape = Edge,
+                    color = MaterialTheme.colorScheme.primary.copy(alpha = .1f),
+                    contentColor = MaterialTheme.colorScheme.primary,
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = .25f))) {
+                    Text(stringResource(R.string.account_support_badge), Modifier.padding(horizontal = 9.dp, vertical = 6.dp),
+                        fontSize = 12.sp, lineHeight = 18.sp, fontWeight = FontWeight.SemiBold)
+                }
                 if (item.publisher.isNotBlank()) Text(item.publisher, fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             FavoriteButton(favorite, onFavorite)
@@ -311,14 +357,34 @@ private fun AppDetail(item: PublicItem, favorite: Boolean, wide: Boolean, signed
                         if (item.appVersion.isNotBlank()) Text(item.appVersion, fontSize = 12.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
-                    Spacer(Modifier.width(16.dp))
-                    val label = stringResource(when {
-                        !signedIn -> R.string.sign_in
-                        item.entitlementStatus == 1 -> R.string.download
-                        item.price.toDoubleOrNull() == 0.0 -> R.string.get_free
-                        else -> R.string.view_official_offer
-                    })
-                    ActionButton(label, !busy, onGet)
+                    if (!showInstallChoices) {
+                        Spacer(Modifier.width(16.dp))
+                        val label = stringResource(when {
+                            originalUpdate -> R.string.update_app
+                            original != null -> R.string.open_app
+                            !signedIn -> R.string.sign_in
+                            item.entitlementStatus == 1 -> R.string.download
+                            item.price.toDoubleOrNull() == 0.0 -> R.string.get_free
+                            else -> R.string.view_official_offer
+                        })
+                        ActionButton(label, !busy) {
+                            when {
+                                originalUpdate -> onGet(InstallVariant.ORIGINAL)
+                                original != null -> onOpen(InstallVariant.ORIGINAL)
+                                else -> onGet(null)
+                            }
+                        }
+                    }
+                }
+                if (showInstallChoices) InstallChoices(wide, !busy, onChoice = { onGet(it) },
+                    installedCopies = installedCopies, latestCode = item.versionCode, latestName = item.appVersion,
+                    purchaseRequired = needsPurchase, onOpen = onOpen)
+                else if (original != null) {
+                    CopyVersions(original, item.versionCode, item.appVersion)
+                    if (originalUpdate) TextButton(onClick = { onOpen(InstallVariant.ORIGINAL) }, enabled = !busy,
+                        contentPadding = PaddingValues(0.dp)) {
+                        Text(stringResource(R.string.open_app), fontWeight = FontWeight.SemiBold)
+                    }
                 }
                 Text(stringResource(R.string.install_hint), fontSize = 12.sp, lineHeight = 18.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -340,6 +406,96 @@ private fun AppDetail(item: PublicItem, favorite: Boolean, wide: Boolean, signed
         val metadata = listOf(item.genres, item.ageRating).filter { it.isNotBlank() }.joinToString("  /  ")
         if (metadata.isNotBlank()) Text(metadata, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
+}
+
+@Composable
+private fun InstallChoices(wide: Boolean, enabled: Boolean, onChoice: (InstallVariant) -> Unit,
+    installedCopies: InstalledCopies = InstalledCopies(), latestCode: Long = 0, latestName: String = "",
+    purchaseRequired: Boolean = false, onOpen: (InstallVariant) -> Unit = {}) {
+    val choice: @Composable (InstallVariant, Modifier) -> Unit = { variant, modifier ->
+        InstallChoice(variant, enabled, modifier, installedCopies.copyFor(variant), latestCode, latestName,
+            purchaseRequired, onInstall = { onChoice(variant) }, onOpen = { onOpen(variant) })
+    }
+    if (wide) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+        choice(InstallVariant.ADAPTED, Modifier.weight(1f))
+        choice(InstallVariant.ORIGINAL, Modifier.weight(1f))
+    } else Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(18.dp)) {
+        choice(InstallVariant.ADAPTED, Modifier.fillMaxWidth())
+        choice(InstallVariant.ORIGINAL, Modifier.fillMaxWidth())
+    }
+}
+
+@Composable
+private fun InstallChoice(variant: InstallVariant, enabled: Boolean, modifier: Modifier, installed: InstalledCopy?,
+    latestCode: Long, latestName: String, purchaseRequired: Boolean, onInstall: () -> Unit, onOpen: () -> Unit) {
+    val adapted = variant == InstallVariant.ADAPTED
+    val updateAvailable = installed != null && installed.versionCode < latestCode
+    val openInstalled = installed != null && !updateAvailable
+    val action = if (openInstalled) onOpen else onInstall
+    val label = stringResource(when {
+        updateAvailable -> R.string.update_app
+        openInstalled -> R.string.open_app
+        purchaseRequired -> R.string.view_official_offer
+        adapted -> R.string.install_account_supported
+        else -> R.string.install_original
+    })
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(7.dp)) {
+        if (latestCode > 0) {
+            Text(stringResource(if (adapted) R.string.account_supported_copy else R.string.original_copy),
+                fontSize = 15.sp, fontWeight = FontWeight.Bold)
+            Column(Modifier.heightIn(min = 38.dp)) {
+                if (installed != null) CopyVersions(installed, latestCode, latestName)
+                else Text(stringResource(R.string.copy_not_installed), fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+        if (adapted) Button(onClick = action, enabled = enabled, shape = Edge,
+            modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 14.dp)) {
+            Text(label, fontSize = 14.sp, lineHeight = 20.sp, fontWeight = FontWeight.Bold)
+        } else OutlinedButton(onClick = action, enabled = enabled, shape = Edge,
+            modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 14.dp)) {
+            Text(label, fontSize = 14.sp, lineHeight = 20.sp, fontWeight = FontWeight.Bold)
+        }
+        Text(stringResource(if (adapted) R.string.install_account_supported_hint else R.string.install_original_hint),
+            fontSize = 13.sp, lineHeight = 20.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        if (updateAvailable) TextButton(onClick = onOpen, enabled = enabled, contentPadding = PaddingValues(0.dp)) {
+            Text(stringResource(R.string.open_app), fontWeight = FontWeight.SemiBold)
+        }
+    }
+}
+
+@Composable
+private fun CopyVersions(installed: InstalledCopy, latestCode: Long, latestName: String) {
+    val sameName = installed.versionName.isNotBlank() && installed.versionName == latestName && installed.versionCode != latestCode
+    val installedLabel = installed.versionName.ifBlank { installed.versionCode.toString() } +
+        if (sameName) " (${installed.versionCode})" else ""
+    val availableLabel = latestName.ifBlank { latestCode.toString() } + if (sameName) " ($latestCode)" else ""
+    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+        Text(stringResource(R.string.installed_version, installedLabel), fontSize = 12.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant)
+        if (latestCode > 0 && installed.versionCode != latestCode)
+            Text(stringResource(R.string.available_version, availableLabel), fontSize = 12.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+@Composable
+private fun InstallChoiceDialog(name: String, busy: Boolean, onChoice: (InstallVariant) -> Unit, onDismiss: () -> Unit) {
+    AlertDialog(onDismissRequest = { if (!busy) onDismiss() }, shape = Edge,
+        containerColor = MaterialTheme.colorScheme.background,
+        title = { Text(stringResource(R.string.install_choice_title), fontWeight = FontWeight.Black) },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(20.dp)) {
+                Text(name, fontSize = 18.sp, lineHeight = 26.sp, fontWeight = FontWeight.SemiBold)
+                InstallChoices(wide = false, enabled = !busy, onChoice = onChoice)
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss, enabled = !busy) { Text(stringResource(R.string.install_later)) }
+        })
 }
 
 @Composable
@@ -393,9 +549,13 @@ private fun AccountDialog(email: String, signedIn: Boolean, busy: Boolean, messa
                 }
             }
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text("PICO Store Lab  ${BuildConfig.VERSION_NAME}", Modifier.weight(1f), fontSize = 12.sp)
-                TextButton(onClick = if (updateVersion != null) onOpenUpdate else onCheckUpdate, enabled = !busy) {
+            Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                Text("PICO Store Lab", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                Text(stringResource(R.string.installed_version, BuildConfig.VERSION_NAME), fontSize = 12.sp)
+                if (updateVersion != null) Text(stringResource(R.string.available_version, updateVersion),
+                    fontSize = 12.sp, color = MaterialTheme.colorScheme.primary)
+                OutlinedButton(onClick = if (updateVersion != null) onOpenUpdate else onCheckUpdate,
+                    modifier = Modifier.fillMaxWidth(), enabled = !busy, shape = Edge) {
                     Text(stringResource(if (updateVersion != null) R.string.download_update else R.string.check_update))
                 }
             }

@@ -11,7 +11,7 @@ import dev.nkanf.picostore.sdk.PicoStoreClient
 import dev.nkanf.picostore.sdk.PublicItem
 import dev.nkanf.picostore.sdk.StoreTarget
 import org.json.JSONArray
-import org.json.JSONObject
+import java.io.File
 import java.util.concurrent.Executors
 
 class MainActivity : ComponentActivity() {
@@ -19,25 +19,43 @@ class MainActivity : ComponentActivity() {
     private val worker = Executors.newSingleThreadExecutor()
     private val prefs by lazy { getSharedPreferences("store", MODE_PRIVATE) }
     private val imageLoader by lazy { StoreImageLoader(this) }
-    private val account by lazy { AccountStore(this) }
+    private val account by lazy { StoreAccountFactory.create(this) }
     private val auth = mutableStateOf<PicoAuth?>(null)
     private val email = mutableStateOf("")
     private val items = mutableStateOf<List<StoreEntry>>(emptyList())
     private val selected = mutableStateOf<PublicItem?>(null)
+    private val compatibility = mutableStateOf(AppCompatibility.UNKNOWN)
+    private val installPromptName = mutableStateOf<String?>(null)
+    private val installedCopies = mutableStateOf(InstalledCopies())
+    private val trackedApplications by lazy {
+        TrackedApplications(getSharedPreferences("tracked_applications", MODE_PRIVATE))
+    }
+    private val compatibilityHistory by lazy {
+        val records = getSharedPreferences("app_compatibility", MODE_PRIVATE)
+        CompatibilityHistory({ key -> records.getString(key, null) }) { key, value ->
+            records.edit().putString(key, value).commit()
+        }
+    }
+    private data class PendingInstallation(val apk: File, val packageName: String)
+    private var pendingInstallation: PendingInstallation? = null
     private val busy = mutableStateOf(false)
     private val downloadProgress = mutableStateOf<Pair<Long, Long?>?>(null)
     private val themeMode = mutableStateOf(ThemeMode.SYSTEM)
     private val updateVersion = mutableStateOf<String?>(null)
+    private var availableUpdate: AvailableUpdate? = null
     private val message = mutableStateOf("")
     private val favorites = mutableStateOf<Set<String>>(emptySet())
     private var seedEntries: List<StoreEntry> = emptyList()
     private var pendingPurchase: StoreTarget? = null
     private lateinit var installer: StoreInstaller
+    private lateinit var installation: AppInstallation
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        installer = StoreInstaller(this) { text -> runOnUiThread { message.value = text } }
+        installer = StoreInstaller(this, onInstalled = ::refreshInstalled) { text -> runOnUiThread { message.value = text } }
+        installation = InstallationFactory.create(this, installer, changed = ::refreshInstalled) { text -> runOnUiThread { message.value = text } }
         restoreSession()
+        installation.recover()
         favorites.value = prefs.getStringSet("favorites", emptySet()).orEmpty().toSet()
         themeMode.value = runCatching { ThemeMode.valueOf(prefs.getString("theme", "SYSTEM")!!) }
             .getOrDefault(ThemeMode.SYSTEM)
@@ -46,11 +64,15 @@ class MainActivity : ComponentActivity() {
             val entry = catalog.getJSONObject(index)
             StoreEntry(StoreTarget(entry.getString("itemId"), entry.getString("packageName"), entry.getString("name")))
         }
+        seedEntries = (seedEntries + trackedApplications.all().map(::StoreEntry)).distinctBy { it.target.itemId }
         items.value = seedEntries
         setContent {
             StoreScreen(
                 entries = items.value,
                 selected = selected.value,
+                compatibility = compatibility.value,
+                installPromptName = installPromptName.value,
+                installedCopies = installedCopies.value,
                 busy = busy.value,
                 downloadProgress = downloadProgress.value,
                 themeMode = themeMode.value,
@@ -61,7 +83,9 @@ class MainActivity : ComponentActivity() {
                 favorites = favorites.value,
                 updateVersion = updateVersion.value,
                 onCheckUpdate = ::checkUpdate,
-                onOpenUpdate = { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(ReleaseUpdates.DOWNLOAD_URL))) },
+                onOpenUpdate = ::downloadSelfUpdate,
+                onCheckAppUpdates = ::checkAppUpdates,
+                onOpenApp = ::openApp,
                 onSearch = ::search,
                 onSelect = ::select,
                 onFavorite = ::toggleFavorite,
@@ -69,6 +93,11 @@ class MainActivity : ComponentActivity() {
                 onLogin = ::login,
                 onLogout = ::logout,
                 onGet = ::getApp,
+                onInstallChoice = ::chooseInstallation,
+                onDismissInstallChoice = {
+                    pendingInstallation = null
+                    installPromptName.value = null
+                },
                 onBack = { selected.value = null },
                 onThemeChange = { mode ->
                     themeMode.value = mode
@@ -81,14 +110,9 @@ class MainActivity : ComponentActivity() {
 
     private fun restoreSession() {
         runCatching {
-            val raw = account.load() ?: return
-            val data = JSONObject(raw)
-            val cookies = data.getJSONObject("cookies")
-            val session = PicoAuth(data.getString("uid"), data.getString("token"),
-                cookies.keys().asSequence().associateWith { cookies.getString(it) })
-            require(session.token.isNotEmpty() || session.cookies.isNotEmpty())
-            auth.value = session
-            email.value = data.optString("email")
+            val session = account.restore() ?: return
+            auth.value = session.auth
+            email.value = session.email
         }.onFailure { message.value = getString(R.string.session_unavailable) }
     }
 
@@ -110,11 +134,54 @@ class MainActivity : ComponentActivity() {
     private fun refreshCatalog() {
         worker.execute {
             items.value.forEach { entry ->
+                val copies = installation.installed(entry.target.packageName)
                 runCatching { client.item(entry.target) }.onSuccess { info ->
-                    runOnUiThread { items.value = items.value.map { if (it.target == entry.target) it.copy(info = info) else it } }
+                    runOnUiThread { items.value = items.value.map { if (it.target == entry.target) it.copy(info = info, installed = copies) else it } }
                 }
             }
         }
+    }
+
+    private fun refreshInstalled() {
+        if (!::installation.isInitialized || worker.isShutdown) return
+        val snapshot = items.value
+        val detail = selected.value
+        worker.execute {
+            val copies = snapshot.associate { it.target.itemId to installation.installed(it.target.packageName) }
+            val selectedCopies = detail?.let { copies[it.itemId] ?: installation.installed(it.packageName) }
+            runOnUiThread {
+                items.value = items.value.map { it.copy(installed = copies[it.target.itemId] ?: it.installed) }
+                if (selected.value?.itemId == detail?.itemId && selectedCopies != null) installedCopies.value = selectedCopies
+            }
+        }
+    }
+
+    private fun checkAppUpdates() = work {
+        runOnUiThread { message.value = getString(R.string.checking_app_updates) }
+        val targets = (seedEntries.map { it.target } + trackedApplications.all()).distinctBy { it.itemId }
+        val previous = items.value.associateBy { it.target.itemId }
+        var checked = 0
+        var failedInstalled = 0
+        val results = targets.map { target ->
+            val copies = installation.installed(target.packageName)
+            val info = runCatching { client.item(target) }.onSuccess { checked++ }.getOrNull()
+            if (info == null && (copies.original != null || copies.adapted != null)) failedInstalled++
+            StoreEntry(target, info ?: previous[target.itemId]?.info, copies)
+        }
+        check(checked > 0) { getString(R.string.update_check_failed) }
+        val count = results.count { it.info?.let { info -> it.installed.hasUpdate(info.versionCode) } == true }
+        runOnUiThread {
+            items.value = results
+            message.value = when {
+                failedInstalled > 0 -> getString(R.string.app_updates_partial)
+                count == 0 -> getString(R.string.apps_up_to_date)
+                else -> getString(R.string.app_updates_available, count)
+            }
+        }
+    }
+
+    private fun openApp(detail: PublicItem, variant: InstallVariant) = work {
+        check(installation.open(detail.packageName, variant)) { getString(R.string.open_app_failed) }
     }
 
     private fun search(query: String) {
@@ -125,21 +192,35 @@ class MainActivity : ComponentActivity() {
             }
             runOnUiThread { items.value = results }
             results.forEach { entry ->
+                val copies = installation.installed(entry.target.packageName)
                 runCatching { client.item(entry.target) }.onSuccess { info ->
-                    runOnUiThread { items.value = items.value.map { if (it.target == entry.target) it.copy(info = info) else it } }
+                    runOnUiThread { items.value = items.value.map { if (it.target == entry.target) it.copy(info = info, installed = copies) else it } }
                 }
             }
         }
     }
 
     private fun select(target: StoreTarget) = work {
-        val detail = auth.value?.let { client.item(target, it) } ?: client.item(target)
-        runOnUiThread { selected.value = detail }
+        val detail = currentAuth()?.let { client.item(target, it) } ?: client.item(target)
+        showDetail(detail)
+    }
+
+    private fun showDetail(detail: PublicItem) {
+        val support = compatibilityHistory.resolve(detail.packageName, detail.versionCode,
+            installation.knownProfile(detail.packageName, detail.versionCode))
+        val copies = installation.installed(detail.packageName)
+        runOnUiThread {
+            selected.value = detail
+            compatibility.value = support
+            installedCopies.value = copies
+        }
     }
 
     private fun checkUpdate() = work {
         try {
-            val version = ReleaseUpdates.newerVersion(BuildConfig.VERSION_NAME)
+            val update = ReleaseUpdates.findUpdate(BuildConfig.VERSION_NAME)
+            availableUpdate = update
+            val version = update?.version
             runOnUiThread {
                 updateVersion.value = version
                 message.value = if (version == null) getString(R.string.up_to_date)
@@ -148,26 +229,43 @@ class MainActivity : ComponentActivity() {
         } catch (_: Exception) { error(getString(R.string.update_check_failed)) }
     }
 
+    private fun downloadSelfUpdate() = work {
+        val update = availableUpdate ?: error(getString(R.string.self_update_unavailable))
+        runOnUiThread { message.value = getString(R.string.self_update_download) }
+        val apk = try {
+            SelfUpdateDownloader(this).download(update) { received, total ->
+                runOnUiThread { downloadProgress.value = received to total }
+            }
+        } catch (failure: SelfUpdateException) {
+            val resource = when (failure.code) {
+                "update_signature", "update_package" -> R.string.self_update_identity_mismatch
+                "update_metadata", "update_not_newer" -> R.string.self_update_unavailable
+                "update_space" -> R.string.not_enough_storage
+                else -> R.string.self_update_download_failed
+            }
+            error(getString(resource))
+        }
+        runOnUiThread { downloadProgress.value = null }
+        installation.install(apk, InstallVariant.ORIGINAL)
+    }
+
     private fun toggleFavorite(itemId: String) {
         favorites.value = if (itemId in favorites.value) favorites.value - itemId else favorites.value + itemId
         prefs.edit().putStringSet("favorites", favorites.value).apply()
     }
 
     private fun sendCode(address: String) = work {
-        client.sendCode(address)
+        account.sendCode(address)
         runOnUiThread { message.value = getString(R.string.code_sent) }
     }
 
     private fun login(address: String, code: String) = work {
-        val session = client.login(address, code)
-        val data = JSONObject().put("uid", session.uid).put("token", session.token)
-            .put("cookies", JSONObject(session.cookies)).put("email", address)
-        try { account.save(data.toString()) }
-        catch (_: Exception) { error(getString(R.string.session_save_failed)) }
+        val session = account.login(address, code).auth
         val previous = selected.value
         val refreshed = previous?.let {
             runCatching { client.item(StoreTarget(it.itemId, it.packageName, it.name), session) }.getOrNull()
         }
+        if (refreshed != null) showDetail(refreshed)
         runOnUiThread {
             auth.value = session; email.value = address; selected.value = refreshed
             message.value = getString(R.string.signed_in)
@@ -175,7 +273,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun logout() = work {
-        try { account.clear() }
+        try { account.logout() }
         catch (_: Exception) { error(getString(R.string.sign_out_failed)) }
         runOnUiThread {
             auth.value = null
@@ -184,12 +282,12 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun getApp(detail: PublicItem) {
-        val session = auth.value ?: run { message.value = getString(R.string.sign_in_first); return }
+    private fun getApp(detail: PublicItem, variant: InstallVariant?) {
         work {
+            val session = currentAuth() ?: error(getString(R.string.sign_in_first))
             val target = StoreTarget(detail.itemId, detail.packageName, detail.name)
             val current = client.item(target, session)
-            runOnUiThread { selected.value = current }
+            showDetail(current)
             if (current.entitlementStatus != 1 && current.price.toDoubleOrNull()?.let { it > 0.0 } == true) {
                 pendingPurchase = target
                 runOnUiThread {
@@ -204,23 +302,72 @@ class MainActivity : ComponentActivity() {
             val apk = installer.download(info) { received, total ->
                 runOnUiThread { downloadProgress.value = received to total }
             }
+            trackedApplications.remember(target)
             runOnUiThread {
                 downloadProgress.value = null
-                message.value = getString(R.string.ready_to_install)
+                message.value = getString(R.string.checking_application)
             }
-            installer.install(apk)
+            if (variant == InstallVariant.ORIGINAL) {
+                // Remember newly introduced account support without blocking an explicit original install.
+                runCatching {
+                    val inspected = installation.inspect(apk)
+                    check(inspected.packageName == target.packageName && inspected.versionCode == info.versionCode)
+                    compatibilityHistory.remember(inspected)
+                }
+                showDetail(current.copy(versionCode = info.versionCode, appVersion = info.version))
+                installDownloaded(apk, target.packageName, InstallVariant.ORIGINAL)
+                return@work
+            }
+            val inspected = installation.inspect(apk)
+            check(inspected.packageName == target.packageName && inspected.versionCode == info.versionCode) {
+                getString(R.string.install_failed)
+            }
+            // Persist the detection before showing a choice, including when it is declined.
+            compatibilityHistory.remember(inspected)
+            val downloaded = current.copy(versionCode = info.versionCode, appVersion = info.version)
+            showDetail(downloaded)
+            when {
+                variant != null -> installDownloaded(apk, target.packageName, variant)
+                inspected.compatibility == AppCompatibility.PROFILE -> installDownloaded(apk, target.packageName, InstallVariant.ADAPTED)
+                inspected.compatibility == AppCompatibility.MATRIX -> runOnUiThread {
+                    pendingInstallation = PendingInstallation(apk, target.packageName)
+                    installPromptName.value = downloaded.name
+                    message.value = ""
+                }
+                else -> installDownloaded(apk, target.packageName, InstallVariant.ORIGINAL)
+            }
+        }
+    }
+
+    private fun chooseInstallation(variant: InstallVariant) {
+        val pending = pendingInstallation ?: return
+        if (busy.value) return
+        pendingInstallation = null
+        installPromptName.value = null
+        work { installDownloaded(pending.apk, pending.packageName, variant) }
+    }
+
+    private fun installDownloaded(apk: File, packageName: String, variant: InstallVariant) {
+        val updating = installation.installed(packageName).copyFor(variant) != null
+        try { installation.install(apk, variant) }
+        catch (failure: Exception) {
+            val reason = failure.message ?: getString(R.string.install_failed)
+            error(if (updating) "$reason\n${getString(R.string.current_version_retained)}" else reason)
         }
     }
 
     override fun onResume() {
         super.onResume()
+        refreshInstalled()
         val target = pendingPurchase ?: return
-        val session = auth.value ?: return
         pendingPurchase = null
         worker.execute {
-            runCatching { client.item(target, session) }.onSuccess { current ->
+            runCatching {
+                val session = currentAuth() ?: error(getString(R.string.sign_in_first))
+                client.item(target, session)
+            }.onSuccess { current ->
+                showDetail(current)
                 runOnUiThread {
-                    selected.value = current
                     message.value = if (current.entitlementStatus == 1) getString(R.string.purchase_ready)
                     else getString(R.string.purchase_not_confirmed)
                 }
@@ -228,12 +375,23 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    /** Grant requests can rotate Passport credentials outside this Activity. */
+    private fun currentAuth(): PicoAuth? {
+        val session = account.restore()
+        runOnUiThread {
+            auth.value = session?.auth
+            email.value = session?.email.orEmpty()
+        }
+        return session?.auth
+    }
+
     override fun onDestroy() {
         imageLoader.close()
         installer.close()
+        installation.close()
         worker.shutdown()
         super.onDestroy()
     }
 }
 
-data class StoreEntry(val target: StoreTarget, val info: PublicItem? = null)
+data class StoreEntry(val target: StoreTarget, val info: PublicItem? = null, val installed: InstalledCopies = InstalledCopies())

@@ -3,6 +3,29 @@ plugins {
     id 'org.jetbrains.kotlin.plugin.compose'
 }
 
+def bridgeEnabled = providers.gradleProperty('matrixBridgeDir').isPresent()
+def releaseSigning = [
+    storeFile: providers.environmentVariable('PICO_ANDROID_KEYSTORE').orNull,
+    keyAlias: providers.environmentVariable('PICO_ANDROID_KEY_ALIAS').orNull,
+    storePassword: providers.environmentVariable('PICO_ANDROID_STORE_PASSWORD').orNull,
+    keyPassword: providers.environmentVariable('PICO_ANDROID_KEY_PASSWORD').orNull,
+]
+if (releaseSigning.values().any { it } && !releaseSigning.values().every { it }) {
+    throw new GradleException('Provide all four PICO_ANDROID signing environment variables')
+}
+if (bridgeEnabled) {
+    def bundleDir = providers.gradleProperty('matrixBundleDir')
+    tasks.register('copyMatrixBundle', Sync) {
+        from providers.provider {
+            if (!bundleDir.isPresent() || !file(bundleDir.get() + '/bundle.json').isFile())
+                throw new GradleException('Provide -PmatrixBundleDir with a prepared Matrix Bridge bundle directory')
+            file(bundleDir.get())
+        }
+        into "$buildDir/generated/matrix-assets/matrix-bridge"
+    }
+    tasks.named('preBuild').configure { dependsOn 'copyMatrixBundle' }
+}
+
 tasks.register('copyStoreCatalog', Copy) {
     from '../../../contracts/v1/catalog.json'
     into "$buildDir/generated/catalog-assets"
@@ -11,6 +34,9 @@ tasks.named('preBuild').configure { dependsOn 'copyStoreCatalog' }
 
 dependencies {
     implementation project(':sdk')
+    implementation 'com.android.tools.build:apksig:9.4.0'
+    if (bridgeEnabled) implementation 'org.picomatrix.bridge:installer-android:0.1.0-dev'
+    coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.5'
     implementation platform('androidx.compose:compose-bom:2026.08.00')
     implementation 'androidx.compose.material3:material3'
     implementation 'androidx.compose.foundation:foundation'
@@ -18,11 +44,14 @@ dependencies {
     implementation 'androidx.activity:activity-compose:1.13.0'
     implementation 'androidx.core:core-ktx:1.17.0'
     testImplementation 'junit:junit:4.13.2'
+    testImplementation 'org.json:json:20240303'
 }
 
 android {
     namespace 'dev.nkanf.picostore'
     sourceSets.main.assets.srcDir "$buildDir/generated/catalog-assets"
+    sourceSets.main.kotlin.srcDir(bridgeEnabled ? 'src/matrix/java' : 'src/standalone/java')
+    if (bridgeEnabled) sourceSets.main.assets.srcDir "$buildDir/generated/matrix-assets"
     compileSdk 37
 
     defaultConfig {
@@ -35,8 +64,22 @@ android {
 
     buildFeatures { compose true; buildConfig true }
 
+    if (releaseSigning.values().every { it }) {
+        signingConfigs {
+            release {
+                storeFile file(releaseSigning.storeFile)
+                keyAlias releaseSigning.keyAlias
+                storePassword releaseSigning.storePassword
+                keyPassword releaseSigning.keyPassword
+            }
+        }
+        buildTypes.release.signingConfig signingConfigs.release
+    }
+    buildTypes.release.debuggable = false
+
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
+        coreLibraryDesugaringEnabled true
     }
 }

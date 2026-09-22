@@ -17,12 +17,15 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.security.MessageDigest
 
-internal class StoreInstaller(private val context: Context, private val report: (String) -> Unit) {
+internal class StoreInstaller(private val context: Context, private val onInstalled: () -> Unit = {}, private val report: (String) -> Unit) {
     private val action = "${context.packageName}.INSTALL_RESULT"
     private val receiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             when (intent.getIntExtra(PackageInstaller.EXTRA_STATUS, PackageInstaller.STATUS_FAILURE)) {
-                PackageInstaller.STATUS_SUCCESS -> report(context.getString(R.string.installed))
+                PackageInstaller.STATUS_SUCCESS -> {
+                    report(context.getString(R.string.installed))
+                    onInstalled()
+                }
                 PackageInstaller.STATUS_PENDING_USER_ACTION -> {
                     @Suppress("DEPRECATION")
                     val confirmation = intent.getParcelableExtra<Intent>(Intent.EXTRA_INTENT)

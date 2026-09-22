@@ -2,6 +2,7 @@ node_modules/
 apps/website/.local/
 apps/website/.wrangler/
 apps/android/.gradle/
+apps/android/.kotlin/
 apps/android/build/
 apps/android/app/build/
 packages/ts/dist/
@@ -17,3 +18,9 @@ dist/
 *.auth.json
 *mirror-config.json
 .DS_Store
+
+# Local working records
+docs/isme/
+docs/plans/
+docs/validation/
+docs/superpowers/
