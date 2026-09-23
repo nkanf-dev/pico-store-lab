@@ -91,7 +91,8 @@ jobs:
           set -euo pipefail
           asset="$RUNNER_TEMP/android-release/pico-store-android.apk"
           gh release upload "$RELEASE_TAG" "$asset" --clobber
-          gh api "repos/$GH_REPO/releases/tags/$RELEASE_TAG" > "$RUNNER_TEMP/release.json"
+          release_id="$(gh release view "$RELEASE_TAG" --json databaseId --jq .databaseId)"
+          gh api "repos/$GH_REPO/releases/$release_id" > "$RUNNER_TEMP/release.json"
           python3 - "$asset" "$RUNNER_TEMP/release.json" <<'PY'
           import hashlib, json, sys
           expected = 'sha256:' + hashlib.sha256(open(sys.argv[1], 'rb').read()).hexdigest()

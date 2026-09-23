@@ -69,7 +69,8 @@ jobs:
           gh release upload "$RELEASE_TAG" "$RUNNER_TEMP"/sdk-release/* --clobber
           mkdir -p "$RUNNER_TEMP/desktop-checksums"
           gh release download "$RELEASE_TAG" --pattern '*.sha256' --dir "$RUNNER_TEMP/desktop-checksums"
-          gh api "repos/$GH_REPO/releases/tags/$RELEASE_TAG" > "$RUNNER_TEMP/release.json"
+          release_id="$(gh release view "$RELEASE_TAG" --json databaseId --jq .databaseId)"
+          gh api "repos/$GH_REPO/releases/$release_id" > "$RUNNER_TEMP/release.json"
           python3 - "$RELEASE_TAG" "$RUNNER_TEMP/release.json" "$RUNNER_TEMP/desktop-checksums" "$RUNNER_TEMP/SHA256SUMS" <<'PY'
           import json, pathlib, re, sys
           tag, release_path, checksum_dir, output = sys.argv[1:]
@@ -105,7 +106,8 @@ jobs:
         run: |
           set -euo pipefail
           gh release edit "$RELEASE_TAG" --draft=false --latest --verify-tag
-          gh api "repos/$GH_REPO/releases/tags/$RELEASE_TAG" > "$RUNNER_TEMP/published.json"
+          release_id="$(gh release view "$RELEASE_TAG" --json databaseId --jq .databaseId)"
+          gh api "repos/$GH_REPO/releases/$release_id" > "$RUNNER_TEMP/published.json"
           python3 - "$RELEASE_TAG" "$RUNNER_TEMP/SHA256SUMS" "$RUNNER_TEMP/published.json" <<'PY'
           import hashlib, json, sys
           tag, checksums, release_path = sys.argv[1:]

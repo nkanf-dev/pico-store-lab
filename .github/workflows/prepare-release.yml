@@ -35,7 +35,8 @@ jobs:
           fi
           gh release create "$RELEASE_TAG" --draft --verify-tag \
             --title "PICO Store Lab ${RELEASE_TAG#v}" --notes-file "$notes"
-          gh api "repos/$GH_REPO/releases/tags/$RELEASE_TAG" > "$RUNNER_TEMP/release.json"
+          release_id="$(gh release view "$RELEASE_TAG" --json databaseId --jq .databaseId)"
+          gh api "repos/$GH_REPO/releases/$release_id" > "$RUNNER_TEMP/release.json"
           python3 - "$RELEASE_TAG" "$RUNNER_TEMP/release.json" <<'PY'
           import json, sys
           release = json.load(open(sys.argv[2]))

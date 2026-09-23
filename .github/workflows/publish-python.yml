@@ -1,6 +1,10 @@
 name: Publish Python package
 on:
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Published release tag to publish to PyPI
+        required: true
 permissions:
   contents: read
 jobs:
@@ -12,6 +16,17 @@ jobs:
       id-token: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.release_tag }}
+      - name: Verify the GitHub release is public
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          set -euo pipefail
+          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          gh release view "$RELEASE_TAG" --json isDraft,tagName --jq ".tagName == \"$RELEASE_TAG\" and (.isDraft | not)" | grep -qx true
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
