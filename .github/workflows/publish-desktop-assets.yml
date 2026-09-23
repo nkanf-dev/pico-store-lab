@@ -1,0 +1,39 @@
+name: Attach desktop release downloads
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_run_id:
+        description: Successful Build release downloads run ID
+        required: true
+      release_tag:
+        description: Existing GitHub release tag
+        required: true
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  attach:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          run-id: ${{ inputs.build_run_id }}
+          github-token: ${{ github.token }}
+          pattern: pico-store-desktop-*
+          merge-multiple: true
+          path: dist
+      - name: Verify and attach desktop downloads
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          set -euo pipefail
+          cd dist
+          checksums=( *.sha256 )
+          test "${#checksums[@]}" -eq 8
+          for checksum in "${checksums[@]}"; do sha256sum --check "$checksum"; done
+          gh release upload "$RELEASE_TAG" pico-store-desktop-* --clobber
