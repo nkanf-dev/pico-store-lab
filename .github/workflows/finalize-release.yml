@@ -1,0 +1,117 @@
+name: Finalize Lab release
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Existing draft release tag
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: finalize-lab-${{ inputs.release_tag }}
+      cancel-in-progress: false
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.release_tag }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '25'
+          cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+      - run: sdkmanager 'platforms;android-37.0' 'build-tools;36.0.0'
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Build SDK release assets
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          set -euo pipefail
+          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          version="${RELEASE_TAG#v}"
+          output="$RUNNER_TEMP/sdk-release"
+          mkdir -p "$output"
+          npm ci --ignore-scripts
+          npm run build:ts
+          npm pack -w @nkanf-dev/pico-store-sdk --pack-destination "$output"
+          python -m pip install build hatchling
+          python -m build packages/python --outdir "$output"
+          cargo package -p pico-store-lab --locked
+          cp "target/package/pico-store-lab-$version.crate" "$output/"
+          (cd apps/android && ./gradlew :sdk:assembleRelease --console=plain)
+          cp packages/kotlin/build/outputs/aar/sdk-release.aar "$output/pico-store-lab-kotlin-$version.aar"
+      - name: Attach SDK assets and check all release digests
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          set -euo pipefail
+          gh release upload "$RELEASE_TAG" "$RUNNER_TEMP"/sdk-release/* --clobber
+          mkdir -p "$RUNNER_TEMP/desktop-checksums"
+          gh release download "$RELEASE_TAG" --pattern '*.sha256' --dir "$RUNNER_TEMP/desktop-checksums"
+          gh api "repos/$GH_REPO/releases/tags/$RELEASE_TAG" > "$RUNNER_TEMP/release.json"
+          python3 - "$RELEASE_TAG" "$RUNNER_TEMP/release.json" "$RUNNER_TEMP/desktop-checksums" "$RUNNER_TEMP/SHA256SUMS" <<'PY'
+          import json, pathlib, re, sys
+          tag, release_path, checksum_dir, output = sys.argv[1:]
+          release = json.load(open(release_path))
+          if not re.fullmatch(r'v[0-9]+\.[0-9]+\.[0-9]+', tag) or release['tag_name'] != tag or not release['draft']:
+              raise SystemExit('Expected the requested draft release')
+          version = tag[1:]
+          desktop = {f'pico-store-desktop-{platform}-{arch}.{extension}'
+                     for platform, extension in [('windows', 'exe'), ('windows', 'zip'), ('macos', 'dmg'), ('linux', 'AppImage')]
+                     for arch in ['x64', 'arm64']}
+          expected = {'pico-store-android.apk', f'nkanf-dev-pico-store-sdk-{version}.tgz',
+                      f'pico-store-lab-{version}.crate', f'pico-store-lab-kotlin-{version}.aar',
+                      f'pico_store_lab-{version}-py3-none-any.whl', f'pico_store_lab-{version}.tar.gz'}
+          expected |= desktop | {name + '.sha256' for name in desktop}
+          assets = {item['name']: item for item in release['assets']}
+          if set(assets) != expected:
+              raise SystemExit(f'Release asset set differs: missing={sorted(expected - set(assets))}, extra={sorted(set(assets) - expected)}')
+          for name, item in assets.items():
+              if item['state'] != 'uploaded' or not re.fullmatch(r'sha256:[0-9a-f]{64}', item.get('digest') or ''):
+                  raise SystemExit(f'Missing uploaded digest: {name}')
+          for name in desktop:
+              parts = (pathlib.Path(checksum_dir) / (name + '.sha256')).read_text().split()
+              if len(parts) != 2 or parts[1] != name or parts[0] != assets[name]['digest'][7:]:
+                  raise SystemExit(f'Desktop checksum differs: {name}')
+          pathlib.Path(output).write_text(''.join(f"{assets[name]['digest'][7:]}  {name}\n" for name in sorted(assets)))
+          PY
+          gh release upload "$RELEASE_TAG" "$RUNNER_TEMP/SHA256SUMS" --clobber
+      - name: Publish and verify release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          set -euo pipefail
+          gh release edit "$RELEASE_TAG" --draft=false --latest --verify-tag
+          gh api "repos/$GH_REPO/releases/tags/$RELEASE_TAG" > "$RUNNER_TEMP/published.json"
+          python3 - "$RELEASE_TAG" "$RUNNER_TEMP/SHA256SUMS" "$RUNNER_TEMP/published.json" <<'PY'
+          import hashlib, json, sys
+          tag, checksums, release_path = sys.argv[1:]
+          release = json.load(open(release_path))
+          assets = [asset for asset in release['assets'] if asset['name'] == 'SHA256SUMS']
+          expected = 'sha256:' + hashlib.sha256(open(checksums, 'rb').read()).hexdigest()
+          if release['tag_name'] != tag or release['draft'] or release['prerelease'] or len(assets) != 1 or assets[0].get('digest') != expected:
+              raise SystemExit('Published release or checksum asset differs')
+          PY
