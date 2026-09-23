@@ -34,7 +34,8 @@ internal object InstallationFactory {
                 return (bundled + saved).toSet()
             }
             private fun selectedProfiles(): List<ApplicationProfile> = profileKeys().mapNotNull { key ->
-                runCatching { store(key).current().implementation }.getOrNull()
+                runCatching { store(key).current().implementation }
+                    .onFailure { android.util.Log.e("MatrixProfiles", "Unable to load profile $key", it) }.getOrNull()
             }
             private fun specificProfiles(packageName: String): List<ApplicationProfile> = selectedProfiles()
                 .filter { it.packageMatcher() == packageName }
