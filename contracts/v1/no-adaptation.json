@@ -1,0 +1,9 @@
+[
+  {
+    "packageName": "com.vrchat.android",
+    "reason": {
+      "zh": "应用内可使用 VRChat 账号登录，无需适配 PICO 登录。",
+      "en": "You can sign in with a VRChat account in the app, so PICO sign-in adaptation is unnecessary."
+    }
+  }
+]

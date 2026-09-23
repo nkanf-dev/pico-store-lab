@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import { apps, guide, signInGuide, adaptationTechGuide, about } from '../content/pages.mjs';
 import { githubOwner, repositoryUrl, releasesUrl, releaseDownloadUrl, ownerUrl, websiteOrigin, playerGuideUrl, registerUrl } from '../content/project-links.mjs';
 import catalog from '../../../contracts/v1/catalog.json' with { type: 'json' };
+import noAdaptation from '../../../contracts/v1/no-adaptation.json' with { type: 'json' };
 
 const origin = websiteOrigin;
 const output = new URL('../dist/', import.meta.url);
@@ -36,16 +37,21 @@ function translate(html, lang) {
 
 function appState(app, lang) {
   const copy = app[lang];
+  const noAdaptationReason = noAdaptation.find(rule => rule.packageName === app.packageName)?.reason?.[lang] ?? '';
   return { ...media.find(item => item.itemId === app.itemId), itemId: app.itemId, packageName: app.packageName,
     name: app.name, slug: app.slug, officialUrl: app.officialUrl, publisher: app.publisher,
     price: app.price ?? '0.00', currency: app.currency ?? '',
-    summary: copy.summary, description: copy.description, supportedPlatforms: copy.platforms.join(' · '), releases: [] };
+    summary: copy.summary, description: copy.description, noAdaptationReason,
+    supportedPlatforms: copy.platforms.join(' · '), releases: [] };
 }
 
 function cards(lang) {
-  return `<div class="featured-apps">${apps.map((app, index) => {
-    const item = appState(app, lang);
-    return `<a class="featured-card" href="${localized(`/apps/${app.slug}/`, lang)}"><div class="card-top"><span class="eyebrow">0${index + 1} / ${lang === 'zh' ? 'PICO 版' : 'PICO EDITION'}</span>${item.iconUrl ? `<img src="${escape(item.iconUrl)}" width="64" height="64" alt="" loading="lazy" referrerpolicy="no-referrer">` : ''}</div><h2>${escape(app.name)}</h2><p>${escape(app[lang].summary)}</p><span class="card-link">${lang === 'zh' ? '查看应用与下载' : 'Explore & download'} <span aria-hidden="true">↗</span></span></a>`;
+  return `<div class="featured-apps">${catalog.map((item, index) => {
+    const app = apps.find(page => page.itemId === item.itemId);
+    const state = app ? appState(app, lang) : null;
+    const href = app ? localized(`/apps/${app.slug}/`, lang) : `${localized('/', lang)}?itemId=${encodeURIComponent(item.itemId)}&package=${encodeURIComponent(item.packageName)}#app-details`;
+    const summary = app?.[lang].summary ?? (lang === 'zh' ? '查看 PICO 版本详情，使用国际区账号下载并安装。' : 'Explore the PICO edition, then download and install with your international account.');
+    return `<a class="featured-card" href="${escape(href)}"><div class="card-top"><span class="eyebrow">0${index + 1} / ${lang === 'zh' ? 'PICO 版' : 'PICO EDITION'}</span>${state?.iconUrl ? `<img src="${escape(state.iconUrl)}" width="64" height="64" alt="" loading="lazy" referrerpolicy="no-referrer">` : ''}</div><h2>${escape(item.name)}</h2><p>${escape(summary)}</p><span class="card-link">${lang === 'zh' ? '查看应用与下载' : 'Explore & download'} <span aria-hidden="true">↗</span></span></a>`;
   }).join('')}</div>`;
 }
 
@@ -70,6 +76,8 @@ function appDetails(app, lang) {
   const state = appState(app, lang);
   let html = detailTemplate.replace('<h2 id="release-heading">—</h2>', `<h1 id="release-heading">${escape(app.name)}</h1>`)
     .replace('<p id="app-summary" class="app-summary"></p>', `<p id="app-summary" class="app-summary">${escape(state.summary)}</p>`)
+    .replace('<p id="adaptation-note" class="adaptation-note" hidden></p>',
+      state.noAdaptationReason ? `<p id="adaptation-note" class="adaptation-note">${lang === 'zh' ? '无需登录适配：' : 'No sign-in adaptation needed: '}${escape(state.noAdaptationReason)}</p>` : '<p id="adaptation-note" class="adaptation-note" hidden></p>')
     .replace('<p id="app-publisher" class="app-publisher"></p>', `<p id="app-publisher" class="app-publisher">${escape(state.publisher)} / PICO</p>`)
     .replace('<div id="app-about" hidden>', '<div id="app-about">')
     .replace('<div id="app-description" class="app-description"></div>', `<div id="app-description" class="app-description">${escape(state.description)}</div>`)
@@ -83,7 +91,8 @@ function appDetails(app, lang) {
 
 function appGuide(app, lang) {
   const copy = app[lang];
-  return `<section class="app-guide"><div class="reading-heading"><p class="eyebrow">${lang === 'zh' ? '下载与安装' : 'DOWNLOAD & INSTALL'}</p><h2>${lang === 'zh' ? '从这里开始，一步步装好。' : 'Get it onto your headset.'}</h2></div>${steps(copy.steps)}<a class="text-link" href="${localized('/guides/install-global-apps/', lang)}">${lang === 'zh' ? '查看完整安装指南' : 'Read the installation guide'} ↗</a> · <a class="text-link" href="${localized('/guides/international-sign-in/', lang)}">${lang === 'zh' ? '国际区登录适配' : 'International sign-in adaptation'} ↗</a><div class="faq">${copy.faq.map(item => `<details><summary>${escape(item.q)}</summary><p>${escape(item.a)}</p></details>`).join('')}</div><p class="source-links">${app.sources.map(link => external(link.url, link.label)).join(' · ')}</p></section>`;
+  const adaptationLink = noAdaptation.some(rule => rule.packageName === app.packageName) ? '' : ` · <a class="text-link" href="${localized('/guides/international-sign-in/', lang)}">${lang === 'zh' ? '国际区登录适配' : 'International sign-in adaptation'} ↗</a>`;
+  return `<section class="app-guide"><div class="reading-heading"><p class="eyebrow">${lang === 'zh' ? '下载与安装' : 'DOWNLOAD & INSTALL'}</p><h2>${lang === 'zh' ? '从这里开始，一步步装好。' : 'Get it onto your headset.'}</h2></div>${steps(copy.steps)}<a class="text-link" href="${localized('/guides/install-global-apps/', lang)}">${lang === 'zh' ? '查看完整安装指南' : 'Read the installation guide'} ↗</a>${adaptationLink}<div class="faq">${copy.faq.map(item => `<details><summary>${escape(item.q)}</summary><p>${escape(item.a)}</p></details>`).join('')}</div><p class="source-links">${app.sources.map(link => external(link.url, link.label)).join(' · ')}</p></section>`;
 }
 
 const records = [];
@@ -122,13 +131,13 @@ await cp(source, output, { recursive:true });
 
 for (const lang of ['zh', 'en']) {
   const zh = lang === 'zh';
-  const hero = `<section class="hero"><div class="hero-copy"><p class="eyebrow"><span class="indicator"></span>PICO STORE LAB</p><h1>${zh ? '在国区 PICO 上，<br><em>找到你想用的应用。</em>' : 'Your PICO.<br><em>More to explore.</em>'}</h1><p class="intro">${zh ? '下载 VRChat、YouTube VR、Virtual Desktop 的 PICO 版本；需要 PICO 账号的应用还能选择国际区登录适配。' : 'Find VRChat, YouTube VR and Virtual Desktop for PICO. Choose international sign-in adaptation for apps that use PICO accounts.'}</p><div class="hero-actions"><a class="action primary" href="#catalog">${zh ? '选择应用' : 'Explore apps'} ↓</a><a id="guide-link" class="action secondary" href="${localized('/guides/international-sign-in/', lang)}">${zh ? '了解国际区登录适配' : 'International sign-in'} ↗</a></div></div><div class="hero-art" aria-hidden="true"><div class="orbit orbit-one"></div><div class="orbit orbit-two"></div><div class="hero-glyph">P<span>/</span></div><div class="art-caption">VRCHAT / YOUTUBE VR<br>VIRTUAL DESKTOP</div></div></section>`;
-  const featured = `<section id="catalog" class="section-head"><span>${zh ? '从这三款开始' : 'START HERE'}</span><span>01 / APPS</span></section>${cards(lang)}`;
+  const hero = `<section class="hero"><div class="hero-copy"><p class="eyebrow"><span class="indicator"></span>PICO STORE LAB</p><h1>${zh ? '在国区 PICO 上，<br><em>找到你想用的应用。</em>' : 'Your PICO.<br><em>More to explore.</em>'}</h1><p class="intro">${zh ? '查找 PICO 应用，用自己的国际区账号下载；需要 PICO 账号的应用还能选择国际区登录适配。' : 'Find PICO apps and download with your international account. Choose sign-in adaptation for apps that use PICO accounts.'}</p><div class="hero-actions"><a class="action primary" href="#catalog">${zh ? '选择应用' : 'Explore apps'} ↓</a><a id="guide-link" class="action secondary" href="${localized('/guides/international-sign-in/', lang)}">${zh ? '了解国际区登录适配' : 'International sign-in'} ↗</a></div></div><div class="hero-art" aria-hidden="true"><div class="orbit orbit-one"></div><div class="orbit orbit-two"></div><div class="hero-glyph">P<span>/</span></div><div class="art-caption">PICO APPS<br>INTERNATIONAL SIGN-IN</div></div></section>`;
+  const featured = `<section id="catalog" class="section-head"><span>${zh ? '推荐应用' : 'FEATURED APPS'}</span><span>01 / APPS</span></section>${cards(lang)}`;
   const discovery = discoveryTemplate.replace('id="catalog"', 'id="more-apps"');
   const workflow = workflowTemplate.replaceAll(playerGuideUrl, localized('/guides/install-global-apps/', lang))
     .replaceAll(releasesUrl, localized('/download/', lang));
   await page({ path:'/', lang, title:zh ? 'PICO 国际区应用下载与安装指南 | PICO Store Lab' : 'PICO apps, downloads & installation | PICO Store Lab',
-    description:zh ? '在国区 PICO 上获取 VRChat、YouTube VR、Virtual Desktop 等应用的 PICO 版本，使用自己的 PICO 国际区账号下载并安装。' : 'Browse PICO apps including VRChat, YouTube VR and Virtual Desktop, then download and install with your international account.',
+    description:zh ? '在国区 PICO 上查找应用的 PICO 版本，使用自己的 PICO 国际区账号下载并安装。' : 'Browse PICO apps, then download and install with your international account.',
     body:hero + featured + discovery + detailTemplate + downloaderTemplate + workflow, interactive:true });
   for (const app of apps) {
     const breadcrumb = `<nav class="breadcrumbs"><a href="${localized('/', lang)}">${zh ? '应用' : 'Apps'}</a><span>/</span><span>${escape(app.name)}</span></nav>`;

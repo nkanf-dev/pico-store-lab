@@ -2,8 +2,7 @@
 (() => {
   if (navigator.doNotTrack === '1' || location.hostname === 'localhost' || location.hostname === '127.0.0.1') return;
   const path = location.pathname.replace(/^\/en(?=\/|$)/, '') || '/';
-  const pages = { '/':'home', '/apps/vrchat/':'vrchat', '/apps/youtube-vr/':'youtube-vr',
-    '/apps/virtual-desktop/':'virtual-desktop', '/guides/install-global-apps/':'guide',
+  const pages = { '/':'home', '/guides/install-global-apps/':'guide',
     '/guides/international-sign-in/':'international-sign-in', '/guides/how-adaptation-works/':'adaptation-tech',
     '/download/':'clients', '/about/':'about' };
   const hosts = { google:'google.com', bing:'bing.com', baidu:'baidu.com', bilibili:'bilibili.com',
@@ -23,7 +22,7 @@
   window.picoTrack = event => {
     fetch('/api/metrics', { method:'POST', credentials:'omit', keepalive:true,
       headers:{ 'Content-Type':'application/json' },
-      body:JSON.stringify({ page:pages[path] ?? 'other', source, event }),
+      body:JSON.stringify({ page:path.startsWith('/apps/') ? 'app' : pages[path] ?? 'other', source, event }),
     }).catch(() => {});
   };
   window.picoTrack('page_view');

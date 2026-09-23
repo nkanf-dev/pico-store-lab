@@ -102,6 +102,7 @@ const translations = {
     "goDownload": "Download this app",
     "aboutApp": "About this app",
     "free": "Free",
+    "noAdaptation": "No sign-in adaptation needed",
     "publisher": "Publisher",
     "genres": "Category",
     "ageRating": "Age rating",
@@ -215,6 +216,7 @@ const translations = {
     "goDownload": "下载此应用",
     "aboutApp": "应用介绍",
     "free": "免费",
+    "noAdaptation": "无需登录适配",
     "publisher": "开发商",
     "genres": "类型",
     "ageRating": "年龄分级",
@@ -365,6 +367,9 @@ function renderDetails(state) {
   setImage('app-icon', state.iconUrl);
   $('app-publisher').textContent = state.publisher || '';
   $('app-summary').textContent = readableText(state.summary);
+  const adaptationNote = $('adaptation-note');
+  adaptationNote.hidden = !state.noAdaptationReason;
+  adaptationNote.textContent = state.noAdaptationReason ? `${t('noAdaptation')}: ${state.noAdaptationReason}` : '';
   $('app-price').textContent = state.price !== undefined && state.price !== ''
     ? Number(state.price) === 0 ? t('free') : `${state.price} ${state.currency || ''}` : '';
   $('download-selected-name').textContent = state.name || '';

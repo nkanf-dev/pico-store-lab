@@ -70,7 +70,20 @@ if (bridgeEnabled) {
 
 tasks.register('copyStoreCatalog', Copy) {
     from '../../../contracts/v1/catalog.json'
+    from '../../../contracts/v1/no-adaptation.json'
     into "$buildDir/generated/catalog-assets"
+    doFirst {
+        def rules = new groovy.json.JsonSlurper().parse(file('../../../contracts/v1/no-adaptation.json'))
+        if (!(rules instanceof List)) throw new GradleException('no-adaptation.json must be a list')
+        def seen = [] as Set
+        rules.each { rule ->
+            def name = rule.packageName
+            if (!(name instanceof String) || !(name ==~ /[A-Za-z0-9_]+(\.[A-Za-z0-9_]+)+/) ||
+                !seen.add(name) || !(rule.reason?.zh instanceof String) || !rule.reason.zh.trim() ||
+                !(rule.reason?.en instanceof String) || !rule.reason.en.trim())
+                throw new GradleException("Invalid or duplicate no-adaptation rule: $name")
+        }
+    }
 }
 tasks.named('preBuild').configure { dependsOn 'copyStoreCatalog' }
 

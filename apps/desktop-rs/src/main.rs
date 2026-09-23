@@ -73,12 +73,26 @@ struct CatalogEntry {
     name: String,
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct NoAdaptationRule {
+    package_name: String,
+    reason: LocalizedReason,
+}
+
+#[derive(Deserialize)]
+struct LocalizedReason {
+    zh: String,
+    en: String,
+}
+
 struct Desktop {
     chinese: bool,
     search: Entity<InputState>,
     email: Entity<InputState>,
     code: Entity<InputState>,
     results: Vec<SearchItem>,
+    no_adaptation: Vec<NoAdaptationRule>,
     selected: Option<StoreTarget>,
     detail: Option<PublicItem>,
     account: Option<Account>,
@@ -122,12 +136,16 @@ impl Desktop {
                     price: String::new(),
                 })
                 .collect();
+        let no_adaptation =
+            serde_json::from_str(include_str!("../../../contracts/v1/no-adaptation.json"))
+                .expect("bundled no-adaptation rules");
         let mut view = Self {
             chinese,
             search,
             email,
             code,
             results,
+            no_adaptation,
             selected: None,
             detail: None,
             account: None,
@@ -467,7 +485,9 @@ impl Desktop {
                     .child(
                         Button::new("register")
                             .label(self.text("Register with PICO ↗", "前往 PICO 注册 ↗"))
-                            .on_click(|_, _, cx| cx.open_url(&ProjectLinks::load().pico_registration_url)),
+                            .on_click(|_, _, cx| {
+                                cx.open_url(&ProjectLinks::load().pico_registration_url)
+                            }),
                     );
         }
         panel.into_any_element()
@@ -682,6 +702,21 @@ impl Render for Desktop {
                             item.app_version.clone()
                         }
                     )));
+                if let Some(rule) = self
+                    .no_adaptation
+                    .iter()
+                    .find(|rule| rule.package_name == item.package_name)
+                {
+                    let reason = if self.chinese {
+                        &rule.reason.zh
+                    } else {
+                        &rule.reason.en
+                    };
+                    detail = detail.child(div().text_sm().text_color(rgb(ACCENT)).child(format!(
+                        "{}: {reason}",
+                        self.text("No sign-in adaptation needed", "无需登录适配")
+                    )));
+                }
                 let official_url = item.official_url.clone();
                 if self.account.is_none() {
                     detail = detail.child(div().child(
@@ -807,18 +842,38 @@ impl Render for Desktop {
                             .child(
                                 Button::new("updates")
                                     .label(if let Some(version) = &self.available_update {
-                                        format!("{} v{} ↗", self.text("Download update", "下载更新"), version)
-                                    } else { format!("v{} · {}", env!("CARGO_PKG_VERSION"), self.text("Check for updates", "检查更新")) })
+                                        format!(
+                                            "{} v{} ↗",
+                                            self.text("Download update", "下载更新"),
+                                            version
+                                        )
+                                    } else {
+                                        format!(
+                                            "v{} · {}",
+                                            env!("CARGO_PKG_VERSION"),
+                                            self.text("Check for updates", "检查更新")
+                                        )
+                                    })
                                     .disabled(self.busy)
                                     .on_click(cx.listener(|this, _, _, cx| {
-                                        if this.available_update.is_some() { cx.open_url(&ProjectLinks::load().latest_release()); }
-                                        else { this.check_updates(cx); }
+                                        if this.available_update.is_some() {
+                                            cx.open_url(&ProjectLinks::load().latest_release());
+                                        } else {
+                                            this.check_updates(cx);
+                                        }
                                     })),
                             )
                             .child(
                                 Button::new("website")
                                     .label(self.text("Website ↗", "网站 ↗"))
-                                    .on_click(|_, _, cx| cx.open_url(&format!("{}/", ProjectLinks::load().website_origin.trim_end_matches('/')))),
+                                    .on_click(|_, _, cx| {
+                                        cx.open_url(&format!(
+                                            "{}/",
+                                            ProjectLinks::load()
+                                                .website_origin
+                                                .trim_end_matches('/')
+                                        ))
+                                    }),
                             )
                             .child(
                                 Button::new("language")
@@ -903,19 +958,19 @@ impl Render for Desktop {
                             .flex()
                             .gap_6()
                             .when(!self.settings_open, |element| {
-                                element
-                                    .child(detail)
-                                    .child(
-                                        div()
-                                            .id("account-panel")
-                                            .w(px(310.))
-                                            .flex_shrink_0()
-                                            .min_h_0()
-                                            .overflow_y_scroll()
-                                            .child(self.account_panel(cx)),
-                                    )
+                                element.child(detail).child(
+                                    div()
+                                        .id("account-panel")
+                                        .w(px(310.))
+                                        .flex_shrink_0()
+                                        .min_h_0()
+                                        .overflow_y_scroll()
+                                        .child(self.account_panel(cx)),
+                                )
                             })
-                            .when(self.settings_open, |element| element.child(self.settings_panel(cx))),
+                            .when(self.settings_open, |element| {
+                                element.child(self.settings_panel(cx))
+                            }),
                     ),
             )
             .child(

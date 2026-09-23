@@ -82,6 +82,7 @@
     <string name="not_enough_storage">Free up some space on your headset and try again.</string>
     <string name="installation_interrupted">Installation was interrupted. You can try again with the saved download.</string>
     <string name="account_support_badge">International account supported</string>
+    <string name="no_adaptation_badge">No sign-in adaptation needed</string>
     <string name="install_account_supported">Install with account support</string>
     <string name="try_account_adaptation">Try account adaptation</string>
     <string name="try_adapted_update">Try adapted update</string>

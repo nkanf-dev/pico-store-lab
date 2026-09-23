@@ -26,6 +26,10 @@ class MainActivity : ComponentActivity() {
     private val items = mutableStateOf<List<StoreEntry>>(emptyList())
     private val selected = mutableStateOf<PublicItem?>(null)
     private val compatibility = mutableStateOf(AppCompatibility.UNKNOWN)
+    private val noAdaptationReason = mutableStateOf<String?>(null)
+    private val noAdaptation by lazy {
+        NoAdaptationPolicy.parse(assets.open("no-adaptation.json").bufferedReader().use { it.readText() })
+    }
     private val installPromptName = mutableStateOf<String?>(null)
     private val originalWarningName = mutableStateOf<String?>(null)
     private val installedCopies = mutableStateOf(InstalledCopies())
@@ -87,6 +91,7 @@ class MainActivity : ComponentActivity() {
                 entries = items.value,
                 selected = selected.value,
                 compatibility = compatibility.value,
+                noAdaptationReason = noAdaptationReason.value,
                 installPromptName = installPromptName.value,
                 originalWarningName = originalWarningName.value,
                 installedCopies = installedCopies.value,
@@ -243,13 +248,16 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun showDetail(detail: PublicItem) {
-        val support = compatibilityHistory.resolve(detail.packageName, detail.versionCode,
-            installation.knownProfile(detail.packageName, detail.versionCode),
-            installation.profileCandidate(detail.packageName))
+        val excluded = noAdaptation.reason(detail.packageName)
+        val support = if (excluded != null) AppCompatibility.ORDINARY else
+            compatibilityHistory.resolve(detail.packageName, detail.versionCode,
+                installation.knownProfile(detail.packageName, detail.versionCode),
+                installation.profileCandidate(detail.packageName))
         val copies = installation.installed(detail.packageName)
         runOnUiThread {
             selected.value = detail
             compatibility.value = support
+            noAdaptationReason.value = excluded?.forLanguage(resources.configuration.locales[0].language)
             installedCopies.value = copies
         }
     }
@@ -399,6 +407,7 @@ class MainActivity : ComponentActivity() {
         work {
             val session = currentAuth() ?: error(getString(R.string.sign_in_first))
             val target = StoreTarget(detail.itemId, detail.packageName, detail.name)
+            val installationChoice = noAdaptation.installationChoice(target.packageName, variant)
             val current = client.item(target, session)
             showDetail(current)
             if (current.entitlementStatus != 1 && current.price.toDoubleOrNull()?.let { it > 0.0 } == true) {
@@ -420,8 +429,8 @@ class MainActivity : ComponentActivity() {
                 downloadProgress.value = null
                 message.value = getString(R.string.checking_application)
             }
-            if (variant == InstallVariant.ORIGINAL) {
-                // Remember newly introduced account support without blocking an explicit original install.
+            if (installationChoice == InstallVariant.ORIGINAL) {
+                // Keep detection history while honoring an explicit original install or a no-adaptation rule.
                 val inspected = runCatching {
                     val inspected = installation.inspect(apk)
                     check(inspected.packageName == target.packageName && inspected.versionCode == info.versionCode)
@@ -429,7 +438,8 @@ class MainActivity : ComponentActivity() {
                     inspected
                 }.getOrNull()
                 showDetail(current.copy(versionCode = info.versionCode, appVersion = info.version))
-                if (inspected?.compatibility in setOf(AppCompatibility.PROFILE, AppCompatibility.PROFILE_CANDIDATE, AppCompatibility.MATRIX)) {
+                if (noAdaptation.reason(target.packageName) == null &&
+                    inspected?.compatibility in setOf(AppCompatibility.PROFILE, AppCompatibility.PROFILE_CANDIDATE, AppCompatibility.MATRIX)) {
                     runOnUiThread {
                         pendingInstallation = PendingInstallation(apk, target.packageName)
                         originalWarningName.value = current.name
@@ -447,7 +457,7 @@ class MainActivity : ComponentActivity() {
             val downloaded = current.copy(versionCode = info.versionCode, appVersion = info.version)
             showDetail(downloaded)
             when {
-                variant != null -> installDownloaded(apk, target.packageName, variant)
+                installationChoice != null -> installDownloaded(apk, target.packageName, installationChoice)
                 inspected.compatibility == AppCompatibility.PROFILE -> installDownloaded(apk, target.packageName, InstallVariant.ADAPTED)
                 inspected.compatibility == AppCompatibility.MATRIX ||
                     inspected.compatibility == AppCompatibility.PROFILE_CANDIDATE -> runOnUiThread {

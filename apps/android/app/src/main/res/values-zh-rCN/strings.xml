@@ -82,6 +82,7 @@
     <string name="not_enough_storage">头显空间不足，请清理一些空间后重试。</string>
     <string name="installation_interrupted">安装中断了，可以使用已下载的文件重试。</string>
     <string name="account_support_badge">国际区账号已适配</string>
+    <string name="no_adaptation_badge">无需登录适配</string>
     <string name="install_account_supported">安装账号适配版</string>
     <string name="try_account_adaptation">尝试账号适配</string>
     <string name="try_adapted_update">尝试适配更新</string>

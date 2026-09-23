@@ -62,7 +62,8 @@ fun StoreScreen(
     downloadProgress: Pair<Long, Long?>?, themeMode: ThemeMode,
     imageLoader: StoreImageLoader,
     email: String, signedIn: Boolean, favorites: Set<String>,
-    compatibility: AppCompatibility, installedCopies: InstalledCopies, installPromptName: String?, originalWarningName: String?,
+    compatibility: AppCompatibility, noAdaptationReason: String?, installedCopies: InstalledCopies,
+    installPromptName: String?, originalWarningName: String?,
     updateVersion: String?, onCheckUpdate: () -> Unit, onOpenUpdate: () -> Unit,
     announcement: ReleaseAnnouncement?, announcementOpen: Boolean, announcementLoading: Boolean,
     onShowAnnouncement: () -> Unit, onRetryAnnouncement: () -> Unit, onDismissAnnouncement: () -> Unit,
@@ -194,7 +195,8 @@ fun StoreScreen(
                             TextButton(onClick = onBack, enabled = !busy, contentPadding = PaddingValues(0.dp)) {
                                 Text("←  ${stringResource(R.string.back_to_store)}", fontWeight = FontWeight.SemiBold)
                             }
-                            AppDetail(selected, selected.itemId in favorites, wide, signedIn, compatibility, installedCopies, imageLoader,
+                            AppDetail(selected, selected.itemId in favorites, wide, signedIn, compatibility,
+                                noAdaptationReason, installedCopies, imageLoader,
                                 onFavorite = { onFavorite(selected.itemId) },
                                 onGet = { variant -> if (signedIn) onGet(selected, variant) else accountOpen = true },
                                 onOpen = { variant -> onOpenApp(selected, variant) }, busy = busy)
@@ -340,13 +342,13 @@ private fun FavoriteButton(favorite: Boolean, action: () -> Unit) {
 
 @Composable
 private fun AppDetail(item: PublicItem, favorite: Boolean, wide: Boolean, signedIn: Boolean,
-    compatibility: AppCompatibility, installedCopies: InstalledCopies, imageLoader: StoreImageLoader,
+    compatibility: AppCompatibility, noAdaptationReason: String?, installedCopies: InstalledCopies, imageLoader: StoreImageLoader,
     onFavorite: () -> Unit, onGet: (InstallVariant?) -> Unit, onOpen: (InstallVariant) -> Unit, busy: Boolean) {
     var expanded by remember(item.itemId) { mutableStateOf(false) }
     val tryAdaptation = compatibility == AppCompatibility.PROFILE_CANDIDATE || compatibility == AppCompatibility.MATRIX
     val supportsAccount = compatibility == AppCompatibility.PROFILE || tryAdaptation
     val needsPurchase = item.entitlementStatus != 1 && (item.price.toDoubleOrNull() ?: 0.0) > 0.0
-    val showInstallChoices = supportsAccount || installedCopies.adapted != null
+    val showInstallChoices = noAdaptationReason == null && (supportsAccount || installedCopies.adapted != null)
     val original = installedCopies.original
     val originalUpdate = original != null && original.versionCode < item.versionCode
     Column(verticalArrangement = Arrangement.spacedBy(24.dp)) {
@@ -361,6 +363,12 @@ private fun AppDetail(item: PublicItem, favorite: Boolean, wide: Boolean, signed
                     border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = .25f))) {
                     Text(stringResource(R.string.account_support_badge), Modifier.padding(horizontal = 9.dp, vertical = 6.dp),
                         fontSize = 12.sp, lineHeight = 18.sp, fontWeight = FontWeight.SemiBold)
+                }
+                if (noAdaptationReason != null) {
+                    Text(stringResource(R.string.no_adaptation_badge), fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                    Text(noAdaptationReason, fontSize = 13.sp, lineHeight = 19.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 if (item.publisher.isNotBlank()) Text(item.publisher, fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }

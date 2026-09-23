@@ -119,11 +119,13 @@ test('Virtual Desktop and sign-in guides are available in both languages', () =>
     const root = new URL(`../dist/${prefix}`, import.meta.url);
     const home = readFileSync(new URL('index.html', root), 'utf8');
     const app = readFileSync(new URL('apps/virtual-desktop/index.html', root), 'utf8');
+    const vrchat = readFileSync(new URL('apps/vrchat/index.html', root), 'utf8');
     const guide = readFileSync(new URL('guides/international-sign-in/index.html', root), 'utf8');
     const technical = readFileSync(new URL('guides/how-adaptation-works/index.html', root), 'utf8');
     assert.match(home, /Virtual Desktop/);
     assert.match(app, /Virtual Desktop/);
     assert.match(app, /"price":""/);
+    assert.match(vrchat, /adaptation-note[^>]*>[^<]*(?:VRChat|PICO sign-in)/);
     assert.match(guide, /how-adaptation-works/);
     assert.match(technical, /international-sign-in/);
   }
