@@ -326,7 +326,8 @@ private fun AppDetail(item: PublicItem, favorite: Boolean, wide: Boolean, signed
     compatibility: AppCompatibility, installedCopies: InstalledCopies, imageLoader: StoreImageLoader,
     onFavorite: () -> Unit, onGet: (InstallVariant?) -> Unit, onOpen: (InstallVariant) -> Unit, busy: Boolean) {
     var expanded by remember(item.itemId) { mutableStateOf(false) }
-    val supportsAccount = compatibility == AppCompatibility.PROFILE || compatibility == AppCompatibility.MATRIX
+    val tryAdaptation = compatibility == AppCompatibility.PROFILE_CANDIDATE || compatibility == AppCompatibility.MATRIX
+    val supportsAccount = compatibility == AppCompatibility.PROFILE || tryAdaptation
     val needsPurchase = item.entitlementStatus != 1 && (item.price.toDoubleOrNull() ?: 0.0) > 0.0
     val showInstallChoices = supportsAccount || installedCopies.adapted != null
     val original = installedCopies.original
@@ -378,7 +379,7 @@ private fun AppDetail(item: PublicItem, favorite: Boolean, wide: Boolean, signed
                 }
                 if (showInstallChoices) InstallChoices(wide, !busy, onChoice = { onGet(it) },
                     installedCopies = installedCopies, latestCode = item.versionCode, latestName = item.appVersion,
-                    purchaseRequired = needsPurchase, onOpen = onOpen)
+                    purchaseRequired = needsPurchase, tryAdaptation = tryAdaptation, onOpen = onOpen)
                 else if (original != null) {
                     CopyVersions(original, item.versionCode, item.appVersion)
                     if (originalUpdate) TextButton(onClick = { onOpen(InstallVariant.ORIGINAL) }, enabled = !busy,
@@ -411,10 +412,10 @@ private fun AppDetail(item: PublicItem, favorite: Boolean, wide: Boolean, signed
 @Composable
 private fun InstallChoices(wide: Boolean, enabled: Boolean, onChoice: (InstallVariant) -> Unit,
     installedCopies: InstalledCopies = InstalledCopies(), latestCode: Long = 0, latestName: String = "",
-    purchaseRequired: Boolean = false, onOpen: (InstallVariant) -> Unit = {}) {
+    purchaseRequired: Boolean = false, tryAdaptation: Boolean = false, onOpen: (InstallVariant) -> Unit = {}) {
     val choice: @Composable (InstallVariant, Modifier) -> Unit = { variant, modifier ->
         InstallChoice(variant, enabled, modifier, installedCopies.copyFor(variant), latestCode, latestName,
-            purchaseRequired, onInstall = { onChoice(variant) }, onOpen = { onOpen(variant) })
+            purchaseRequired, tryAdaptation, onInstall = { onChoice(variant) }, onOpen = { onOpen(variant) })
     }
     if (wide) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
         choice(InstallVariant.ADAPTED, Modifier.weight(1f))
@@ -427,15 +428,18 @@ private fun InstallChoices(wide: Boolean, enabled: Boolean, onChoice: (InstallVa
 
 @Composable
 private fun InstallChoice(variant: InstallVariant, enabled: Boolean, modifier: Modifier, installed: InstalledCopy?,
-    latestCode: Long, latestName: String, purchaseRequired: Boolean, onInstall: () -> Unit, onOpen: () -> Unit) {
+    latestCode: Long, latestName: String, purchaseRequired: Boolean, tryAdaptation: Boolean,
+    onInstall: () -> Unit, onOpen: () -> Unit) {
     val adapted = variant == InstallVariant.ADAPTED
     val updateAvailable = installed != null && installed.versionCode < latestCode
     val openInstalled = installed != null && !updateAvailable
     val action = if (openInstalled) onOpen else onInstall
     val label = stringResource(when {
+        updateAvailable && adapted && tryAdaptation -> R.string.try_adapted_update
         updateAvailable -> R.string.update_app
         openInstalled -> R.string.open_app
         purchaseRequired -> R.string.view_official_offer
+        adapted && tryAdaptation -> R.string.try_account_adaptation
         adapted -> R.string.install_account_supported
         else -> R.string.install_original
     })
@@ -459,7 +463,11 @@ private fun InstallChoice(variant: InstallVariant, enabled: Boolean, modifier: M
             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 14.dp)) {
             Text(label, fontSize = 14.sp, lineHeight = 20.sp, fontWeight = FontWeight.Bold)
         }
-        Text(stringResource(if (adapted) R.string.install_account_supported_hint else R.string.install_original_hint),
+        Text(stringResource(when {
+            adapted && tryAdaptation -> R.string.try_account_adaptation_hint
+            adapted -> R.string.install_account_supported_hint
+            else -> R.string.install_original_hint
+        }),
             fontSize = 13.sp, lineHeight = 20.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
         if (updateAvailable) TextButton(onClick = onOpen, enabled = enabled, contentPadding = PaddingValues(0.dp)) {
             Text(stringResource(R.string.open_app), fontWeight = FontWeight.SemiBold)
@@ -490,7 +498,7 @@ private fun InstallChoiceDialog(name: String, busy: Boolean, onChoice: (InstallV
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(20.dp)) {
                 Text(name, fontSize = 18.sp, lineHeight = 26.sp, fontWeight = FontWeight.SemiBold)
-                InstallChoices(wide = false, enabled = !busy, onChoice = onChoice)
+                InstallChoices(wide = false, enabled = !busy, onChoice = onChoice, tryAdaptation = true)
             }
         },
         confirmButton = {

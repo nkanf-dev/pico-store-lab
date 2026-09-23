@@ -79,8 +79,11 @@
     <string name="installation_interrupted">Installation was interrupted. You can try again with the saved download.</string>
     <string name="account_support_badge">International account supported</string>
     <string name="install_account_supported">Install with account support</string>
+    <string name="try_account_adaptation">Try account adaptation</string>
+    <string name="try_adapted_update">Try adapted update</string>
     <string name="install_original">Install original</string>
     <string name="install_account_supported_hint">Use the PICO international account signed in to Lab.</string>
+    <string name="try_account_adaptation_hint">This version is unverified. If adaptation fails, your download and installed app are kept.</string>
     <string name="install_original_hint">Keep the app’s original sign-in method.</string>
     <string name="install_choice_title">Choose how to install</string>
     <string name="install_later">Later</string>

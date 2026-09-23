@@ -17,7 +17,13 @@ class CompatibilityHistoryTest {
     @Test fun newVersionMustBeDetectedAgain() {
         history().remember(InspectedApp(AppCompatibility.MATRIX, "example.app", 7, digest))
         assertEquals(AppCompatibility.UNKNOWN, history().resolve("example.app", 8, false))
+        assertEquals(AppCompatibility.PROFILE_CANDIDATE, history().resolve("example.app", 8, false, true))
         assertEquals(AppCompatibility.UNKNOWN, history().resolve("another.app", 7, false))
+    }
+
+    @Test fun inspectedVersionAttemptRemainsAvailableAfterRestart() {
+        history().remember(InspectedApp(AppCompatibility.PROFILE_CANDIDATE, "example.app", 8, digest))
+        assertEquals(AppCompatibility.PROFILE_CANDIDATE, history().resolve("example.app", 8, false, true))
     }
 
     @Test fun downloadedIdentityOverridesACatalogProfilePrediction() {

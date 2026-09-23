@@ -20,7 +20,11 @@ internal class CompatibilityHistory(
             .getOrNull()?.takeUnless { it == AppCompatibility.UNKNOWN }
     }
 
-    fun resolve(packageName: String, version: Long, knownProfile: Boolean): AppCompatibility =
+    fun resolve(packageName: String, version: Long, knownProfile: Boolean, profileCandidate: Boolean = false): AppCompatibility =
         recorded(packageName, version)
-            ?: if (knownProfile) AppCompatibility.PROFILE else AppCompatibility.UNKNOWN
+            ?: when {
+                knownProfile -> AppCompatibility.PROFILE
+                profileCandidate -> AppCompatibility.PROFILE_CANDIDATE
+                else -> AppCompatibility.UNKNOWN
+            }
 }

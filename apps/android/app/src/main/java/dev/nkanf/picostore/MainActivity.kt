@@ -207,7 +207,8 @@ class MainActivity : ComponentActivity() {
 
     private fun showDetail(detail: PublicItem) {
         val support = compatibilityHistory.resolve(detail.packageName, detail.versionCode,
-            installation.knownProfile(detail.packageName, detail.versionCode))
+            installation.knownProfile(detail.packageName, detail.versionCode),
+            installation.profileCandidate(detail.packageName))
         val copies = installation.installed(detail.packageName)
         runOnUiThread {
             selected.value = detail
@@ -329,7 +330,8 @@ class MainActivity : ComponentActivity() {
             when {
                 variant != null -> installDownloaded(apk, target.packageName, variant)
                 inspected.compatibility == AppCompatibility.PROFILE -> installDownloaded(apk, target.packageName, InstallVariant.ADAPTED)
-                inspected.compatibility == AppCompatibility.MATRIX -> runOnUiThread {
+                inspected.compatibility == AppCompatibility.MATRIX ||
+                    inspected.compatibility == AppCompatibility.PROFILE_CANDIDATE -> runOnUiThread {
                     pendingInstallation = PendingInstallation(apk, target.packageName)
                     installPromptName.value = downloaded.name
                     message.value = ""

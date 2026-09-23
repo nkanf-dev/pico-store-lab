@@ -52,11 +52,15 @@ internal object InstallationFactory {
             }
             override fun knownProfile(packageName: String, versionCode: Long): Boolean =
                 runCatching { AdapterEngine.supportsProfile(bundle, packageName, versionCode) }.getOrDefault(false)
+            override fun profileCandidate(packageName: String): Boolean =
+                runCatching { AdapterEngine.canAttemptProfile(bundle, packageName) }.getOrDefault(false)
             override fun inspect(apk: File): InspectedApp {
                 val result = try { AdapterEngine.inspect(apk, bundle) }
                     catch (_: Exception) { throw IllegalStateException(host.getString(R.string.application_check_failed)) }
                 val compatibility = when {
-                    result.route == AdapterEngine.Route.PROFILE -> AppCompatibility.PROFILE
+                    result.route == AdapterEngine.Route.PROFILE ->
+                        if (result.profileExact)
+                            AppCompatibility.PROFILE else AppCompatibility.PROFILE_CANDIDATE
                     result.matrixDetected -> AppCompatibility.MATRIX
                     else -> AppCompatibility.ORDINARY
                 }

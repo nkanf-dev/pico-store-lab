@@ -2,7 +2,7 @@ package dev.nkanf.picostore
 
 import java.io.File
 
-enum class AppCompatibility { UNKNOWN, PROFILE, MATRIX, ORDINARY }
+enum class AppCompatibility { UNKNOWN, PROFILE, PROFILE_CANDIDATE, MATRIX, ORDINARY }
 enum class InstallVariant { ORIGINAL, ADAPTED }
 
 data class InstalledCopy(val versionCode: Long, val versionName: String)
@@ -21,6 +21,7 @@ internal data class InspectedApp(
 
 internal interface AppInstallation : AutoCloseable {
     fun knownProfile(packageName: String, versionCode: Long): Boolean = false
+    fun profileCandidate(packageName: String): Boolean = false
     fun inspect(apk: File): InspectedApp
     fun install(apk: File, variant: InstallVariant)
     fun installed(packageName: String): InstalledCopies
