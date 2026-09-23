@@ -5,3 +5,14 @@
 @media(max-width:580px){.masthead{padding:0 20px}.masthead-meta{gap:13px}.masthead-meta>a{font-size:11px}.masthead-meta>a:nth-child(3){display:none}.brand{font-size:10px;gap:10px}.brand-mark{font-size:31px}.featured-apps,.client-grid{grid-template-columns:1fr}.featured-card+ .featured-card,.client-grid>section:nth-child(even){border-left:0}.featured-card{padding-top:28px;padding-bottom:30px}.featured-card p{min-height:0}.featured-card h2{margin-top:12px}.card-top img{width:52px;height:52px}.card-link{margin-top:20px}.page-home .hero-copy{padding:40px 5vw 48px}.page-home .hero h1{font-size:40px}.page-home .hero-actions{margin-top:30px}.reading-hero h1{font-size:35px}.reading-hero>p:not(.eyebrow){font-size:17px}.guide-toc{grid-template-columns:1fr}.guide-toc a{padding:12px 0}.guide-body h2{font-size:25px}.guide-body p,.guide-steps>li{font-size:16px}.guide-layout{padding-bottom:30px}.breadcrumbs{padding-top:18px;padding-bottom:18px}.page-app .app-overview-copy h1{font-size:44px}.reading-heading h2{font-size:29px}.source-links{overflow-wrap:anywhere}}
 @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}.action{transition:none}}
 @media(min-width:581px) and (max-width:850px){.featured-apps{grid-template-columns:1fr}.featured-card+ .featured-card{border-left:0}}
+
+.adapted-download-notice{display:flex;justify-content:space-between;align-items:center;gap:32px;padding:36px 5vw;background:#242820;color:#f7f3e8}
+.adapted-download-notice>div:first-child{max-width:790px}
+.adapted-download-notice .eyebrow{color:#f4a58a}
+.adapted-download-notice h2{font-size:clamp(27px,3.5vw,43px);line-height:1.25;letter-spacing:-.03em;margin:10px 0}
+.adapted-download-notice p:not(.eyebrow){font-size:17px;line-height:1.75;margin:0}
+.adapted-download-actions{display:flex;flex-direction:column;align-items:flex-start;gap:12px;flex-shrink:0}
+.adapted-download-actions .action.primary{background:#b13a22;border-color:#b13a22;color:#fff;white-space:nowrap}
+.adapted-download-actions .text-link{color:#fff;margin:0}
+.client-grid .client-adaptation-note{border-left:4px solid #b13a22;padding-left:16px;font-weight:700;color:#242820}
+@media(max-width:760px){.adapted-download-notice{display:block}.adapted-download-actions{margin-top:24px}}

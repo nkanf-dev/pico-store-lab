@@ -112,7 +112,13 @@ export const apps = [
     sources: [{ label: 'Virtual Desktop · PICO Store', url: picoStoreAppUrl('3540') }],
     zh: {
       summary: '在 PICO 头显里无线连接电脑，使用大屏桌面或串流 PCVR 游戏。下载安装后，选择国际区登录适配即可在国区头显上使用。',
-      description: 'Virtual Desktop 可以把电脑桌面、视频和 PCVR 游戏带到 PICO 头显。先在 PICO 国际区商店购买，再用 PICO Store Lab 下载并选择适配版安装；打开应用后连接电脑上的 Virtual Desktop Streamer。',
+      description: 'Virtual Desktop 可以把电脑桌面、视频和 PCVR 游戏带到 PICO 头显。先在 PICO 国际区商店购买，再到头显上的 PICO Store Lab 下载并选择适配版安装；打开应用后连接电脑上的 Virtual Desktop Streamer。',
+      downloadNotice: {
+        title: '适配版请在头显客户端下载',
+        text: '这个网页只能下载 Virtual Desktop 原版 APK。要安装国际区登录适配版，请在头显上的 PICO Store Lab 搜索 Virtual Desktop，选择适配版并安装。',
+        clientLabel: '下载头显客户端',
+        originalLabel: '继续下载原版 APK',
+      },
       platforms: ['PICO 4', 'PICO 4 Pro', 'PICO 4 Ultra'],
       steps: [
         { title: '购买并登录', text: '在 PICO 国际区商店购买 Virtual Desktop，再使用购买时的 PICO 国际区账号登录 PICO Store Lab。' },
@@ -122,12 +128,18 @@ export const apps = [
       faq: [
         { q: '安装后会自动打开吗？', a: '安装完成后，到头显应用库找到 Virtual Desktop，随时自行打开。' },
         { q: '需要先购买吗？', a: '需要。Virtual Desktop 是付费应用，请先用自己的 PICO 国际区账号在官方商店购买，再下载 APK。' },
-        { q: '什么是国际区登录适配？', a: '它让依赖 PICO 账号组件的应用在国区头显上使用国际区账号。下载完成后，PICO Store Lab 会提供适配版安装选项。' },
+        { q: '什么是国际区登录适配？', a: '它让依赖 PICO 账号组件的应用在国区头显上使用国际区账号。头显客户端会在下载完成后提供适配版安装选项。' },
       ],
     },
     en: {
       summary: 'Connect your PICO headset wirelessly to a computer for a large desktop or PCVR streaming. Choose international sign-in adaptation when installing.',
-      description: 'Virtual Desktop brings your computer desktop, videos and PCVR games to your PICO headset. Purchase it with your PICO international account, download it through PICO Store Lab, and install the adapted copy. Then open the app and connect to Virtual Desktop Streamer on your computer.',
+      description: 'Virtual Desktop brings your computer desktop, videos and PCVR games to your PICO headset. Purchase it with your PICO international account, then use PICO Store Lab on your headset to download and install the adapted copy. Open the app and connect to Virtual Desktop Streamer on your computer.',
+      downloadNotice: {
+        title: 'Get the adapted copy in the headset app',
+        text: 'This website can only download the original Virtual Desktop APK. To install the international sign-in adapted copy, search for Virtual Desktop in PICO Store Lab on your headset, then choose the adapted installation.',
+        clientLabel: 'Get the headset app',
+        originalLabel: 'Download original APK here',
+      },
       platforms: ['PICO 4', 'PICO 4 Pro', 'PICO 4 Ultra'],
       steps: [
         { title: 'Purchase and sign in', text: 'Purchase Virtual Desktop in PICO’s international store, then sign in to PICO Store Lab with the same account.' },
@@ -137,7 +149,7 @@ export const apps = [
       faq: [
         { q: 'Will the app open automatically?', a: 'Open Virtual Desktop yourself from the headset library after installation.' },
         { q: 'Do I need to purchase it first?', a: 'Yes. Purchase Virtual Desktop with your own PICO international account in the official store before downloading the APK.' },
-        { q: 'What is international sign-in adaptation?', a: 'It lets apps that use PICO account components sign in with an international account on a China-region headset. PICO Store Lab offers the adapted installation after download.' },
+        { q: 'What is international sign-in adaptation?', a: 'It lets apps that use PICO account components sign in with an international account on a China-region headset. The headset app offers the adapted installation after download.' },
       ],
     },
   },
