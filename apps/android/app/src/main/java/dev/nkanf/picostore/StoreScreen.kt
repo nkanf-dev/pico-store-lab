@@ -64,6 +64,8 @@ fun StoreScreen(
     email: String, signedIn: Boolean, favorites: Set<String>,
     compatibility: AppCompatibility, installedCopies: InstalledCopies, installPromptName: String?,
     updateVersion: String?, onCheckUpdate: () -> Unit, onOpenUpdate: () -> Unit,
+    announcement: ReleaseAnnouncement?, announcementOpen: Boolean, announcementLoading: Boolean,
+    onShowAnnouncement: () -> Unit, onRetryAnnouncement: () -> Unit, onDismissAnnouncement: () -> Unit,
     profileVersions: Map<String, Long>, profileUpdateVersions: Map<String, Long>,
     onCheckProfileUpdate: () -> Unit, onOpenProfileUpdate: (String) -> Unit,
     onSearch: (String) -> Unit, onSelect: (StoreTarget) -> Unit,
@@ -84,7 +86,7 @@ fun StoreScreen(
         ThemeMode.DARK -> true
     }
     LaunchedEffect(signedIn) { if (signedIn) accountOpen = false }
-    BackHandler((selected != null || settingsOpen) && !accountOpen && installPromptName == null) {
+    BackHandler((selected != null || settingsOpen) && !accountOpen && !announcementOpen && installPromptName == null) {
         if (!busy) {
             if (settingsOpen) settingsOpen = false else onBack()
         }
@@ -199,10 +201,18 @@ fun StoreScreen(
                     }
                     if (message.isNotBlank() || busy) StatusStrip(message, busy, downloadProgress, gutter)
                 }
-                if (accountOpen) AccountDialog(email, signedIn, busy, message,
+                if (announcementOpen) AnnouncementDialog(announcement, announcementLoading,
+                    onDismiss = onDismissAnnouncement, onRetry = onRetryAnnouncement,
+                    onViewUpdate = {
+                        onDismissAnnouncement()
+                        accountOpen = true
+                        onCheckUpdate()
+                    })
+                else if (accountOpen) AccountDialog(email, signedIn, busy, message,
                     onDismiss = { accountOpen = false }, onSendCode = onSendCode,
                     onLogin = onLogin, onLogout = onLogout, updateVersion = updateVersion,
                     onCheckUpdate = onCheckUpdate, onOpenUpdate = onOpenUpdate,
+                    onShowAnnouncement = onShowAnnouncement,
                     profileVersions = profileVersions, profileUpdateVersions = profileUpdateVersions,
                     onCheckProfileUpdate = onCheckProfileUpdate, onOpenProfileUpdate = onOpenProfileUpdate)
                 else if (installPromptName != null) InstallChoiceDialog(installPromptName, busy,
@@ -531,7 +541,7 @@ private fun StatusStrip(message: String, busy: Boolean, progress: Pair<Long, Lon
 @Composable
 private fun AccountDialog(email: String, signedIn: Boolean, busy: Boolean, message: String,
     onDismiss: () -> Unit, onSendCode: (String) -> Unit, onLogin: (String, String) -> Unit, onLogout: () -> Unit,
-    updateVersion: String?, onCheckUpdate: () -> Unit, onOpenUpdate: () -> Unit,
+    updateVersion: String?, onCheckUpdate: () -> Unit, onOpenUpdate: () -> Unit, onShowAnnouncement: () -> Unit,
     profileVersions: Map<String, Long>, profileUpdateVersions: Map<String, Long>,
     onCheckProfileUpdate: () -> Unit, onOpenProfileUpdate: (String) -> Unit) {
     var address by remember(email) { mutableStateOf(email) }
@@ -568,6 +578,9 @@ private fun AccountDialog(email: String, signedIn: Boolean, busy: Boolean, messa
                 Text(stringResource(R.string.installed_version, BuildConfig.VERSION_NAME), fontSize = 12.sp)
                 if (updateVersion != null) Text(stringResource(R.string.available_version, updateVersion),
                     fontSize = 12.sp, color = MaterialTheme.colorScheme.primary)
+                TextButton(onClick = onShowAnnouncement, contentPadding = PaddingValues(0.dp)) {
+                    Text(stringResource(R.string.update_announcement))
+                }
                 OutlinedButton(onClick = if (updateVersion != null) onOpenUpdate else onCheckUpdate,
                     modifier = Modifier.fillMaxWidth(), enabled = !busy, shape = Edge) {
                     Text(stringResource(if (updateVersion != null) R.string.download_update else R.string.check_update))
@@ -602,6 +615,35 @@ private fun AccountDialog(email: String, signedIn: Boolean, busy: Boolean, messa
             }
         },
         dismissButton = { TextButton(onClick = onDismiss, enabled = !busy) { Text(stringResource(R.string.close)) } })
+}
+
+@Composable
+private fun AnnouncementDialog(announcement: ReleaseAnnouncement?, loading: Boolean,
+    onDismiss: () -> Unit, onRetry: () -> Unit, onViewUpdate: () -> Unit) {
+    val newer = announcement?.let { ReleaseUpdates.isNewer(it.version, BuildConfig.VERSION_NAME) } == true
+    AlertDialog(onDismissRequest = onDismiss, shape = Edge,
+        containerColor = MaterialTheme.colorScheme.background,
+        title = { Text(stringResource(R.string.update_announcement), fontWeight = FontWeight.Black) },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                if (announcement != null) {
+                    Text(stringResource(R.string.announcement_version, announcement.version),
+                        fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.primary)
+                    Text(announcement.body, fontSize = 14.sp, lineHeight = 21.sp)
+                } else if (loading) LinearProgressIndicator(Modifier.fillMaxWidth())
+                else {
+                    Text(stringResource(R.string.announcement_unavailable))
+                    TextButton(onClick = onRetry) { Text(stringResource(R.string.retry)) }
+                }
+            }
+        },
+        confirmButton = {
+            if (newer) TextButton(onClick = onViewUpdate) { Text(stringResource(R.string.check_update)) }
+            else TextButton(onClick = onDismiss) { Text(stringResource(R.string.close)) }
+        },
+        dismissButton = {
+            if (newer) TextButton(onClick = onDismiss) { Text(stringResource(R.string.close)) }
+        })
 }
 
 @Composable

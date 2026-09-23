@@ -2,6 +2,13 @@
 
 All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and semantic versioning.
 
+## [0.2.0] - Unreleased
+
+### Added
+
+- Android Lab shows the latest Lab release announcement once per version and keeps it available from the account menu.
+- Android Lab supports independently updated Matrix compatibility profiles.
+
 ## [0.1.3] - 2026-09-22
 
 ### Added

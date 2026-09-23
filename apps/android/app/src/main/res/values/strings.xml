@@ -60,6 +60,10 @@
     <string name="register_account">Register with PICO</string>
     <string name="close">Close</string>
     <string name="check_update">Check for updates</string>
+    <string name="update_announcement">What’s new</string>
+    <string name="announcement_version">PICO Store Lab %1$s</string>
+    <string name="announcement_unavailable">No release notes are available right now.</string>
+    <string name="retry">Try again</string>
     <string name="download_update">Download and update</string>
     <string name="up_to_date">You’re up to date.</string>
     <string name="update_available">Version %1$s is available.</string>

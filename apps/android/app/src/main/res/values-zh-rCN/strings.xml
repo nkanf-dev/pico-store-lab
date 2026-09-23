@@ -60,6 +60,10 @@
     <string name="register_account">前往 PICO 注册</string>
     <string name="close">关闭</string>
     <string name="check_update">检查更新</string>
+    <string name="update_announcement">更新公告</string>
+    <string name="announcement_version">PICO Store Lab %1$s</string>
+    <string name="announcement_unavailable">暂时无法获取更新公告。</string>
+    <string name="retry">重试</string>
     <string name="download_update">下载并更新</string>
     <string name="up_to_date">当前已是最新版本。</string>
     <string name="update_available">发现新版本 %1$s。</string>

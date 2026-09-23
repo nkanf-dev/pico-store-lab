@@ -17,6 +17,7 @@ import java.util.concurrent.Executors
 class MainActivity : ComponentActivity() {
     private val client = PicoStoreClient()
     private val worker = Executors.newSingleThreadExecutor()
+    private val announcementWorker = Executors.newSingleThreadExecutor()
     private val prefs by lazy { getSharedPreferences("store", MODE_PRIVATE) }
     private val imageLoader by lazy { StoreImageLoader(this) }
     private val account by lazy { StoreAccountFactory.create(this) }
@@ -43,6 +44,9 @@ class MainActivity : ComponentActivity() {
     private val themeMode = mutableStateOf(ThemeMode.SYSTEM)
     private val updateVersion = mutableStateOf<String?>(null)
     private var availableUpdate: AvailableUpdate? = null
+    private val announcement = mutableStateOf<ReleaseAnnouncement?>(null)
+    private val announcementOpen = mutableStateOf(false)
+    private val announcementLoading = mutableStateOf(false)
     private val profileVersions = mutableStateOf<Map<String, Long>>(emptyMap())
     private val profileUpdateVersions = mutableStateOf<Map<String, Long>>(emptyMap())
     private val availableProfiles = mutableMapOf<String, AvailableProfile>()
@@ -62,6 +66,14 @@ class MainActivity : ComponentActivity() {
         favorites.value = prefs.getStringSet("favorites", emptySet()).orEmpty().toSet()
         themeMode.value = runCatching { ThemeMode.valueOf(prefs.getString("theme", "SYSTEM")!!) }
             .getOrDefault(ThemeMode.SYSTEM)
+        val cachedVersion = prefs.getString("announcement_version", null)
+        val cachedBody = prefs.getString("announcement_body", null)
+        if (cachedVersion != null && !cachedBody.isNullOrBlank()) {
+            announcement.value = runCatching {
+                if (ReleaseUpdates.isNewer(BuildConfig.VERSION_NAME, cachedVersion)) null
+                else ReleaseAnnouncement(cachedVersion, cachedBody)
+            }.getOrNull()
+        }
         val catalog = JSONArray(assets.open("catalog.json").bufferedReader().use { it.readText() })
         seedEntries = (0 until catalog.length()).map { index ->
             val entry = catalog.getJSONObject(index)
@@ -85,10 +97,16 @@ class MainActivity : ComponentActivity() {
                 signedIn = auth.value != null,
                 favorites = favorites.value,
                 updateVersion = updateVersion.value,
+                announcement = announcement.value,
+                announcementOpen = announcementOpen.value,
+                announcementLoading = announcementLoading.value,
                 profileVersions = profileVersions.value,
                 profileUpdateVersions = profileUpdateVersions.value,
                 onCheckUpdate = ::checkUpdate,
                 onOpenUpdate = ::downloadSelfUpdate,
+                onShowAnnouncement = ::showAnnouncement,
+                onRetryAnnouncement = { loadAnnouncement(false) },
+                onDismissAnnouncement = ::dismissAnnouncement,
                 onCheckProfileUpdate = ::checkProfileUpdates,
                 onOpenProfileUpdate = ::downloadProfileUpdate,
                 onCheckAppUpdates = ::checkAppUpdates,
@@ -112,6 +130,7 @@ class MainActivity : ComponentActivity() {
                 },
             )
         }
+        loadAnnouncement(true)
         refreshCatalog()
         worker.execute {
             val versions = installation.profileKeys().mapNotNull { key -> installation.profileVersion(key)?.let { key to it } }.toMap()
@@ -239,6 +258,44 @@ class MainActivity : ComponentActivity() {
                     else getString(R.string.update_available, version)
             }
         } catch (_: Exception) { error(getString(R.string.update_check_failed)) }
+    }
+
+    private fun loadAnnouncement(showOnNew: Boolean) {
+        if (announcementLoading.value) return
+        announcementLoading.value = true
+        announcementWorker.execute {
+            val result = runCatching { ReleaseUpdates.findAnnouncement(BuildConfig.VERSION_NAME) }
+            runOnUiThread {
+                if (isDestroyed) return@runOnUiThread
+                announcementLoading.value = false
+                result.onSuccess { latest ->
+                    announcement.value = latest
+                    prefs.edit().apply {
+                        if (latest == null) {
+                            remove("announcement_version")
+                            remove("announcement_body")
+                        } else {
+                            putString("announcement_version", latest.version)
+                            putString("announcement_body", latest.body)
+                        }
+                    }.apply()
+                    if (showOnNew && latest != null &&
+                        prefs.getString("announcement_seen_version", null) != latest.version) {
+                        announcementOpen.value = true
+                    }
+                }
+            }
+        }
+    }
+
+    private fun showAnnouncement() {
+        announcementOpen.value = true
+        if (announcement.value == null) loadAnnouncement(false)
+    }
+
+    private fun dismissAnnouncement() {
+        announcement.value?.let { prefs.edit().putString("announcement_seen_version", it.version).apply() }
+        announcementOpen.value = false
     }
 
     private fun downloadSelfUpdate() = work {
@@ -440,6 +497,7 @@ class MainActivity : ComponentActivity() {
         installer.close()
         installation.close()
         worker.shutdown()
+        announcementWorker.shutdown()
         super.onDestroy()
     }
 }

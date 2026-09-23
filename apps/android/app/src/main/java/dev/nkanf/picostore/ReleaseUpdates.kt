@@ -9,6 +9,7 @@ import java.net.URL
 import java.security.MessageDigest
 
 internal data class AvailableUpdate(val version: String, val url: String, val size: Long, val sha256: String)
+data class ReleaseAnnouncement(val version: String, val body: String)
 
 internal class SelfUpdateException(val code: String, cause: Throwable? = null) : IOException(code, cause)
 
@@ -21,6 +22,25 @@ internal object ReleaseUpdates {
     private val sha256 = Regex("[a-fA-F0-9]{64}")
 
     fun newerVersion(current: String): String? = findUpdate(current)?.version
+
+    fun findAnnouncement(current: String): ReleaseAnnouncement? {
+        val connection = UpdateHttp.open(ProjectLinks.storeLatestApi, asset = false)
+        val json = try {
+            UpdateHttp.read(connection, JSON_LIMIT).toString(Charsets.UTF_8)
+        } finally { connection.disconnect() }
+        return parseAnnouncement(current, json)
+    }
+
+    internal fun parseAnnouncement(current: String, json: String): ReleaseAnnouncement? = metadata {
+        if (json.toByteArray(Charsets.UTF_8).size > JSON_LIMIT) throw SelfUpdateException("update_metadata")
+        val release = JSONObject(json)
+        if (release.getBoolean("draft") || release.getBoolean("prerelease")) return@metadata null
+        val version = release.getString("tag_name").removePrefix("v")
+        if (isNewer(current.removePrefix("v"), version)) return@metadata null
+        val body = release.optString("body").trim()
+        if (body.isEmpty()) return@metadata null
+        ReleaseAnnouncement(version, body.take(32_768))
+    }
 
     fun findUpdate(current: String): AvailableUpdate? {
         val connection = UpdateHttp.open(ProjectLinks.storeLatestApi, asset = false)

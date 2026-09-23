@@ -25,6 +25,24 @@ class ReleaseUpdatesTest {
         assertTrue(update.url.endsWith("/$apkName"))
     }
 
+    @Test fun announcementUsesLabReleaseBodyWithoutRequiringApkMetadata() {
+        val json = release().put("body", "  ## What’s new\n\n- Better downloads  ").toString()
+        assertEquals(ReleaseAnnouncement("0.2.0", "## What’s new\n\n- Better downloads"),
+            ReleaseUpdates.parseAnnouncement("0.1.3", json))
+        assertNotNull(ReleaseUpdates.parseAnnouncement("0.2.0", json))
+        assertNull(ReleaseUpdates.parseAnnouncement("0.3.0", json))
+    }
+
+    @Test fun announcementIgnoresEmptyAndUnpublishedNotes() {
+        assertNull(ReleaseUpdates.parseAnnouncement("0.1.3", release().toString()))
+        assertNull(ReleaseUpdates.parseAnnouncement("0.1.3", release().put("body", "   ").toString()))
+        assertNull(ReleaseUpdates.parseAnnouncement("0.1.3", release().put("body", "notes").put("draft", true).toString()))
+        assertNull(ReleaseUpdates.parseAnnouncement("0.1.3", release().put("body", "notes").put("prerelease", true).toString()))
+        assertCode("update_metadata") {
+            ReleaseUpdates.parseAnnouncement("0.1.3", release().put("body", "notes").put("tag_name", "v0.2.0-beta").toString())
+        }
+    }
+
     @Test fun rejectsAmbiguousAssetIdentityAndWrongDownloadLocation() {
         assertCode("update_metadata") { ReleaseUpdates.parseRelease("0.1.3", release(asset(), asset()).toString()) }
         for (url in listOf(
