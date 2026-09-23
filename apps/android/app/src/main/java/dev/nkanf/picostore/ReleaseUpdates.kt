@@ -130,6 +130,7 @@ internal object ReleaseUpdates {
 /** GitHub redirects release downloads to these HTTPS asset hosts; never forward credentials. */
 internal object UpdateHttp {
     private val assetHosts = setOf("github.com", "release-assets.githubusercontent.com", "objects.githubusercontent.com")
+    private val apiPaths = setOf("/repos/nkanf-dev/pico-store-lab/releases/latest")
 
     fun open(url: String, asset: Boolean): HttpURLConnection {
         var next = url
@@ -165,7 +166,8 @@ internal object UpdateHttp {
         val uri = URI(url)
         uri.scheme == "https" && uri.rawUserInfo == null && uri.port == -1 && uri.rawFragment == null &&
             if (asset) uri.host in assetHosts else uri.host == "api.github.com" &&
-                uri.rawPath == "/repos/nkanf-dev/pico-store-lab/releases/latest" && uri.rawQuery == null
+                ((uri.rawPath in apiPaths && uri.rawQuery == null) ||
+                    (uri.rawPath == "/repos/nkanf-dev/pico-matrix-bridge/releases" && uri.rawQuery == "per_page=100"))
     }.getOrDefault(false)
 
     fun read(connection: HttpURLConnection, limit: Int): ByteArray = try {

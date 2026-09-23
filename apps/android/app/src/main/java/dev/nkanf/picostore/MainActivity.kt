@@ -43,6 +43,9 @@ class MainActivity : ComponentActivity() {
     private val themeMode = mutableStateOf(ThemeMode.SYSTEM)
     private val updateVersion = mutableStateOf<String?>(null)
     private var availableUpdate: AvailableUpdate? = null
+    private val profileVersion = mutableStateOf<Long?>(null)
+    private val profileUpdateVersion = mutableStateOf<Long?>(null)
+    private var availableProfile: AvailableProfile? = null
     private val message = mutableStateOf("")
     private val favorites = mutableStateOf<Set<String>>(emptySet())
     private var seedEntries: List<StoreEntry> = emptyList()
@@ -82,8 +85,12 @@ class MainActivity : ComponentActivity() {
                 signedIn = auth.value != null,
                 favorites = favorites.value,
                 updateVersion = updateVersion.value,
+                profileVersion = profileVersion.value,
+                profileUpdateVersion = profileUpdateVersion.value,
                 onCheckUpdate = ::checkUpdate,
                 onOpenUpdate = ::downloadSelfUpdate,
+                onCheckProfileUpdate = ::checkProfileUpdate,
+                onOpenProfileUpdate = ::downloadProfileUpdate,
                 onCheckAppUpdates = ::checkAppUpdates,
                 onOpenApp = ::openApp,
                 onSearch = ::search,
@@ -106,6 +113,7 @@ class MainActivity : ComponentActivity() {
             )
         }
         refreshCatalog()
+        worker.execute { val version = installation.profileVersion(); runOnUiThread { profileVersion.value = version } }
     }
 
     private fun restoreSession() {
@@ -248,6 +256,41 @@ class MainActivity : ComponentActivity() {
         }
         runOnUiThread { downloadProgress.value = null }
         installation.install(apk, InstallVariant.ORIGINAL)
+    }
+
+    private fun checkProfileUpdate() = work {
+        val current = installation.profileVersion() ?: error(getString(R.string.profile_unavailable))
+        val update = try { ProfileReleaseUpdates.findUpdate(current) }
+            catch (_: Exception) { error(getString(R.string.profile_check_failed)) }
+        availableProfile = update
+        runOnUiThread {
+            profileVersion.value = current
+            profileUpdateVersion.value = update?.version
+            message.value = if (update == null) getString(R.string.profile_up_to_date)
+                else getString(R.string.profile_update_available, ProfileReleaseUpdates.display(update.version))
+        }
+    }
+
+    private fun downloadProfileUpdate() = work {
+        val update = availableProfile ?: error(getString(R.string.profile_unavailable))
+        runOnUiThread { message.value = getString(R.string.profile_downloading) }
+        val file = try {
+            ProfileReleaseUpdates.download(this, update) { received, total ->
+                runOnUiThread { downloadProgress.value = received to total }
+            }
+        } catch (_: Exception) { error(getString(R.string.profile_download_failed)) }
+        try {
+            val installed = installation.activateProfile(file, update.sha256, update.version)
+            runOnUiThread {
+                profileVersion.value = installed
+                profileUpdateVersion.value = null
+                availableProfile = null
+                downloadProgress.value = null
+                message.value = getString(R.string.profile_updated, ProfileReleaseUpdates.display(installed))
+            }
+            refreshInstalled()
+        } catch (_: Exception) { error(getString(R.string.profile_verify_failed)) }
+        finally { file.delete() }
     }
 
     private fun toggleFavorite(itemId: String) {

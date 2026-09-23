@@ -64,6 +64,8 @@ fun StoreScreen(
     email: String, signedIn: Boolean, favorites: Set<String>,
     compatibility: AppCompatibility, installedCopies: InstalledCopies, installPromptName: String?,
     updateVersion: String?, onCheckUpdate: () -> Unit, onOpenUpdate: () -> Unit,
+    profileVersion: Long?, profileUpdateVersion: Long?,
+    onCheckProfileUpdate: () -> Unit, onOpenProfileUpdate: () -> Unit,
     onSearch: (String) -> Unit, onSelect: (StoreTarget) -> Unit,
     onFavorite: (String) -> Unit, onSendCode: (String) -> Unit,
     onLogin: (String, String) -> Unit, onLogout: () -> Unit,
@@ -200,7 +202,9 @@ fun StoreScreen(
                 if (accountOpen) AccountDialog(email, signedIn, busy, message,
                     onDismiss = { accountOpen = false }, onSendCode = onSendCode,
                     onLogin = onLogin, onLogout = onLogout, updateVersion = updateVersion,
-                    onCheckUpdate = onCheckUpdate, onOpenUpdate = onOpenUpdate)
+                    onCheckUpdate = onCheckUpdate, onOpenUpdate = onOpenUpdate,
+                    profileVersion = profileVersion, profileUpdateVersion = profileUpdateVersion,
+                    onCheckProfileUpdate = onCheckProfileUpdate, onOpenProfileUpdate = onOpenProfileUpdate)
                 else if (installPromptName != null) InstallChoiceDialog(installPromptName, busy,
                     onChoice = onInstallChoice, onDismiss = onDismissInstallChoice)
             }
@@ -527,7 +531,9 @@ private fun StatusStrip(message: String, busy: Boolean, progress: Pair<Long, Lon
 @Composable
 private fun AccountDialog(email: String, signedIn: Boolean, busy: Boolean, message: String,
     onDismiss: () -> Unit, onSendCode: (String) -> Unit, onLogin: (String, String) -> Unit, onLogout: () -> Unit,
-    updateVersion: String?, onCheckUpdate: () -> Unit, onOpenUpdate: () -> Unit) {
+    updateVersion: String?, onCheckUpdate: () -> Unit, onOpenUpdate: () -> Unit,
+    profileVersion: Long?, profileUpdateVersion: Long?,
+    onCheckProfileUpdate: () -> Unit, onOpenProfileUpdate: () -> Unit) {
     var address by remember(email) { mutableStateOf(email) }
     var code by remember { mutableStateOf("") }
     val uri = LocalUriHandler.current
@@ -565,6 +571,16 @@ private fun AccountDialog(email: String, signedIn: Boolean, busy: Boolean, messa
                 OutlinedButton(onClick = if (updateVersion != null) onOpenUpdate else onCheckUpdate,
                     modifier = Modifier.fillMaxWidth(), enabled = !busy, shape = Edge) {
                     Text(stringResource(if (updateVersion != null) R.string.download_update else R.string.check_update))
+                }
+            }
+            if (profileVersion != null) Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                Text(stringResource(R.string.profile_title), fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                Text(stringResource(R.string.profile_installed, ProfileReleaseUpdates.display(profileVersion)), fontSize = 12.sp)
+                if (profileUpdateVersion != null) Text(stringResource(R.string.profile_available, ProfileReleaseUpdates.display(profileUpdateVersion)),
+                    fontSize = 12.sp, color = MaterialTheme.colorScheme.primary)
+                OutlinedButton(onClick = if (profileUpdateVersion != null) onOpenProfileUpdate else onCheckProfileUpdate,
+                    modifier = Modifier.fillMaxWidth(), enabled = !busy, shape = Edge) {
+                    Text(stringResource(if (profileUpdateVersion != null) R.string.profile_download else R.string.profile_check))
                 }
             }
             if (message.isNotBlank()) Text(message, fontSize = 13.sp, color = MaterialTheme.colorScheme.primary)

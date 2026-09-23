@@ -15,6 +15,7 @@ if (releaseSigning.values().any { it } && !releaseSigning.values().every { it })
 }
 if (bridgeEnabled) {
     def bundleDir = providers.gradleProperty('matrixBundleDir')
+    def profileApk = providers.gradleProperty('matrixProfileApk')
     tasks.register('copyMatrixBundle', Sync) {
         from providers.provider {
             if (!bundleDir.isPresent() || !file(bundleDir.get() + '/bundle.json').isFile())
@@ -24,6 +25,16 @@ if (bridgeEnabled) {
         into "$buildDir/generated/matrix-assets/matrix-bridge"
     }
     tasks.named('preBuild').configure { dependsOn 'copyMatrixBundle' }
+    tasks.register('copyMatrixProfile', Copy) {
+        from providers.provider {
+            if (!profileApk.isPresent() || !file(profileApk.get()).isFile())
+                throw new GradleException('Provide -PmatrixProfileApk with a signed profile APK')
+            file(profileApk.get())
+        }
+        rename { 'matrix-profile-vd.apk' }
+        into "$buildDir/generated/profile-assets"
+    }
+    tasks.named('preBuild').configure { dependsOn 'copyMatrixProfile' }
 }
 
 tasks.register('copyStoreCatalog', Copy) {
@@ -52,6 +63,7 @@ android {
     sourceSets.main.assets.srcDir "$buildDir/generated/catalog-assets"
     sourceSets.main.kotlin.srcDir(bridgeEnabled ? 'src/matrix/java' : 'src/standalone/java')
     if (bridgeEnabled) sourceSets.main.assets.srcDir "$buildDir/generated/matrix-assets"
+    if (bridgeEnabled) sourceSets.main.assets.srcDir "$buildDir/generated/profile-assets"
     compileSdk 37
 
     defaultConfig {

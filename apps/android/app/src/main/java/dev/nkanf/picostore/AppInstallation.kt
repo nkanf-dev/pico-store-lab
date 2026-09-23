@@ -22,6 +22,8 @@ internal data class InspectedApp(
 internal interface AppInstallation : AutoCloseable {
     fun knownProfile(packageName: String, versionCode: Long): Boolean = false
     fun profileCandidate(packageName: String): Boolean = false
+    fun profileVersion(): Long? = null
+    fun activateProfile(apk: File, sha256: String, version: Long): Long = error("profile_unavailable")
     fun inspect(apk: File): InspectedApp
     fun install(apk: File, variant: InstallVariant)
     fun installed(packageName: String): InstalledCopies

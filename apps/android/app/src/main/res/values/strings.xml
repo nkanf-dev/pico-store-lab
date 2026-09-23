@@ -107,6 +107,19 @@
     <string name="self_update_unavailable">This Lab update is unavailable. Please try again later.</string>
     <string name="self_update_identity_mismatch">Could not verify the update. Your current Lab app is unchanged.</string>
     <string name="self_update_download">Downloading the Lab update…</string>
+    <string name="profile_title">Virtual Desktop profile</string>
+    <string name="profile_installed">Installed profile: %1$s</string>
+    <string name="profile_available">Available profile: %1$s</string>
+    <string name="profile_check">Check profile update</string>
+    <string name="profile_download">Download profile update</string>
+    <string name="profile_unavailable">The VD profile is unavailable. Your installed apps are unchanged.</string>
+    <string name="profile_check_failed">Could not check VD profile updates. Try again later.</string>
+    <string name="profile_up_to_date">The VD profile is up to date.</string>
+    <string name="profile_update_available">VD profile %1$s is available.</string>
+    <string name="profile_downloading">Downloading the VD profile…</string>
+    <string name="profile_download_failed">Could not download the VD profile. The current profile remains available.</string>
+    <string name="profile_verify_failed">Could not verify the VD profile. The current profile remains available.</string>
+    <string name="profile_updated">VD profile %1$s is ready. Lab did not need an update.</string>
     <string name="app_updates_partial">Some apps could not be checked for updates. Please try again later.</string>
     <string name="current_version_retained">Your installed version is still available to use.</string>
 </resources>
