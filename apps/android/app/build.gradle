@@ -4,6 +4,8 @@ plugins {
 }
 
 def bridgeEnabled = providers.gradleProperty('matrixBridgeDir').isPresent()
+def projectLinks = new groovy.json.JsonSlurper().parseText(
+    providers.fileContents(layout.projectDirectory.file('../../../project-links.json')).asText.get())
 def releaseSigning = [
     storeFile: providers.environmentVariable('PICO_ANDROID_KEYSTORE').orNull,
     keyAlias: providers.environmentVariable('PICO_ANDROID_KEY_ALIAS').orNull,
@@ -15,7 +17,7 @@ if (releaseSigning.values().any { it } && !releaseSigning.values().every { it })
 }
 if (bridgeEnabled) {
     def bundleDir = providers.gradleProperty('matrixBundleDir')
-    def profileApk = providers.gradleProperty('matrixProfileApk')
+    def profileDir = providers.gradleProperty('matrixProfileDir')
     tasks.register('copyMatrixBundle', Sync) {
         from providers.provider {
             if (!bundleDir.isPresent() || !file(bundleDir.get() + '/bundle.json').isFile())
@@ -25,16 +27,42 @@ if (bridgeEnabled) {
         into "$buildDir/generated/matrix-assets/matrix-bridge"
     }
     tasks.named('preBuild').configure { dependsOn 'copyMatrixBundle' }
-    tasks.register('copyMatrixProfile', Copy) {
+    tasks.register('copyMatrixProfiles', Sync) {
         from providers.provider {
-            if (!profileApk.isPresent() || !file(profileApk.get()).isFile())
-                throw new GradleException('Provide -PmatrixProfileApk with a signed profile APK')
-            file(profileApk.get())
+            if (!profileDir.isPresent() || !file(profileDir.get()).isDirectory())
+                throw new GradleException('Provide -PmatrixProfileDir with signed profile APKs')
+            def files = file(profileDir.get()).listFiles().findAll {
+                it.isFile() && it.name ==~ /matrix-profile-[a-z][a-z0-9_]{0,63}\.apk/
+            }
+            if (files.isEmpty()) throw new GradleException('No signed profile APKs in matrixProfileDir')
+            def routes = [:]
+            files.each { apk ->
+                new java.util.zip.ZipFile(apk).withCloseable { archive ->
+                    def entry = archive.getEntry('assets/profile.json')
+                    if (entry == null || entry.size > 4 * 1024 * 1024)
+                        throw new GradleException("Missing profile recipe: $apk.name")
+                    def recipe = archive.getInputStream(entry).withCloseable { input ->
+                        new groovy.json.JsonSlurper().parse(input, 'UTF-8')
+                    }
+                    def key = apk.name.substring('matrix-profile-'.length(), apk.name.length() - '.apk'.length())
+                    def profile = recipe.profile
+                    def matcher = profile?.packageMatcher
+                    def priority = profile?.priority
+                    if (profile?.profileKey != key || !(priority instanceof Integer) ||
+                        !(matcher == '*' || matcher ==~ /[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z][A-Za-z0-9_]*)+/) ||
+                        profile.profileVersionCode != recipe.profileVersionCode)
+                        throw new GradleException("Invalid profile identity or match rule: $apk.name")
+                    def route = "$matcher:$priority".toString()
+                    if (routes.containsKey(route))
+                        throw new GradleException("Ambiguous profile match rule $route: ${routes[route]} and $key")
+                    routes[route] = key
+                }
+            }
+            files
         }
-        rename { 'matrix-profile-vd.apk' }
         into "$buildDir/generated/profile-assets"
     }
-    tasks.named('preBuild').configure { dependsOn 'copyMatrixProfile' }
+    tasks.named('preBuild').configure { dependsOn 'copyMatrixProfiles' }
 }
 
 tasks.register('copyStoreCatalog', Copy) {
@@ -72,6 +100,10 @@ android {
         targetSdk 35
         versionCode 7
         versionName '0.1.3'
+        ['githubHost', 'githubApiHost', 'githubOwner', 'storeRepository', 'bridgeRepository',
+         'websiteOrigin', 'picoRegistrationUrl'].each { field ->
+            buildConfigField 'String', field.toUpperCase(java.util.Locale.ROOT), groovy.json.JsonOutput.toJson(projectLinks[field])
+        }
     }
 
     buildFeatures { compose true; buildConfig true }

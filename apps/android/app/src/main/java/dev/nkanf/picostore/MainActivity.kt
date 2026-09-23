@@ -43,9 +43,9 @@ class MainActivity : ComponentActivity() {
     private val themeMode = mutableStateOf(ThemeMode.SYSTEM)
     private val updateVersion = mutableStateOf<String?>(null)
     private var availableUpdate: AvailableUpdate? = null
-    private val profileVersion = mutableStateOf<Long?>(null)
-    private val profileUpdateVersion = mutableStateOf<Long?>(null)
-    private var availableProfile: AvailableProfile? = null
+    private val profileVersions = mutableStateOf<Map<String, Long>>(emptyMap())
+    private val profileUpdateVersions = mutableStateOf<Map<String, Long>>(emptyMap())
+    private val availableProfiles = mutableMapOf<String, AvailableProfile>()
     private val message = mutableStateOf("")
     private val favorites = mutableStateOf<Set<String>>(emptySet())
     private var seedEntries: List<StoreEntry> = emptyList()
@@ -85,11 +85,11 @@ class MainActivity : ComponentActivity() {
                 signedIn = auth.value != null,
                 favorites = favorites.value,
                 updateVersion = updateVersion.value,
-                profileVersion = profileVersion.value,
-                profileUpdateVersion = profileUpdateVersion.value,
+                profileVersions = profileVersions.value,
+                profileUpdateVersions = profileUpdateVersions.value,
                 onCheckUpdate = ::checkUpdate,
                 onOpenUpdate = ::downloadSelfUpdate,
-                onCheckProfileUpdate = ::checkProfileUpdate,
+                onCheckProfileUpdate = ::checkProfileUpdates,
                 onOpenProfileUpdate = ::downloadProfileUpdate,
                 onCheckAppUpdates = ::checkAppUpdates,
                 onOpenApp = ::openApp,
@@ -113,7 +113,10 @@ class MainActivity : ComponentActivity() {
             )
         }
         refreshCatalog()
-        worker.execute { val version = installation.profileVersion(); runOnUiThread { profileVersion.value = version } }
+        worker.execute {
+            val versions = installation.profileKeys().mapNotNull { key -> installation.profileVersion(key)?.let { key to it } }.toMap()
+            runOnUiThread { profileVersions.value = versions }
+        }
     }
 
     private fun restoreSession() {
@@ -258,21 +261,22 @@ class MainActivity : ComponentActivity() {
         installation.install(apk, InstallVariant.ORIGINAL)
     }
 
-    private fun checkProfileUpdate() = work {
-        val current = installation.profileVersion() ?: error(getString(R.string.profile_unavailable))
-        val update = try { ProfileReleaseUpdates.findUpdate(current) }
+    private fun checkProfileUpdates() = work {
+        val current = installation.profileKeys().mapNotNull { key -> installation.profileVersion(key)?.let { key to it } }.toMap()
+        val updates = try { ProfileReleaseUpdates.findUpdates(current) }
             catch (_: Exception) { error(getString(R.string.profile_check_failed)) }
-        availableProfile = update
+        availableProfiles.clear()
+        availableProfiles.putAll(updates)
         runOnUiThread {
-            profileVersion.value = current
-            profileUpdateVersion.value = update?.version
-            message.value = if (update == null) getString(R.string.profile_up_to_date)
-                else getString(R.string.profile_update_available, ProfileReleaseUpdates.display(update.version))
+            profileVersions.value = current
+            profileUpdateVersions.value = updates.mapValues { it.value.version }
+            message.value = if (updates.isEmpty()) getString(R.string.profile_up_to_date)
+                else getString(R.string.profile_updates_available, updates.size)
         }
     }
 
-    private fun downloadProfileUpdate() = work {
-        val update = availableProfile ?: error(getString(R.string.profile_unavailable))
+    private fun downloadProfileUpdate(key: String) = work {
+        val update = availableProfiles[key] ?: error(getString(R.string.profile_unavailable))
         runOnUiThread { message.value = getString(R.string.profile_downloading) }
         val file = try {
             ProfileReleaseUpdates.download(this, update) { received, total ->
@@ -280,15 +284,16 @@ class MainActivity : ComponentActivity() {
             }
         } catch (_: Exception) { error(getString(R.string.profile_download_failed)) }
         try {
-            val installed = installation.activateProfile(file, update.sha256, update.version)
+            val installed = installation.activateProfile(key, file, update.sha256, update.version)
             runOnUiThread {
-                profileVersion.value = installed
-                profileUpdateVersion.value = null
-                availableProfile = null
+                profileVersions.value = profileVersions.value + (key to installed)
+                profileUpdateVersions.value = profileUpdateVersions.value - key
+                availableProfiles.remove(key)
                 downloadProgress.value = null
                 message.value = getString(R.string.profile_updated, ProfileReleaseUpdates.display(installed))
             }
             refreshInstalled()
+            selected.value?.let(::showDetail)
         } catch (_: Exception) { error(getString(R.string.profile_verify_failed)) }
         finally { file.delete() }
     }

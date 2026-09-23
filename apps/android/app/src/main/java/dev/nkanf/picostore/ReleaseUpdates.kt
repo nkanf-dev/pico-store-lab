@@ -13,9 +13,6 @@ internal data class AvailableUpdate(val version: String, val url: String, val si
 internal class SelfUpdateException(val code: String, cause: Throwable? = null) : IOException(code, cause)
 
 internal object ReleaseUpdates {
-    const val DOWNLOAD_URL = "https://github.com/nkanf-dev/pico-store-lab/releases/latest"
-    private const val API_URL = "https://api.github.com/repos/nkanf-dev/pico-store-lab/releases/latest"
-    private const val ASSET_ROOT = "https://github.com/nkanf-dev/pico-store-lab/releases/download/"
     private const val APK_NAME = "pico-store-android.apk"
     private const val JSON_LIMIT = 1_048_576
     private const val CHECKSUM_LIMIT = 262_144
@@ -26,7 +23,7 @@ internal object ReleaseUpdates {
     fun newerVersion(current: String): String? = findUpdate(current)?.version
 
     fun findUpdate(current: String): AvailableUpdate? {
-        val connection = UpdateHttp.open(API_URL, asset = false)
+        val connection = UpdateHttp.open(ProjectLinks.storeLatestApi, asset = false)
         val json = try {
             UpdateHttp.read(connection, JSON_LIMIT).toString(Charsets.UTF_8)
         } finally { connection.disconnect() }
@@ -76,7 +73,7 @@ internal object ReleaseUpdates {
     }
 
     internal fun validate(update: AvailableUpdate) {
-        val expected = listOf("v${update.version}", update.version).map { "$ASSET_ROOT$it/$APK_NAME" }
+        val expected = listOf("v${update.version}", update.version).map { "${ProjectLinks.storeAssetRoot}$it/$APK_NAME" }
         if (!stableVersion.matches(update.version) || update.version.length > 96 ||
             update.url !in expected || update.size !in 1..MAX_APK_BYTES || !sha256.matches(update.sha256)) {
             throw SelfUpdateException("update_metadata")
@@ -105,7 +102,7 @@ internal object ReleaseUpdates {
     }
 
     private fun checkedAsset(asset: JSONObject, tag: String, name: String): String {
-        val expected = "$ASSET_ROOT$tag/$name"
+        val expected = "${ProjectLinks.storeAssetRoot}$tag/$name"
         if (asset.getString("state") != "uploaded" || asset.getString("browser_download_url") != expected) {
             throw SelfUpdateException("update_metadata")
         }
@@ -129,8 +126,8 @@ internal object ReleaseUpdates {
 
 /** GitHub redirects release downloads to these HTTPS asset hosts; never forward credentials. */
 internal object UpdateHttp {
-    private val assetHosts = setOf("github.com", "release-assets.githubusercontent.com", "objects.githubusercontent.com")
-    private val apiPaths = setOf("/repos/nkanf-dev/pico-store-lab/releases/latest")
+    private val assetHosts = ProjectLinks.githubAssetHosts
+    private val apiPaths = setOf(ProjectLinks.storeLatestApiPath)
 
     fun open(url: String, asset: Boolean): HttpURLConnection {
         var next = url
@@ -165,9 +162,9 @@ internal object UpdateHttp {
     internal fun permitted(url: String, asset: Boolean): Boolean = runCatching {
         val uri = URI(url)
         uri.scheme == "https" && uri.rawUserInfo == null && uri.port == -1 && uri.rawFragment == null &&
-            if (asset) uri.host in assetHosts else uri.host == "api.github.com" &&
+            if (asset) uri.host in assetHosts else uri.host == ProjectLinks.apiHost &&
                 ((uri.rawPath in apiPaths && uri.rawQuery == null) ||
-                    (uri.rawPath == "/repos/nkanf-dev/pico-matrix-bridge/releases" && uri.rawQuery == "per_page=100"))
+                    (uri.rawPath == ProjectLinks.bridgeReleasesApiPath && ProjectLinks.permittedBridgeReleasesQuery(uri.rawQuery)))
     }.getOrDefault(false)
 
     fun read(connection: HttpURLConnection, limit: Int): ByteArray = try {

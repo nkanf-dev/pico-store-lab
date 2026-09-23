@@ -1,6 +1,4 @@
-const registerUrl = 'https://sso-global.picoxr.com/';
-const releasesUrl = 'https://github.com/nkanf-dev/pico-store-lab/releases/latest';
-const repositoryUrl = 'https://github.com/nkanf-dev/pico-store-lab';
+import { registerUrl, releasesUrl, repositoryUrl } from './project-links.mjs';
 
 export const apps = [
   {
@@ -154,7 +152,7 @@ export const guide = {
         ],
         links: [
           { label: '下载头显客户端', url: '/download/' },
-          { label: '使用电脑和 ADB 安装', url: 'https://github.com/nkanf-dev/pico-store-lab/blob/main/README.zh-CN.md#2-在头显下载并安装' },
+          { label: '使用电脑和 ADB 安装', url: `${repositoryUrl}/blob/main/README.zh-CN.md#2-在头显下载并安装` },
         ],
       },
       {
@@ -225,7 +223,7 @@ export const guide = {
         ],
         links: [
           { label: 'Download the headset app', url: '/en/download/' },
-          { label: 'Install from a computer with ADB', url: 'https://github.com/nkanf-dev/pico-store-lab#2-download-and-install-on-your-headset' },
+          { label: 'Install from a computer with ADB', url: `${repositoryUrl}#2-download-and-install-on-your-headset` },
         ],
       },
       {

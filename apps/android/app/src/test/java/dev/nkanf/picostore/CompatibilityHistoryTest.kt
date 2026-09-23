@@ -26,10 +26,11 @@ class CompatibilityHistoryTest {
         assertEquals(AppCompatibility.PROFILE_CANDIDATE, history().resolve("example.app", 8, false, true))
     }
 
-    @Test fun downloadedIdentityOverridesACatalogProfilePrediction() {
+    @Test fun newlyInstalledProfilesOverrideEarlierInspections() {
         assertEquals(AppCompatibility.PROFILE, history().resolve("example.app", 7, true))
         history().remember(InspectedApp(AppCompatibility.MATRIX, "example.app", 7, digest))
-        assertEquals(AppCompatibility.MATRIX, history().resolve("example.app", 7, true))
+        assertEquals(AppCompatibility.PROFILE, history().resolve("example.app", 7, true))
+        assertEquals(AppCompatibility.PROFILE_CANDIDATE, history().resolve("example.app", 7, false, true))
     }
 
     @Test fun ordinaryAppsRetainOneInstallActionAndCorruptRecordsAreIgnored() {

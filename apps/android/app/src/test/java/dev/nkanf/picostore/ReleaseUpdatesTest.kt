@@ -11,7 +11,7 @@ class ReleaseUpdatesTest {
     private val tag = "v0.2.0"
     private fun asset(name: String = apkName, size: Long = 1234) = JSONObject()
         .put("name", name).put("size", size).put("state", "uploaded")
-        .put("browser_download_url", "https://github.com/nkanf-dev/pico-store-lab/releases/download/$tag/$name")
+        .put("browser_download_url", "${ProjectLinks.storeAssetRoot}$tag/$name")
         .put("digest", "sha256:$digest")
     private fun release(vararg assets: JSONObject) = JSONObject().put("tag_name", tag)
         .put("draft", false).put("prerelease", false).put("assets", JSONArray(assets.toList()))
@@ -28,10 +28,10 @@ class ReleaseUpdatesTest {
     @Test fun rejectsAmbiguousAssetIdentityAndWrongDownloadLocation() {
         assertCode("update_metadata") { ReleaseUpdates.parseRelease("0.1.3", release(asset(), asset()).toString()) }
         for (url in listOf(
-            "http://github.com/nkanf-dev/pico-store-lab/releases/download/$tag/$apkName",
+            "${ProjectLinks.storeAssetRoot.replace("https://", "http://")}$tag/$apkName",
             "https://github.com/other/repo/releases/download/$tag/$apkName",
-            "https://github.com/nkanf-dev/pico-store-lab/releases/download/v0.3.0/$apkName",
-            "https://github.com/nkanf-dev/pico-store-lab/releases/download/$tag/$apkName?anything=1",
+            "${ProjectLinks.storeAssetRoot}v0.3.0/$apkName",
+            "${ProjectLinks.storeAssetRoot}$tag/$apkName?anything=1",
         )) {
             assertCode("update_metadata") {
                 ReleaseUpdates.parseRelease("0.1.3", release(asset().put("browser_download_url", url)).toString())
@@ -98,7 +98,10 @@ class ReleaseUpdatesTest {
             "https://github.com:444/file", "https://127.0.0.1/file", "https://github.com/file#fragment")) {
             assertFalse(url, UpdateHttp.permitted(url, true))
         }
-        assertTrue(UpdateHttp.permitted("https://api.github.com/repos/nkanf-dev/pico-store-lab/releases/latest", false))
+        assertTrue(UpdateHttp.permitted(ProjectLinks.storeLatestApi, false))
+        assertTrue(UpdateHttp.permitted(ProjectLinks.bridgeReleasesApi, false))
+        assertTrue(UpdateHttp.permitted(ProjectLinks.bridgeReleasesPage(2), false))
+        assertFalse(UpdateHttp.permitted(ProjectLinks.bridgeReleasesPage(21), false))
         assertFalse(UpdateHttp.permitted("https://api.github.com/repos/other/repo/releases/latest", false))
     }
 

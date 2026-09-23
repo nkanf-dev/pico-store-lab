@@ -1,0 +1,9 @@
+{
+  "githubHost": "github.com",
+  "githubApiHost": "api.github.com",
+  "githubOwner": "nkanf-dev",
+  "storeRepository": "pico-store-lab",
+  "bridgeRepository": "pico-matrix-bridge",
+  "websiteOrigin": "https://pico.kanglives.top",
+  "picoRegistrationUrl": "https://sso-global.picoxr.com/"
+}

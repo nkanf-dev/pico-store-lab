@@ -1,7 +1,8 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import settings from '../content/indexnow.json' with { type:'json' };
+import { websiteOrigin } from '../content/project-links.mjs';
 
-const origin = 'https://pico.kanglives.top';
+const origin = websiteOrigin;
 const manifest = JSON.parse(await readFile(new URL('../.local/page-manifest.json', import.meta.url), 'utf8'));
 const stateFile = new URL('../.local/indexnow-submitted.json', import.meta.url);
 let previous = [];

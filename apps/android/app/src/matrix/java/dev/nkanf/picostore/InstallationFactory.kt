@@ -6,6 +6,8 @@ import org.picomatrix.bridge.installer.android.AssetBundle
 import org.picomatrix.bridge.installer.android.MatrixInstaller
 import org.picomatrix.bridge.adapter.AdapterEngine
 import org.picomatrix.bridge.installer.android.ProfileStore
+import org.picomatrix.bridge.adapter.ApplicationProfile
+import java.util.concurrent.ConcurrentHashMap
 
 internal object InstallationFactory {
     fun create(context: Context, downloader: StoreInstaller, changed: () -> Unit = {}, report: (String) -> Unit): AppInstallation =
@@ -13,8 +15,30 @@ internal object InstallationFactory {
             private val host = context.applicationContext
             private val installer = MatrixInstaller(host)
             private val bundle by lazy { AssetBundle.open(host, "matrix-bridge") }
-            private val profiles by lazy { ProfileStore(host, "org.picomatrix.bridge.profile.vd", "matrix-profile-vd.apk") }
-            private fun profile() = profiles.current().implementation
+            private val bundled by lazy { host.assets.list("").orEmpty().mapNotNull { ProjectLinks.profileAssetPattern.matchEntire(it)?.groupValues?.get(1) }.toSet() }
+            private val profileStores = ConcurrentHashMap<String, ProfileStore>()
+            private fun store(key: String): ProfileStore {
+                require(ProjectLinks.profileKeyPattern.matches(key))
+                return profileStores.computeIfAbsent(key) {
+                    ProfileStore(host, ProjectLinks.profilePackageName(key), if (key in bundled) ProjectLinks.profileAssetName(key) else null)
+                }
+            }
+            override fun profileKeys(): Set<String> {
+                val saved = File(host.filesDir, ProjectLinks.profileStorageDirectory).listFiles().orEmpty().mapNotNull {
+                    it.name.removePrefix(ProjectLinks.profilePackagePrefix).takeIf { key ->
+                        it.isDirectory && ProjectLinks.profileKeyPattern.matches(key) && it.name == ProjectLinks.profilePackageName(key)
+                    }
+                }
+                return (bundled + saved).toSet()
+            }
+            private fun selectedProfiles(): List<ApplicationProfile> = profileKeys().mapNotNull { key ->
+                runCatching { store(key).current().implementation }.getOrNull()
+            }
+            private fun specificProfiles(packageName: String): List<ApplicationProfile> = selectedProfiles()
+                .filter { it.packageMatcher() == packageName }
+                .sortedWith(compareByDescending<ApplicationProfile> { it.priority() }
+                    .thenByDescending { it.metadata().optLong("profileVersionCode", 0) }
+                    .thenBy { it.metadata().optString("profileKey") })
             private fun message(code: String): String = host.getString(when (code) {
                 "checking_application" -> R.string.checking_application
                 "preparing_application", "preparing_installation" -> R.string.preparing_application
@@ -41,28 +65,28 @@ internal object InstallationFactory {
             }
             override fun installed(packageName: String): InstalledCopies {
                 val original = InstalledApplications.read(host, packageName)
-                val selected = runCatching { profile() }.getOrNull() ?: return InstalledCopies(original)
-                val target = runCatching { AdapterEngine.targetPackage(selected, packageName) }.getOrNull()
+                val specific = specificProfiles(packageName)
+                val target = runCatching { AdapterEngine.targetPackage(specific.firstOrNull(), packageName) }.getOrNull()
                     ?: return InstalledCopies(original)
                 return InstalledCopies(original,
                     InstalledApplications.read(host, target, packageName) { version ->
-                        AdapterEngine.supportsProfile(selected, packageName, version)
+                        specific.any { AdapterEngine.supportsProfile(it, packageName, version) }
                     })
             }
             override fun open(packageName: String, variant: InstallVariant): Boolean {
                 if (installed(packageName).copyFor(variant) == null) return false
                 return InstalledApplications.open(host, if (variant == InstallVariant.ORIGINAL) packageName
-                    else AdapterEngine.targetPackage(profile(), packageName))
+                    else AdapterEngine.targetPackage(specificProfiles(packageName).firstOrNull(), packageName))
             }
             override fun knownProfile(packageName: String, versionCode: Long): Boolean =
-                runCatching { AdapterEngine.supportsProfile(profile(), packageName, versionCode) }.getOrDefault(false)
+                runCatching { specificProfiles(packageName).any { AdapterEngine.supportsProfile(it, packageName, versionCode) } }.getOrDefault(false)
             override fun profileCandidate(packageName: String): Boolean =
-                runCatching { AdapterEngine.canAttemptProfile(profile(), packageName) }.getOrDefault(false)
-            override fun profileVersion(): Long? = runCatching { profiles.current().version }.getOrNull()
-            override fun activateProfile(apk: File, sha256: String, version: Long): Long =
-                profiles.activate(apk, sha256, version).version
+                runCatching { specificProfiles(packageName).isNotEmpty() }.getOrDefault(false)
+            override fun profileVersion(key: String): Long? = runCatching { store(key).current().version }.getOrNull()
+            override fun activateProfile(key: String, apk: File, sha256: String, version: Long): Long =
+                store(key).activate(apk, sha256, version).version
             override fun inspect(apk: File): InspectedApp {
-                val result = try { AdapterEngine.inspect(apk, bundle, runCatching { profile() }.getOrNull()) }
+                val result = try { AdapterEngine.inspect(apk, bundle, selectedProfiles()) }
                     catch (_: Exception) { throw IllegalStateException(host.getString(R.string.application_check_failed)) }
                 val compatibility = when {
                     result.route == AdapterEngine.Route.PROFILE ->
@@ -79,7 +103,7 @@ internal object InstallationFactory {
                         else MatrixInstaller.Mode.ADAPTED
                     val inputs = if (variant == InstallVariant.ORIGINAL) File(host.filesDir, "matrix-bundles") else bundle
                     installer.prepareAndInstall(apk, inputs, mode,
-                        if (variant == InstallVariant.ORIGINAL) null else runCatching { profile() }.getOrNull())
+                        if (variant == InstallVariant.ORIGINAL) emptyList() else selectedProfiles())
                 } catch (error: Exception) { throw IllegalStateException(message(error.message.orEmpty())) }
             }
             override fun recover() = installer.reconcile()

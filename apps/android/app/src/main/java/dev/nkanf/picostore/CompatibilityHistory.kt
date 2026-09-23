@@ -21,10 +21,9 @@ internal class CompatibilityHistory(
     }
 
     fun resolve(packageName: String, version: Long, knownProfile: Boolean, profileCandidate: Boolean = false): AppCompatibility =
-        recorded(packageName, version)
-            ?: when {
-                knownProfile -> AppCompatibility.PROFILE
-                profileCandidate -> AppCompatibility.PROFILE_CANDIDATE
-                else -> AppCompatibility.UNKNOWN
-            }
+        when {
+            knownProfile -> AppCompatibility.PROFILE
+            profileCandidate -> AppCompatibility.PROFILE_CANDIDATE
+            else -> recorded(packageName, version) ?: AppCompatibility.UNKNOWN
+        }
 }

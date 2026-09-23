@@ -15,8 +15,34 @@ use pico_store_lab::{PicoStoreClient, PublicItem, SearchItem, StoreTarget};
 use serde::Deserialize;
 use std::path::PathBuf;
 
-const WEBSITE: &str = "https://pico.kanglives.top/";
-const REGISTER: &str = "https://sso-global.picoxr.com/";
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ProjectLinks {
+    github_host: String,
+    github_api_host: String,
+    github_owner: String,
+    store_repository: String,
+    website_origin: String,
+    pico_registration_url: String,
+}
+impl ProjectLinks {
+    fn load() -> Self {
+        serde_json::from_str(include_str!("../../../project-links.json"))
+            .expect("Invalid project-links.json")
+    }
+    fn latest_release_api(&self) -> String {
+        format!(
+            "https://{}/repos/{}/{}/releases/latest",
+            self.github_api_host, self.github_owner, self.store_repository
+        )
+    }
+    fn latest_release(&self) -> String {
+        format!(
+            "https://{}/{}/{}/releases/latest",
+            self.github_host, self.github_owner, self.store_repository
+        )
+    }
+}
 const PAPER: u32 = 0xf1f0e8;
 const INK: u32 = 0x191b16;
 const ACCENT: u32 = 0xb63a20;
@@ -349,11 +375,9 @@ impl Desktop {
         self.run(
             Message("Checking for updates…", "正在检查更新…"),
             || {
-                let mut response = ureq::get(
-                    "https://api.github.com/repos/nkanf-dev/pico-store-lab/releases/latest",
-                )
-                .header("User-Agent", "pico-store-desktop")
-                .call()?;
+                let mut response = ureq::get(&ProjectLinks::load().latest_release_api())
+                    .header("User-Agent", "pico-store-desktop")
+                    .call()?;
                 let release: serde_json::Value =
                     serde_json::from_str(&response.body_mut().read_to_string()?)?;
                 let version = semver::Version::parse(
@@ -443,7 +467,7 @@ impl Desktop {
                     .child(
                         Button::new("register")
                             .label(self.text("Register with PICO ↗", "前往 PICO 注册 ↗"))
-                            .on_click(|_, _, cx| cx.open_url(REGISTER)),
+                            .on_click(|_, _, cx| cx.open_url(&ProjectLinks::load().pico_registration_url)),
                     );
         }
         panel.into_any_element()
@@ -787,14 +811,14 @@ impl Render for Desktop {
                                     } else { format!("v{} · {}", env!("CARGO_PKG_VERSION"), self.text("Check for updates", "检查更新")) })
                                     .disabled(self.busy)
                                     .on_click(cx.listener(|this, _, _, cx| {
-                                        if this.available_update.is_some() { cx.open_url("https://github.com/nkanf-dev/pico-store-lab/releases/latest"); }
+                                        if this.available_update.is_some() { cx.open_url(&ProjectLinks::load().latest_release()); }
                                         else { this.check_updates(cx); }
                                     })),
                             )
                             .child(
                                 Button::new("website")
                                     .label(self.text("Website ↗", "网站 ↗"))
-                                    .on_click(|_, _, cx| cx.open_url(WEBSITE)),
+                                    .on_click(|_, _, cx| cx.open_url(&format!("{}/", ProjectLinks::load().website_origin.trim_end_matches('/')))),
                             )
                             .child(
                                 Button::new("language")
