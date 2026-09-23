@@ -20,7 +20,9 @@ internal object InstallationFactory {
             private fun store(key: String): ProfileStore {
                 require(ProjectLinks.profileKeyPattern.matches(key))
                 return profileStores.computeIfAbsent(key) {
-                    ProfileStore(host, ProjectLinks.profilePackageName(key), if (key in bundled) ProjectLinks.profileAssetName(key) else null)
+                    ProfileStore(host, ProjectLinks.profilePackageName(key),
+                        if (key in bundled) ProjectLinks.profileAssetName(key) else null,
+                        BuildConfig.PROFILE_SIGNER_SHA256)
                 }
             }
             override fun profileKeys(): Set<String> {

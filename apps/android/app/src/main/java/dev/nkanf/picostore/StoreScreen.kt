@@ -62,7 +62,7 @@ fun StoreScreen(
     downloadProgress: Pair<Long, Long?>?, themeMode: ThemeMode,
     imageLoader: StoreImageLoader,
     email: String, signedIn: Boolean, favorites: Set<String>,
-    compatibility: AppCompatibility, installedCopies: InstalledCopies, installPromptName: String?,
+    compatibility: AppCompatibility, installedCopies: InstalledCopies, installPromptName: String?, originalWarningName: String?,
     updateVersion: String?, onCheckUpdate: () -> Unit, onOpenUpdate: () -> Unit,
     announcement: ReleaseAnnouncement?, announcementOpen: Boolean, announcementLoading: Boolean,
     onShowAnnouncement: () -> Unit, onRetryAnnouncement: () -> Unit, onDismissAnnouncement: () -> Unit,
@@ -74,6 +74,7 @@ fun StoreScreen(
     onGet: (PublicItem, InstallVariant?) -> Unit,
     onOpenApp: (PublicItem, InstallVariant) -> Unit, onCheckAppUpdates: () -> Unit,
     onInstallChoice: (InstallVariant) -> Unit, onDismissInstallChoice: () -> Unit,
+    onConfirmOriginal: () -> Unit, onDismissOriginalWarning: () -> Unit,
     onBack: () -> Unit, onThemeChange: (ThemeMode) -> Unit,
 ) {
     var query by remember { mutableStateOf("") }
@@ -86,7 +87,7 @@ fun StoreScreen(
         ThemeMode.DARK -> true
     }
     LaunchedEffect(signedIn) { if (signedIn) accountOpen = false }
-    BackHandler((selected != null || settingsOpen) && !accountOpen && !announcementOpen && installPromptName == null) {
+    BackHandler((selected != null || settingsOpen) && !accountOpen && !announcementOpen && installPromptName == null && originalWarningName == null) {
         if (!busy) {
             if (settingsOpen) settingsOpen = false else onBack()
         }
@@ -217,6 +218,8 @@ fun StoreScreen(
                     onCheckProfileUpdate = onCheckProfileUpdate, onOpenProfileUpdate = onOpenProfileUpdate)
                 else if (installPromptName != null) InstallChoiceDialog(installPromptName, busy,
                     onChoice = onInstallChoice, onDismiss = onDismissInstallChoice)
+                else if (originalWarningName != null) OriginalWarningDialog(originalWarningName, busy,
+                    onConfirm = onConfirmOriginal, onDismiss = onDismissOriginalWarning)
             }
         }
     }
@@ -517,6 +520,20 @@ private fun InstallChoiceDialog(name: String, busy: Boolean, onChoice: (InstallV
         },
         confirmButton = {
             TextButton(onClick = onDismiss, enabled = !busy) { Text(stringResource(R.string.install_later)) }
+        })
+}
+
+@Composable
+private fun OriginalWarningDialog(name: String, busy: Boolean, onConfirm: () -> Unit, onDismiss: () -> Unit) {
+    AlertDialog(onDismissRequest = { if (!busy) onDismiss() }, shape = Edge,
+        containerColor = MaterialTheme.colorScheme.background,
+        title = { Text(stringResource(R.string.original_warning_title), fontWeight = FontWeight.Black) },
+        text = { Text(stringResource(R.string.original_warning_body, name), lineHeight = 24.sp) },
+        confirmButton = {
+            TextButton(onClick = onConfirm, enabled = !busy) { Text(stringResource(R.string.continue_original_install)) }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss, enabled = !busy) { Text(stringResource(R.string.back_to_app)) }
         })
 }
 

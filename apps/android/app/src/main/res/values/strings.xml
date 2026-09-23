@@ -90,6 +90,10 @@
     <string name="try_account_adaptation_hint">This version is unverified. If adaptation fails, your download and installed app are kept.</string>
     <string name="install_original_hint">Keep the app’s original sign-in method.</string>
     <string name="install_choice_title">Choose how to install</string>
+    <string name="original_warning_title">Install without international sign-in adaptation?</string>
+    <string name="original_warning_body">%1$s uses PICO account components. Without international sign-in adaptation, PICO account sign-in may fail and some features may not work on this headset.</string>
+    <string name="continue_original_install">Continue with original</string>
+    <string name="back_to_app">Back to app</string>
     <string name="install_later">Later</string>
     <string name="updates">Updates</string>
     <string name="empty_updates">No updates to show.</string>

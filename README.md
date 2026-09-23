@@ -8,11 +8,11 @@
 
 [简体中文](README.zh-CN.md) · [Website](https://pico.kanglives.top/en/) · [Installation guide](https://pico.kanglives.top/en/guides/install-global-apps/) · [Download a client](https://pico.kanglives.top/en/download/)
 
-Looking for VRChat or YouTube VR on a PICO headset with the China-region store? PICO Store Lab helps you find the PICO version, download it with your PICO international account, and install it without changing the headset's region.
+Looking for VRChat, YouTube VR or Virtual Desktop on a PICO headset with the China-region store? PICO Store Lab helps you find the PICO version, download it with your PICO international account, and install it without changing the headset's region. Apps that use PICO accounts can use international sign-in adaptation.
 
 Use the website to save an APK to your computer, or use the Android app to download and install on your headset.
 
-**[VRChat for PICO](https://pico.kanglives.top/en/apps/vrchat/)** · **[YouTube VR for PICO](https://pico.kanglives.top/en/apps/youtube-vr/)** · [Browse all apps](https://pico.kanglives.top/en/)
+**[VRChat for PICO](https://pico.kanglives.top/en/apps/vrchat/)** · **[YouTube VR for PICO](https://pico.kanglives.top/en/apps/youtube-vr/)** · **[Virtual Desktop for PICO](https://pico.kanglives.top/en/apps/virtual-desktop/)** · [Browse all apps](https://pico.kanglives.top/en/)
 
 ![PICO Store Lab homepage with app search](assets/screenshots/website-home-en.webp)
 
@@ -21,7 +21,7 @@ Use the website to save an APK to your computer, or use the Android app to downl
 
 You’ll need a **PICO international account**. Don’t have one? [Register on PICO’s website](https://sso-global.picoxr.com/) by choosing **Sign Up**, then return here to sign in.
 
-The [installation guide](https://pico.kanglives.top/en/guides/install-global-apps/) covers account registration, downloading, installing, and common questions. Check the supported devices on the app page before downloading. Each app has its own sign-in and network requirements.
+The [installation guide](https://pico.kanglives.top/en/guides/install-global-apps/) covers account registration, downloading, installing, and common questions. For apps that use PICO accounts, follow the [international sign-in guide](https://pico.kanglives.top/en/guides/international-sign-in/). The [technical guide](https://pico.kanglives.top/en/guides/how-adaptation-works/) explains how adaptation works.
 
 App availability depends on your account’s region. For paid apps, purchase them in PICO Store before downloading.
 

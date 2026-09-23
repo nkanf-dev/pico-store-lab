@@ -27,6 +27,7 @@ class MainActivity : ComponentActivity() {
     private val selected = mutableStateOf<PublicItem?>(null)
     private val compatibility = mutableStateOf(AppCompatibility.UNKNOWN)
     private val installPromptName = mutableStateOf<String?>(null)
+    private val originalWarningName = mutableStateOf<String?>(null)
     private val installedCopies = mutableStateOf(InstalledCopies())
     private val trackedApplications by lazy {
         TrackedApplications(getSharedPreferences("tracked_applications", MODE_PRIVATE))
@@ -87,6 +88,7 @@ class MainActivity : ComponentActivity() {
                 selected = selected.value,
                 compatibility = compatibility.value,
                 installPromptName = installPromptName.value,
+                originalWarningName = originalWarningName.value,
                 installedCopies = installedCopies.value,
                 busy = busy.value,
                 downloadProgress = downloadProgress.value,
@@ -119,6 +121,11 @@ class MainActivity : ComponentActivity() {
                 onLogout = ::logout,
                 onGet = ::getApp,
                 onInstallChoice = ::chooseInstallation,
+                onConfirmOriginal = ::confirmOriginalInstallation,
+                onDismissOriginalWarning = {
+                    pendingInstallation = null
+                    originalWarningName.value = null
+                },
                 onDismissInstallChoice = {
                     pendingInstallation = null
                     installPromptName.value = null
@@ -415,13 +422,20 @@ class MainActivity : ComponentActivity() {
             }
             if (variant == InstallVariant.ORIGINAL) {
                 // Remember newly introduced account support without blocking an explicit original install.
-                runCatching {
+                val inspected = runCatching {
                     val inspected = installation.inspect(apk)
                     check(inspected.packageName == target.packageName && inspected.versionCode == info.versionCode)
                     compatibilityHistory.remember(inspected)
-                }
+                    inspected
+                }.getOrNull()
                 showDetail(current.copy(versionCode = info.versionCode, appVersion = info.version))
-                installDownloaded(apk, target.packageName, InstallVariant.ORIGINAL)
+                if (inspected?.compatibility in setOf(AppCompatibility.PROFILE, AppCompatibility.PROFILE_CANDIDATE, AppCompatibility.MATRIX)) {
+                    runOnUiThread {
+                        pendingInstallation = PendingInstallation(apk, target.packageName)
+                        originalWarningName.value = current.name
+                        message.value = ""
+                    }
+                } else installDownloaded(apk, target.packageName, InstallVariant.ORIGINAL)
                 return@work
             }
             val inspected = installation.inspect(apk)
@@ -449,9 +463,21 @@ class MainActivity : ComponentActivity() {
     private fun chooseInstallation(variant: InstallVariant) {
         val pending = pendingInstallation ?: return
         if (busy.value) return
-        pendingInstallation = null
         installPromptName.value = null
-        work { installDownloaded(pending.apk, pending.packageName, variant) }
+        if (variant == InstallVariant.ORIGINAL) {
+            originalWarningName.value = selected.value?.name ?: pending.packageName
+        } else {
+            pendingInstallation = null
+            work { installDownloaded(pending.apk, pending.packageName, variant) }
+        }
+    }
+
+    private fun confirmOriginalInstallation() {
+        val pending = pendingInstallation ?: return
+        if (busy.value) return
+        pendingInstallation = null
+        originalWarningName.value = null
+        work { installDownloaded(pending.apk, pending.packageName, InstallVariant.ORIGINAL) }
     }
 
     private fun installDownloaded(apk: File, packageName: String, variant: InstallVariant) {

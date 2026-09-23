@@ -230,10 +230,10 @@ const translations = {
 
 const requested = new URL(location.href).searchParams.get('lang');
 const pageContext = document.documentElement.dataset ?? {};
-const publicPaths = { '7288745304105664518': 'vrchat', '7270207384512020485': 'youtube-vr' };
 let initialCatalog = [];
 try { initialCatalog = JSON.parse($('catalog-data')?.textContent || '[]'); } catch { initialCatalog = []; }
 if (!Array.isArray(initialCatalog)) initialCatalog = [];
+const publicPaths = Object.fromEntries(initialCatalog.filter(item => item.state?.slug).map(item => [item.itemId, item.state.slug]));
 let locale = requested === 'en' || requested === 'zh-CN'
   ? requested : pageContext.seo ? document.documentElement.lang : navigator.language.startsWith('zh') ? 'zh-CN' : 'en';
 let currentState = null;

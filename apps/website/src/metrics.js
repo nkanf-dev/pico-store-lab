@@ -1,4 +1,4 @@
-const pages = new Set(['home', 'vrchat', 'youtube-vr', 'guide', 'clients', 'about', 'other']);
+const pages = new Set(['home', 'vrchat', 'youtube-vr', 'virtual-desktop', 'guide', 'international-sign-in', 'adaptation-tech', 'clients', 'about', 'other']);
 const sources = new Set(['direct', 'google', 'bing', 'baidu', 'bilibili', 'douyin', 'xiaohongshu', 'chatgpt', 'perplexity', 'github', 'other']);
 const events = new Set(['page_view', 'download_click', 'login_success', 'download_requested']);
 

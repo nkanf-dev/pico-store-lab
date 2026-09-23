@@ -114,6 +114,21 @@ test('web downloader is wired into the page, script, and guide', () => {
   }
 });
 
+test('Virtual Desktop and sign-in guides are available in both languages', () => {
+  for (const prefix of ['', 'en/']) {
+    const root = new URL(`../dist/${prefix}`, import.meta.url);
+    const home = readFileSync(new URL('index.html', root), 'utf8');
+    const app = readFileSync(new URL('apps/virtual-desktop/index.html', root), 'utf8');
+    const guide = readFileSync(new URL('guides/international-sign-in/index.html', root), 'utf8');
+    const technical = readFileSync(new URL('guides/how-adaptation-works/index.html', root), 'utf8');
+    assert.match(home, /Virtual Desktop/);
+    assert.match(app, /Virtual Desktop/);
+    assert.match(app, /"price":""/);
+    assert.match(guide, /how-adaptation-works/);
+    assert.match(technical, /international-sign-in/);
+  }
+});
+
 test('the page, the script, and both locales stay in agreement', () => {
   const html = readFileSync(new URL('../dist/index.html', import.meta.url), 'utf8');
   const source = readFileSync(new URL('../public/app.js', import.meta.url), 'utf8');

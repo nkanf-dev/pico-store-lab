@@ -8,11 +8,11 @@
 
 [English](README.md) · [在线使用](https://pico.kanglives.top/) · [安装指南](https://pico.kanglives.top/guides/install-global-apps/) · [下载客户端](https://pico.kanglives.top/download/)
 
-想在国区 PICO 上装 VRChat、YouTube VR，商店里却搜不到？PICO Store Lab 可以帮你找到应用的 PICO 版本，用自己的 PICO 国际区账号下载，再安装到头显，不需要先给头显转区。
+想在国区 PICO 上装 VRChat、YouTube VR 或 Virtual Desktop，商店里却搜不到？PICO Store Lab 可以帮你找到应用的 PICO 版本，用自己的 PICO 国际区账号下载，再安装到头显，不需要先给头显转区。需要 PICO 账号的应用可以选择国际区登录适配。
 
 你可以在网页把安装包保存到电脑，也可以使用 Android 客户端，在头显上直接下载并安装。
 
-**[VRChat PICO 版](https://pico.kanglives.top/apps/vrchat/)** · **[YouTube VR PICO 版](https://pico.kanglives.top/apps/youtube-vr/)** · [浏览全部应用](https://pico.kanglives.top/)
+**[VRChat PICO 版](https://pico.kanglives.top/apps/vrchat/)** · **[YouTube VR PICO 版](https://pico.kanglives.top/apps/youtube-vr/)** · **[Virtual Desktop PICO 版](https://pico.kanglives.top/apps/virtual-desktop/)** · [浏览全部应用](https://pico.kanglives.top/)
 
 ![PICO Store Lab 中文首页与应用搜索](assets/screenshots/website-home-zh-CN.webp)
 
@@ -21,7 +21,7 @@
 
 你需要一个 **PICO 国际区账号**。还没有账号？[前往 PICO 官网](https://sso-global.picoxr.com/)，选择 **Sign Up** 注册，完成后回到这里登录。
 
-注册、下载、安装的完整步骤和常见问题，都在[安装指南](https://pico.kanglives.top/guides/install-global-apps/)中。下载前看看应用页的适用设备；装好后，按应用自己的账号和网络要求使用。
+注册、下载、安装的完整步骤和常见问题，都在[安装指南](https://pico.kanglives.top/guides/install-global-apps/)中。需要 PICO 账号的应用可按[国际区登录适配指南](https://pico.kanglives.top/guides/international-sign-in/)操作；想了解内部流程，可以读[技术原理](https://pico.kanglives.top/guides/how-adaptation-works/)。
 
 不同账号地区可获取的应用可能不同。付费应用请先在 PICO 商店购买，再下载。
 

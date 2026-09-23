@@ -1,4 +1,4 @@
-import { registerUrl, releasesUrl, repositoryUrl } from './project-links.mjs';
+import { bridgeRepositoryUrl, picoStoreAppUrl, registerUrl, releasesUrl, repositoryUrl } from './project-links.mjs';
 
 export const apps = [
   {
@@ -6,10 +6,10 @@ export const apps = [
     itemId: '7288745304105664518',
     packageName: 'com.vrchat.android',
     name: 'VRChat',
-    officialUrl: 'https://store-global.picoxr.com/global/detail/1/7288745304105664518',
+    officialUrl: picoStoreAppUrl('7288745304105664518'),
     publisher: 'VRChat',
     sources: [
-      { label: 'VRChat · PICO Store', url: 'https://store-global.picoxr.com/global/detail/1/7288745304105664518' },
+      { label: 'VRChat · PICO Store', url: picoStoreAppUrl('7288745304105664518') },
       { label: 'VRChat · Getting started', url: 'https://wiki.vrchat.com/wiki/Getting_Started' },
     ],
     zh: {
@@ -56,10 +56,10 @@ export const apps = [
     itemId: '7270207384512020485',
     packageName: 'com.google.android.apps.youtube.vr.pico',
     name: 'YouTube VR',
-    officialUrl: 'https://store-global.picoxr.com/global/detail/1/7270207384512020485',
+    officialUrl: picoStoreAppUrl('7270207384512020485'),
     publisher: 'Google LLC',
     sources: [
-      { label: 'YouTube VR · PICO Store', url: 'https://store-global.picoxr.com/global/detail/1/7270207384512020485' },
+      { label: 'YouTube VR · PICO Store', url: picoStoreAppUrl('7270207384512020485') },
       { label: 'YouTube VR · Help', url: 'https://support.google.com/youtube/answer/7205134' },
     ],
     zh: {
@@ -101,21 +101,63 @@ export const apps = [
       ],
     },
   },
+  {
+    slug: 'virtual-desktop',
+    itemId: '3540',
+    packageName: 'VirtualDesktop.Android',
+    name: 'Virtual Desktop',
+    officialUrl: picoStoreAppUrl('3540'),
+    publisher: 'Virtual Desktop, Inc',
+    price: '',
+    sources: [{ label: 'Virtual Desktop · PICO Store', url: picoStoreAppUrl('3540') }],
+    zh: {
+      summary: '在 PICO 头显里无线连接电脑，使用大屏桌面或串流 PCVR 游戏。下载安装后，选择国际区登录适配即可在国区头显上使用。',
+      description: 'Virtual Desktop 可以把电脑桌面、视频和 PCVR 游戏带到 PICO 头显。先在 PICO 国际区商店购买，再用 PICO Store Lab 下载并选择适配版安装；打开应用后连接电脑上的 Virtual Desktop Streamer。',
+      platforms: ['PICO 4', 'PICO 4 Pro', 'PICO 4 Ultra'],
+      steps: [
+        { title: '购买并登录', text: '在 PICO 国际区商店购买 Virtual Desktop，再使用购买时的 PICO 国际区账号登录 PICO Store Lab。' },
+        { title: '下载适配版', text: '在头显客户端搜索 Virtual Desktop，下载后选择国际区登录适配，并确认安装。' },
+        { title: '打开并连接电脑', text: '在头显应用库中打开 Virtual Desktop，在电脑上运行 Virtual Desktop Streamer，按应用提示连接。' },
+      ],
+      faq: [
+        { q: '安装后会自动打开吗？', a: '安装完成后，到头显应用库找到 Virtual Desktop，随时自行打开。' },
+        { q: '需要先购买吗？', a: '需要。Virtual Desktop 是付费应用，请先用自己的 PICO 国际区账号在官方商店购买，再下载 APK。' },
+        { q: '什么是国际区登录适配？', a: '它让依赖 PICO 账号组件的应用在国区头显上使用国际区账号。下载完成后，PICO Store Lab 会提供适配版安装选项。' },
+      ],
+    },
+    en: {
+      summary: 'Connect your PICO headset wirelessly to a computer for a large desktop or PCVR streaming. Choose international sign-in adaptation when installing.',
+      description: 'Virtual Desktop brings your computer desktop, videos and PCVR games to your PICO headset. Purchase it with your PICO international account, download it through PICO Store Lab, and install the adapted copy. Then open the app and connect to Virtual Desktop Streamer on your computer.',
+      platforms: ['PICO 4', 'PICO 4 Pro', 'PICO 4 Ultra'],
+      steps: [
+        { title: 'Purchase and sign in', text: 'Purchase Virtual Desktop in PICO’s international store, then sign in to PICO Store Lab with the same account.' },
+        { title: 'Download and adapt', text: 'Search for Virtual Desktop in the headset app, download it, choose international sign-in adaptation, and confirm installation.' },
+        { title: 'Open and connect', text: 'Open Virtual Desktop from your headset library. Run Virtual Desktop Streamer on your computer and follow the connection steps in the app.' },
+      ],
+      faq: [
+        { q: 'Will the app open automatically?', a: 'Open Virtual Desktop yourself from the headset library after installation.' },
+        { q: 'Do I need to purchase it first?', a: 'Yes. Purchase Virtual Desktop with your own PICO international account in the official store before downloading the APK.' },
+        { q: 'What is international sign-in adaptation?', a: 'It lets apps that use PICO account components sign in with an international account on a China-region headset. PICO Store Lab offers the adapted installation after download.' },
+      ],
+    },
+  },
 ];
 
 export const guide = {
   zh: {
     title: '国区 PICO 不转区，怎么下载国际区应用？',
-    description: '用 PICO 国际区账号下载 VRChat、YouTube VR 等应用的 PICO 版 APK，再安装到头显。从注册账号到安装，按步骤完成。',
+    description: '用 PICO 国际区账号下载 VRChat、YouTube VR、Virtual Desktop 等应用的 PICO 版 APK，再安装到头显。需要 PICO 账号的应用可选择国际区登录适配。',
     sections: [
       {
         id: 'before-you-start',
         title: '先选好要安装的应用',
-        paragraphs: ['如果你在国区商店搜不到 VRChat 或 YouTube VR，可以先下载它的 PICO 版安装包，再安装到头显。这条流程不需要给头显刷国际版固件。', '下载前看一下应用页的适用设备。下载用的 PICO 国际区账号、头显所在地区，以及应用内的账号是几件不同的事：领取安装包后，VRChat 和 YouTube 仍按各自的方式登录使用。'],
+        paragraphs: ['如果你在国区商店搜不到想用的应用，可以先下载它的 PICO 版安装包，再安装到头显。这条流程不需要给头显刷国际版固件。', '下载前看一下应用页的适用设备。下载用的 PICO 国际区账号、头显所在地区，以及应用内的账号是几件不同的事；需要 PICO 账号的应用可选择国际区登录适配。'],
         steps: [],
         links: [
           { label: '下载 VRChat PICO 版', url: '/apps/vrchat/' },
           { label: '下载 YouTube VR PICO 版', url: '/apps/youtube-vr/' },
+          { label: '下载 Virtual Desktop PICO 版', url: '/apps/virtual-desktop/' },
+          { label: '了解国际区登录适配', url: '/guides/international-sign-in/' },
         ],
       },
       {
@@ -134,7 +176,7 @@ export const guide = {
         title: '在网页下载 APK',
         paragraphs: ['在电脑上打开应用页面，可以把安装包保存下来，再传到头显。'],
         steps: [
-          { title: '打开应用', text: '从 VRChat、YouTube VR 页面进入，或在首页搜索应用名称，选择需要的 PICO 版本。' },
+          { title: '打开应用', text: '从首页选择 VRChat、YouTube VR 或 Virtual Desktop，也可以搜索其他应用，进入对应页面。' },
           { title: '使用邮箱验证码登录', text: '在下载区域输入 PICO 国际区账号邮箱，点击“发送验证码”，查收邮件后登录。' },
           { title: '领取应用', text: '尚未领取的免费应用，先点击“领取免费应用”。付费应用需要先在 PICO 商店购买。' },
           { title: '下载安装包', text: '点击“下载 APK”，等待浏览器完成下载。接下来把文件传到头显并安装。' },
@@ -144,7 +186,7 @@ export const guide = {
       {
         id: 'headset-install',
         title: '把安装包安装到头显',
-        paragraphs: ['如果头显已有 APK 安装器，把下载的文件传过去，打开并按系统提示安装即可。安装完成后，到应用库中找刚安装的应用；有些 PICO OS 版本会把侧载应用放在“未知来源”中。', '也可以先给头显安装 PICO Store Lab。之后直接在头显里搜索应用、登录和下载，下载完成后会进入安装流程。'],
+        paragraphs: ['如果头显已有 APK 安装器，把下载的文件传过去，打开并按系统提示安装即可。安装完成后，到应用库中找刚安装的应用；有些 PICO OS 版本会把侧载应用放在“未知来源”中。', '也可以先给头显安装 PICO Store Lab。之后直接在头显里搜索应用、登录和下载；需要 PICO 账号的应用选择国际区登录适配，再确认安装。'],
         steps: [
           { title: '下载头显客户端', text: '在客户端下载页选择 Android APK，将 pico-store-android.apk 传到头显并安装。' },
           { title: '在头显打开 PICO Store Lab', text: '从应用库或“未知来源”打开，使用 PICO 国际区账号登录，搜索要安装的应用。' },
@@ -177,16 +219,18 @@ export const guide = {
   },
   en: {
     title: 'Install international PICO apps without changing your headset region',
-    description: 'Get the PICO APK for VRChat, YouTube VR, and other apps with your PICO international account, then install it on your headset.',
+    description: 'Get the PICO APK for VRChat, YouTube VR, Virtual Desktop and more with your international account, then install it on your headset. Choose international sign-in adaptation for apps that use PICO accounts.',
     sections: [
       {
         id: 'before-you-start',
         title: 'Choose the app you want',
-        paragraphs: ['If VRChat or YouTube VR is missing from your headset store, you can download its PICO APK and install it yourself. This method does not require flashing international firmware.', 'Check the supported devices on the app page first. The PICO international account used to download, your headset region, and the account you use inside the app are separate things. Once installed, VRChat and YouTube follow their own sign-in process.'],
+        paragraphs: ['If an app is missing from your headset store, you can download its PICO APK and install it yourself. This method does not require flashing international firmware.', 'Check supported devices on the app page. Your download account, headset region and in-app account are separate; choose international sign-in adaptation for apps that use PICO accounts.'],
         steps: [],
         links: [
           { label: 'Get VRChat for PICO', url: '/en/apps/vrchat/' },
           { label: 'Get YouTube VR for PICO', url: '/en/apps/youtube-vr/' },
+          { label: 'Get Virtual Desktop for PICO', url: '/en/apps/virtual-desktop/' },
+          { label: 'International sign-in adaptation', url: '/en/guides/international-sign-in/' },
         ],
       },
       {
@@ -205,7 +249,7 @@ export const guide = {
         title: 'Download the APK from the website',
         paragraphs: ['Open the app page on your computer to save an APK, then transfer it to your headset.'],
         steps: [
-          { title: 'Choose an app', text: 'Open the VRChat or YouTube VR page, or search from the homepage. Choose the PICO version you want.' },
+          { title: 'Choose an app', text: 'Select VRChat, YouTube VR or Virtual Desktop from the homepage, or search for another app.' },
           { title: 'Sign in with an email code', text: 'Enter your PICO international account email in the download section, choose Send code, and sign in with the code from your inbox.' },
           { title: 'Add the app to your account', text: 'Choose Get free app if you have not claimed a free app yet. Paid apps must first be purchased in PICO Store.' },
           { title: 'Save the APK', text: 'Choose Download APK and wait for your browser to finish. You can then transfer the file to your headset and install it.' },
@@ -215,7 +259,7 @@ export const guide = {
       {
         id: 'headset-install',
         title: 'Install on your headset',
-        paragraphs: ['If your headset has an APK installer, transfer the downloaded file, open it, and follow the installation prompts. Find the installed app in your library; some PICO OS versions place sideloaded apps under Unknown Sources.', 'You can also install PICO Store Lab on your headset first. Then search, sign in, and download on the headset, and confirm the installation when the download finishes.'],
+        paragraphs: ['If your headset has an APK installer, transfer the downloaded file, open it, and follow the installation prompts. Find the installed app in your library; some PICO OS versions place sideloaded apps under Unknown Sources.', 'You can also install PICO Store Lab on your headset first. Search, sign in, and download on the headset. Choose international sign-in adaptation for an app that uses PICO accounts, then confirm installation.'],
         steps: [
           { title: 'Get the headset app', text: 'Choose the Android APK on the downloads page, transfer pico-store-android.apk to your headset, and install it.' },
           { title: 'Open PICO Store Lab', text: 'Find it in your library or Unknown Sources, sign in with your PICO international account, and search for an app.' },
@@ -248,6 +292,54 @@ export const guide = {
   },
 };
 
+export const signInGuide = {
+  zh: {
+    title: '在国区头显使用国际区账号登录',
+    description: '用 PICO Store Lab 下载应用，选择国际区登录适配，安装后就能从应用库自行打开。',
+    sections: [
+      { id: 'choose', title: '选择需要的应用', paragraphs: ['在 PICO Store Lab 头显客户端搜索应用。Virtual Desktop 会提供专用适配；其他检测到 PICO 账号组件的应用会提供通用适配。'], links: [{ label: '查看 Virtual Desktop', url: '/apps/virtual-desktop/' }, { label: '了解适配的技术原理', url: '/guides/how-adaptation-works/' }] },
+      { id: 'download', title: '登录并下载', paragraphs: ['使用自己的 PICO 国际区账号登录。免费应用先领取，付费应用先在 PICO 商店购买。下载完成后，选择“适配版”。'], links: [{ label: '下载头显客户端', url: '/download/' }] },
+      { id: 'install', title: '确认安装并打开', paragraphs: ['按系统提示允许安装，然后到头显应用库找到应用，自行打开。以后更新应用时，重新下载并选择适配版。'] },
+      { id: 'original', title: '选择原版时', paragraphs: ['如果应用使用 PICO 账号组件，直接安装原版可能无法登录 PICO 账号，部分功能也可能无法正常使用。PICO Store Lab 会在安装前提醒，你可以返回选择适配版。'] },
+    ],
+  },
+  en: {
+    title: 'Use international PICO sign-in on your headset',
+    description: 'Download an app in PICO Store Lab, choose international sign-in adaptation, then open it yourself from the headset library.',
+    sections: [
+      { id: 'choose', title: 'Choose an app', paragraphs: ['Search in the PICO Store Lab headset app. Virtual Desktop has a dedicated adaptation; other apps with detected PICO account components can use the general adaptation.'], links: [{ label: 'Explore Virtual Desktop', url: '/en/apps/virtual-desktop/' }, { label: 'How adaptation works', url: '/en/guides/how-adaptation-works/' }] },
+      { id: 'download', title: 'Sign in and download', paragraphs: ['Sign in with your own PICO international account. Claim free apps or buy paid apps in PICO Store first. After the download, choose the adapted copy.'], links: [{ label: 'Get the headset app', url: '/en/download/' }] },
+      { id: 'install', title: 'Install and open', paragraphs: ['Confirm the system installation prompt, then find and open the app yourself in your headset library. Choose the adapted copy again when updating the app.'] },
+      { id: 'original', title: 'If you choose the original copy', paragraphs: ['An app with PICO account components may be unable to sign in or use some features without adaptation. PICO Store Lab will remind you before installation, so you can go back and choose the adapted copy.'] },
+    ],
+  },
+};
+
+export const adaptationTechGuide = {
+  zh: {
+    title: '国际区登录适配是怎么工作的？',
+    description: '从识别应用、挑选 profile，到生成适配版 APK 和安装，了解 PICO Store Lab 背后的流程。',
+    sections: [
+      { id: 'why', title: '为什么需要适配', paragraphs: ['一些 PICO 应用通过系统账号组件获取登录状态。国际区应用装在国区头显上时，原有账号调用可能找不到它期望的国际区服务。适配会把这些调用连接到应用可用的账号运行时。', 'PICO Store Lab 只在你下载应用并选择适配版后处理 APK；安装完成后由你从应用库打开。'] },
+      { id: 'detect', title: '先检查下载的 APK', paragraphs: ['Lab 下载你有权获取的 PICO 原版 APK，读取包名、版本、入口、原生库和账号组件引用。检测结果决定是否显示适配选项。原版 APK 仍是独立的安装选项。'] },
+      { id: 'profiles', title: 'Profile 决定如何处理应用', paragraphs: ['每个 profile 是一份可独立更新的适配包，包含匹配规则、优先级、适配代码和所需配方。通用 profile 匹配所有可识别的 PICO 账号接入，优先级最低；Virtual Desktop 的专用 profile 匹配它的包名，优先级更高。Lab 根据规则选择最合适的 profile，不为每个应用写一套分派逻辑。', '应用版本变化时，Lab 仍允许你尝试现有 profile。真正改写之前，profile 会逐项检查要修改的文件和字节是否符合配方；不符合就停止适配，保留原始下载和已安装版本。'], links: [{ label: '查看 profile 源码', url: `${bridgeRepositoryUrl}/tree/main/profiles` }] },
+      { id: 'rewrite', title: '生成适配版 APK', paragraphs: ['通用 profile 把已识别的 PICO 账号组件接入随 APK 一同打包的运行时。专用 profile 还可以处理该应用自己的启动和完整性逻辑，例如 Virtual Desktop 的托管程序集与原生代码。Bridge 负责通用的检查、写入、签名和安装步骤，应用特有逻辑留在 profile。', '适配版使用另一个安装包名和 Lab 在头显上创建的签名，因此可以与原版并存。APK 会先在本地生成和检查，再交给 Android 安装器确认安装。'] },
+      { id: 'updates', title: 'Profile 如何独立更新', paragraphs: ['Lab 内置 profile 发布者的公开证书。新版 profile 由独立发布密钥签名并发布；Lab 下载后校验签名、版本和文件哈希，再在自己的进程中加载。更新 profile 不需要重装 Lab。社区可以贡献 profile 源码，由维护者审核后通过发布流程签名。'], links: [{ label: '回到使用指南', url: '/guides/international-sign-in/' }] },
+    ],
+  },
+  en: {
+    title: 'How does international sign-in adaptation work?',
+    description: 'See how PICO Store Lab detects an app, selects a profile, prepares an adapted APK, and installs it.',
+    sections: [
+      { id: 'why', title: 'Why adaptation helps', paragraphs: ['Some PICO apps use headset account components for sign-in. On a China-region headset, an international app may not reach the international account service it expects. Adaptation connects those calls to an account runtime the app can use.', 'PICO Store Lab processes an APK only after you download it and choose the adapted copy. You open the installed app yourself from the library.'] },
+      { id: 'detect', title: 'Inspect the downloaded APK', paragraphs: ['Lab downloads an original PICO APK available to your account and reads its package name, version, entry point, native libraries and account component references. Detection determines whether adaptation is offered. The original APK remains a separate installation choice.'] },
+      { id: 'profiles', title: 'A profile chooses the app-specific changes', paragraphs: ['Each profile is independently updatable and includes matching rules, priority, adaptation code and a recipe. The general profile has the lowest priority and handles recognized PICO account integrations. A dedicated Virtual Desktop profile matches its package name at higher priority. Lab selects a profile from those rules.', 'When an app version changes, Lab still lets you try an existing profile. Before rewriting, the profile checks each target file and byte sequence against its recipe. If they differ, adaptation stops while the original download and installed copy remain available.'] },
+      { id: 'rewrite', title: 'Prepare the adapted APK', paragraphs: ['The general profile routes recognized PICO account components to a runtime packaged with the APK. Dedicated profiles can also handle app-specific startup and integrity logic, as Virtual Desktop does for its managed and native code. Bridge supplies the shared inspection, writing, signing and installation steps.', 'The adapted copy uses a separate package name and a signature created by Lab on the headset, so it can coexist with the original. Lab checks the prepared APK before handing it to the Android installer.'] },
+      { id: 'updates', title: 'Update profiles independently', paragraphs: ['Lab includes the profile publisher’s public certificate. New profiles are signed with a separate publisher key; Lab checks the signature, version and file hash before loading code in its process. Updating a profile does not require reinstalling Lab. Community members can contribute source for review and maintainer publication.'], links: [{ label: 'Back to the user guide', url: '/en/guides/international-sign-in/' }] },
+    ],
+  },
+};
+
 export const about = {
   zh: {
     title: '关于 PICO Store Lab',
@@ -256,7 +348,7 @@ export const about = {
       {
         id: 'project',
         title: '让想装的应用更好找',
-        paragraphs: ['国区商店搜不到想用的应用，又不想折腾转区，PICO Store Lab 就是为这种情况做的。你可以在网页找到 VRChat、YouTube VR 等应用，用自己的 PICO 国际区账号下载，再安装到头显。', '经常下载应用的话，也可以使用头显客户端，或 Windows、macOS、Linux 桌面客户端。项目由 nkanf-dev 维护，代码公开在 GitHub。'],
+        paragraphs: ['国区商店搜不到想用的应用，又不想折腾转区，PICO Store Lab 就是为这种情况做的。你可以在网页找到 VRChat、YouTube VR、Virtual Desktop 等应用，用自己的 PICO 国际区账号下载，再安装到头显。', '经常下载应用的话，也可以使用头显客户端，或 Windows、macOS、Linux 桌面客户端。项目由 nkanf-dev 维护，代码公开在 GitHub。'],
         steps: [],
         links: [{ label: '查看 GitHub 项目', url: repositoryUrl }, { label: '选择客户端', url: '/download/' }],
       },
@@ -276,7 +368,7 @@ export const about = {
       {
         id: 'project',
         title: 'Find the apps you want to install',
-        paragraphs: ['PICO Store Lab helps when an app is missing from your headset store and you do not want to change regions. Find apps such as VRChat and YouTube VR, download with your own PICO international account, and install them on your headset.', 'For regular downloads, use the headset app or a desktop app for Windows, macOS, or Linux. The project is maintained by nkanf-dev, with its source code available on GitHub.'],
+        paragraphs: ['PICO Store Lab helps when an app is missing from your headset store and you do not want to change regions. Find VRChat, YouTube VR, Virtual Desktop and other apps, download with your own PICO international account, and install them on your headset.', 'For regular downloads, use the headset app or a desktop app for Windows, macOS, or Linux. The project is maintained by nkanf-dev, with its source code available on GitHub.'],
         steps: [],
         links: [{ label: 'View the GitHub project', url: repositoryUrl }, { label: 'Choose a client', url: '/en/download/' }],
       },

@@ -90,6 +90,10 @@
     <string name="try_account_adaptation_hint">此版本尚未验证。适配失败会保留下载文件和已安装应用。</string>
     <string name="install_original_hint">保留应用原有的登录方式。</string>
     <string name="install_choice_title">选择安装方式</string>
+    <string name="original_warning_title">不适配国际区登录，继续安装吗？</string>
+    <string name="original_warning_body">检测到 %1$s 使用 PICO 账号组件。直接安装原版，可能无法登录 PICO 账号，部分功能也可能无法正常使用。</string>
+    <string name="continue_original_install">继续安装原版</string>
+    <string name="back_to_app">返回应用页面</string>
     <string name="install_later">稍后再说</string>
     <string name="updates">更新</string>
     <string name="empty_updates">暂时没有可更新的应用。</string>

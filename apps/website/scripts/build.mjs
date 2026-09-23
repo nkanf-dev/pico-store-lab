@@ -1,6 +1,6 @@
 import { cp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
-import { apps, guide, about } from '../content/pages.mjs';
+import { apps, guide, signInGuide, adaptationTechGuide, about } from '../content/pages.mjs';
 import { githubOwner, repositoryUrl, releasesUrl, releaseDownloadUrl, ownerUrl, websiteOrigin, playerGuideUrl, registerUrl } from '../content/project-links.mjs';
 import catalog from '../../../contracts/v1/catalog.json' with { type: 'json' };
 
@@ -37,7 +37,8 @@ function translate(html, lang) {
 function appState(app, lang) {
   const copy = app[lang];
   return { ...media.find(item => item.itemId === app.itemId), itemId: app.itemId, packageName: app.packageName,
-    name: app.name, officialUrl: app.officialUrl, publisher: app.publisher, price: '0.00',
+    name: app.name, slug: app.slug, officialUrl: app.officialUrl, publisher: app.publisher,
+    price: app.price ?? '0.00', currency: app.currency ?? '',
     summary: copy.summary, description: copy.description, supportedPlatforms: copy.platforms.join(' · '), releases: [] };
 }
 
@@ -82,7 +83,7 @@ function appDetails(app, lang) {
 
 function appGuide(app, lang) {
   const copy = app[lang];
-  return `<section class="app-guide"><div class="reading-heading"><p class="eyebrow">${lang === 'zh' ? '下载与安装' : 'DOWNLOAD & INSTALL'}</p><h2>${lang === 'zh' ? '从这里开始，一步步装好。' : 'Get it onto your headset.'}</h2></div>${steps(copy.steps)}<a class="text-link" href="${localized('/guides/install-global-apps/', lang)}">${lang === 'zh' ? '查看完整安装指南' : 'Read the installation guide'} ↗</a><div class="faq">${copy.faq.map(item => `<details><summary>${escape(item.q)}</summary><p>${escape(item.a)}</p></details>`).join('')}</div><p class="source-links">${app.sources.map(link => external(link.url, link.label)).join(' · ')}</p></section>`;
+  return `<section class="app-guide"><div class="reading-heading"><p class="eyebrow">${lang === 'zh' ? '下载与安装' : 'DOWNLOAD & INSTALL'}</p><h2>${lang === 'zh' ? '从这里开始，一步步装好。' : 'Get it onto your headset.'}</h2></div>${steps(copy.steps)}<a class="text-link" href="${localized('/guides/install-global-apps/', lang)}">${lang === 'zh' ? '查看完整安装指南' : 'Read the installation guide'} ↗</a> · <a class="text-link" href="${localized('/guides/international-sign-in/', lang)}">${lang === 'zh' ? '国际区登录适配' : 'International sign-in adaptation'} ↗</a><div class="faq">${copy.faq.map(item => `<details><summary>${escape(item.q)}</summary><p>${escape(item.a)}</p></details>`).join('')}</div><p class="source-links">${app.sources.map(link => external(link.url, link.label)).join(' · ')}</p></section>`;
 }
 
 const records = [];
@@ -121,13 +122,13 @@ await cp(source, output, { recursive:true });
 
 for (const lang of ['zh', 'en']) {
   const zh = lang === 'zh';
-  const hero = `<section class="hero"><div class="hero-copy"><p class="eyebrow"><span class="indicator"></span>PICO STORE LAB</p><h1>${zh ? '在国区 PICO 上，<br><em>找到你想用的应用。</em>' : 'Your PICO.<br><em>More to explore.</em>'}</h1><p class="intro">${zh ? '下载 VRChat、YouTube VR 等应用的 PICO 版本，查看不转区安装方法。' : 'Find the PICO editions of VRChat, YouTube VR and more. Download with your international account and follow the headset installation guide.'}</p><div class="hero-actions"><a class="action primary" href="#catalog">${zh ? '选择应用' : 'Explore apps'} ↓</a><a id="guide-link" class="action secondary" href="${localized('/guides/install-global-apps/', lang)}">${zh ? '看看怎么安装' : 'How to install'} ↗</a></div></div><div class="hero-art" aria-hidden="true"><div class="orbit orbit-one"></div><div class="orbit orbit-two"></div><div class="hero-glyph">P<span>/</span></div><div class="art-caption">VRCHAT / YOUTUBE VR<br>PICO EDITION</div></div></section>`;
-  const featured = `<section id="catalog" class="section-head"><span>${zh ? '先从这两款开始' : 'START HERE'}</span><span>01 / APPS</span></section>${cards(lang)}`;
+  const hero = `<section class="hero"><div class="hero-copy"><p class="eyebrow"><span class="indicator"></span>PICO STORE LAB</p><h1>${zh ? '在国区 PICO 上，<br><em>找到你想用的应用。</em>' : 'Your PICO.<br><em>More to explore.</em>'}</h1><p class="intro">${zh ? '下载 VRChat、YouTube VR、Virtual Desktop 的 PICO 版本；需要 PICO 账号的应用还能选择国际区登录适配。' : 'Find VRChat, YouTube VR and Virtual Desktop for PICO. Choose international sign-in adaptation for apps that use PICO accounts.'}</p><div class="hero-actions"><a class="action primary" href="#catalog">${zh ? '选择应用' : 'Explore apps'} ↓</a><a id="guide-link" class="action secondary" href="${localized('/guides/international-sign-in/', lang)}">${zh ? '了解国际区登录适配' : 'International sign-in'} ↗</a></div></div><div class="hero-art" aria-hidden="true"><div class="orbit orbit-one"></div><div class="orbit orbit-two"></div><div class="hero-glyph">P<span>/</span></div><div class="art-caption">VRCHAT / YOUTUBE VR<br>VIRTUAL DESKTOP</div></div></section>`;
+  const featured = `<section id="catalog" class="section-head"><span>${zh ? '从这三款开始' : 'START HERE'}</span><span>01 / APPS</span></section>${cards(lang)}`;
   const discovery = discoveryTemplate.replace('id="catalog"', 'id="more-apps"');
   const workflow = workflowTemplate.replaceAll(playerGuideUrl, localized('/guides/install-global-apps/', lang))
     .replaceAll(releasesUrl, localized('/download/', lang));
   await page({ path:'/', lang, title:zh ? 'PICO 国际区应用下载与安装指南 | PICO Store Lab' : 'PICO apps, downloads & installation | PICO Store Lab',
-    description:zh ? '在国区 PICO 上获取 VRChat、YouTube VR 等应用的 PICO 版本。使用自己的 PICO 国际账号下载 APK，查看不转区安装方法。' : 'Browse PICO apps, download with your international account, and follow practical installation guides for your headset.',
+    description:zh ? '在国区 PICO 上获取 VRChat、YouTube VR、Virtual Desktop 等应用的 PICO 版本，使用自己的 PICO 国际区账号下载并安装。' : 'Browse PICO apps including VRChat, YouTube VR and Virtual Desktop, then download and install with your international account.',
     body:hero + featured + discovery + detailTemplate + downloaderTemplate + workflow, interactive:true });
   for (const app of apps) {
     const breadcrumb = `<nav class="breadcrumbs"><a href="${localized('/', lang)}">${zh ? '应用' : 'Apps'}</a><span>/</span><span>${escape(app.name)}</span></nav>`;
@@ -141,6 +142,12 @@ for (const lang of ['zh', 'en']) {
   const guideCopy = guide[lang];
   await page({ path:'/guides/install-global-apps/', lang, title:`${guideCopy.title} | PICO Store Lab`, description:guideCopy.description,
     body:`<header class="reading-hero"><p class="eyebrow">${zh ? '安装指南' : 'PLAYER GUIDE'}</p><h1>${escape(guideCopy.title)}</h1><p>${escape(guideCopy.description)}</p><a class="action primary" href="${localized('/', lang)}#catalog">${zh ? '去选一款应用' : 'Choose an app'} ↗</a></header>${reading(guideCopy, lang)}<section class="related-apps"><h2>${zh ? '想先装哪一款？' : 'Where would you like to start?'}</h2>${cards(lang)}</section>` });
+  const signInCopy = signInGuide[lang];
+  await page({ path:'/guides/international-sign-in/', lang, title:`${signInCopy.title} | PICO Store Lab`, description:signInCopy.description,
+    body:`<header class="reading-hero"><p class="eyebrow">${zh ? '国际区登录适配' : 'INTERNATIONAL SIGN-IN'}</p><h1>${escape(signInCopy.title)}</h1><p>${escape(signInCopy.description)}</p><a class="action primary" href="${localized('/download/', lang)}">${zh ? '下载头显客户端' : 'Get the headset app'} ↗</a></header>${reading(signInCopy, lang)}<section class="related-apps"><h2>${zh ? '选择应用' : 'Choose an app'}</h2>${cards(lang)}</section>` });
+  const techCopy = adaptationTechGuide[lang];
+  await page({ path:'/guides/how-adaptation-works/', lang, title:`${techCopy.title} | PICO Store Lab`, description:techCopy.description,
+    body:`<header class="reading-hero"><p class="eyebrow">${zh ? '技术原理' : 'HOW IT WORKS'}</p><h1>${escape(techCopy.title)}</h1><p>${escape(techCopy.description)}</p><a class="action primary" href="${localized('/guides/international-sign-in/', lang)}">${zh ? '查看使用指南' : 'Read the user guide'} ↗</a></header>${reading(techCopy, lang)}` });
   const releases = releaseDownloadUrl;
   const clientBody = `<header class="reading-hero"><p class="eyebrow">PICO STORE LAB</p><h1>${zh ? '选一个顺手的<br>下载方式。' : 'Choose how<br>you download.'}</h1><p>${zh ? '偶尔下载，打开网页就够了。常用的话，也可以装到头显或电脑上。' : 'Use the website for a quick download, or keep the app on your headset or computer.'}</p><a class="action primary" href="${localized('/', lang)}#catalog">${zh ? '直接在网页下载' : 'Use the website'} ↗</a></header><div class="client-grid"><section><span class="eyebrow">01 / PICO</span><h2>${zh ? '在头显上' : 'On your headset'}</h2><p>${zh ? '安装一次 PICO Store Lab，之后在头显里搜索、下载和安装应用。' : 'Install PICO Store Lab once, then find, download and install apps on your headset.'}</p><a class="action primary" href="${releases}pico-store-android.apk">${zh ? '下载 Android APK' : 'Download Android APK'} ↓</a><a class="text-link" href="${localized('/guides/install-global-apps/', lang)}#headset-install">${zh ? '安装方法' : 'Installation guide'} ↗</a></section>${[['Windows','windows','exe'],['macOS','macos','dmg'],['Linux','linux','AppImage']].map(([name,platform,ext],index) => `<section><span class="eyebrow">0${index + 2} / DESKTOP</span><h2>${name}</h2><p>${zh ? '在电脑上查找应用，下载后安装到头显。' : 'Find apps on your computer, then install your downloads on the headset.'}</p><div class="client-actions"><a class="action secondary" href="${releases}pico-store-desktop-${platform}-x64.${ext}">${name === 'macOS' ? 'Intel' : 'x64'} ↓</a><a class="action secondary" href="${releases}pico-store-desktop-${platform}-arm64.${ext}">${name === 'macOS' ? 'Apple silicon' : 'ARM64'} ↓</a></div></section>`).join('')}</div>`;
   await page({ path:'/download/', lang, title:zh ? '下载 PICO Store Lab 客户端 | Android、Windows、macOS、Linux' : 'Download PICO Store Lab | Android, Windows, macOS & Linux', description:zh ? '下载 PICO Store Lab，在 PICO 头显或电脑上查找、下载应用。也可以直接使用网页。' : 'Get PICO Store Lab for your headset or computer, or download apps directly on the website.', body:clientBody });

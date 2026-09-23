@@ -4,6 +4,7 @@ plugins {
 }
 
 def bridgeEnabled = providers.gradleProperty('matrixBridgeDir').isPresent()
+def profileSignerSha256 = providers.gradleProperty('matrixProfileSignerSha256')
 def projectLinks = new groovy.json.JsonSlurper().parseText(
     providers.fileContents(layout.projectDirectory.file('../../../project-links.json')).asText.get())
 def releaseSigning = [
@@ -16,6 +17,8 @@ if (releaseSigning.values().any { it } && !releaseSigning.values().every { it })
     throw new GradleException('Provide all four PICO_ANDROID signing environment variables')
 }
 if (bridgeEnabled) {
+    if (!profileSignerSha256.isPresent() || !(profileSignerSha256.get() ==~ /[a-f0-9]{64}/))
+        throw new GradleException('Provide -PmatrixProfileSignerSha256 with the trusted profile publisher certificate SHA-256')
     def bundleDir = providers.gradleProperty('matrixBundleDir')
     def profileDir = providers.gradleProperty('matrixProfileDir')
     tasks.register('copyMatrixBundle', Sync) {
@@ -104,6 +107,8 @@ android {
          'websiteOrigin', 'picoRegistrationUrl'].each { field ->
             buildConfigField 'String', field.toUpperCase(java.util.Locale.ROOT), groovy.json.JsonOutput.toJson(projectLinks[field])
         }
+        if (bridgeEnabled) buildConfigField 'String', 'PROFILE_SIGNER_SHA256',
+            groovy.json.JsonOutput.toJson(profileSignerSha256.get())
     }
 
     buildFeatures { compose true; buildConfig true }
