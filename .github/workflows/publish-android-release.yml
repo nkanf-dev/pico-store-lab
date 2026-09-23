@@ -1,0 +1,103 @@
+name: Build and attach signed Android release
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Existing draft Lab release tag
+        required: true
+      bridge_ref:
+        description: Reviewed Matrix Bridge commit SHA
+        required: true
+      input_sha256:
+        description: SHA-256 of the private matrix-build-input.zip draft asset
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  android:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: android-publishing
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.release_tag }}
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: nkanf-dev/pico-matrix-bridge
+          ref: ${{ inputs.bridge_ref }}
+          path: bridge
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+      - run: sdkmanager 'platforms;android-37.0' 'build-tools;36.0.0'
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Fetch pinned private compatibility input and previous Lab APK
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+          INPUT_SHA256: ${{ inputs.input_sha256 }}
+        run: |
+          set -euo pipefail
+          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          [[ "$INPUT_SHA256" =~ ^[0-9a-f]{64}$ ]]
+          mkdir -p "$RUNNER_TEMP/matrix-input" "$RUNNER_TEMP/previous"
+          gh release download "$RELEASE_TAG" --pattern matrix-build-input.zip --dir "$RUNNER_TEMP"
+          printf '%s  %s\n' "$INPUT_SHA256" "$RUNNER_TEMP/matrix-build-input.zip" | sha256sum --check
+          unzip -q "$RUNNER_TEMP/matrix-build-input.zip" -d "$RUNNER_TEMP/matrix-input"
+          gh release download v0.1.3 --pattern pico-store-android.apk --dir "$RUNNER_TEMP/previous"
+      - name: Build, sign and verify Lab APK
+        env:
+          PICO_ANDROID_KEYSTORE_BASE64: ${{ secrets.PICO_ANDROID_KEYSTORE_BASE64 }}
+          PICO_ANDROID_STORE_PASSWORD: ${{ secrets.PICO_ANDROID_STORE_PASSWORD }}
+          PICO_ANDROID_KEY_PASSWORD: ${{ secrets.PICO_ANDROID_KEY_PASSWORD }}
+          PICO_ANDROID_KEY_ALIAS: androiddebugkey
+        run: |
+          set -euo pipefail
+          test -n "$PICO_ANDROID_KEYSTORE_BASE64"
+          test -n "$PICO_ANDROID_STORE_PASSWORD"
+          test -n "$PICO_ANDROID_KEY_PASSWORD"
+          export PICO_ANDROID_KEYSTORE="$RUNNER_TEMP/lab-release.keystore"
+          trap 'rm -f "$PICO_ANDROID_KEYSTORE"' EXIT
+          printf '%s' "$PICO_ANDROID_KEYSTORE_BASE64" | base64 --decode > "$PICO_ANDROID_KEYSTORE"
+          chmod 600 "$PICO_ANDROID_KEYSTORE"
+          python3 tools/build_android_release.py \
+            --output-dir "$RUNNER_TEMP/android-release" \
+            --matrix-bridge-dir "$GITHUB_WORKSPACE/bridge" \
+            --matrix-bundle-dir "$RUNNER_TEMP/matrix-input/bundle" \
+            --matrix-profiles-dir "$RUNNER_TEMP/matrix-input/profiles" \
+            --previous-apk "$RUNNER_TEMP/previous/pico-store-android.apk"
+      - name: Attach verified APK and remove private build input
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          set -euo pipefail
+          asset="$RUNNER_TEMP/android-release/pico-store-android.apk"
+          gh release upload "$RELEASE_TAG" "$asset" --clobber
+          gh api "repos/$GH_REPO/releases/tags/$RELEASE_TAG" > "$RUNNER_TEMP/release.json"
+          python3 - "$asset" "$RUNNER_TEMP/release.json" <<'PY'
+          import hashlib, json, sys
+          expected = 'sha256:' + hashlib.sha256(open(sys.argv[1], 'rb').read()).hexdigest()
+          release = json.load(open(sys.argv[2]))
+          assets = [a for a in release['assets'] if a['name'] == 'pico-store-android.apk']
+          if len(assets) != 1 or assets[0].get('digest') != expected or assets[0]['state'] != 'uploaded':
+              raise SystemExit('Published Android APK differs from the CI build')
+          PY
+          gh release delete-asset "$RELEASE_TAG" matrix-build-input.zip --yes
