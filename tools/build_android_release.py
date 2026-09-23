@@ -22,6 +22,7 @@ import json
 import os
 import re
 import shutil
+import ssl
 import subprocess
 import sys
 import zipfile
@@ -57,7 +58,7 @@ def certificate_digests(output: str) -> set[str]:
     return {
         value.lower()
         for value in re.findall(
-            r"Signer #\d+ certificate SHA-256 digest: ([a-f0-9]{64})",
+            r"(?:Signer #\d+|V\d+ Signer:) certificate SHA-256 digest: ([a-f0-9]{64})",
             output,
             re.IGNORECASE,
         )
@@ -126,6 +127,7 @@ def main() -> None:
     parser.add_argument("--output-dir", type=Path, default=root / "dist" / "android")
     parser.add_argument("--matrix-bridge-dir", type=Path)
     parser.add_argument("--matrix-bundle-dir", type=Path)
+    parser.add_argument("--matrix-profiles-dir", type=Path)
     parser.add_argument("--previous-apk", type=Path)
     args = parser.parse_args()
     missing = [name for name in SIGNING_ENV if not os.environ.get(name)]
@@ -173,8 +175,15 @@ def main() -> None:
         raise RuntimeError(
             "Selected key cannot update the existing Android release; use its original signing key"
         )
-    if bool(args.matrix_bridge_dir) != bool(args.matrix_bundle_dir):
-        raise RuntimeError("Provide both --matrix-bridge-dir and --matrix-bundle-dir")
+    matrix_inputs = (
+        args.matrix_bridge_dir,
+        args.matrix_bundle_dir,
+        args.matrix_profiles_dir,
+    )
+    if any(matrix_inputs) and not all(matrix_inputs):
+        raise RuntimeError(
+            "Provide the Matrix Bridge, runtime bundle and signed profiles together"
+        )
     android = root / "apps" / "android"
     command = [
         str(android / ("gradlew.bat" if os.name == "nt" else "gradlew")),
@@ -183,17 +192,46 @@ def main() -> None:
         ":app:assembleRelease",
         "--console=plain",
     ]
+    profiles: list[Path] = []
     if args.matrix_bridge_dir:
         bridge = args.matrix_bridge_dir.expanduser().resolve(strict=True)
         bundle = args.matrix_bundle_dir.expanduser().resolve(strict=True)
+        profile_dir = args.matrix_profiles_dir.expanduser().resolve(strict=True)
         if (
             not (bridge / "settings.gradle").is_file()
             or not (bundle / "bundle.json").is_file()
+            or not profile_dir.is_dir()
         ):
             raise RuntimeError(
-                "Provide a Matrix Bridge checkout and a prepared compatibility bundle"
+                "Provide a Matrix Bridge checkout, runtime bundle and profile directory"
             )
-        command.extend([f"-PmatrixBridgeDir={bridge}", f"-PmatrixBundleDir={bundle}"])
+        publisher_pem = (bridge / "profiles/signing/profile-publisher.pem").read_text()
+        publisher_der = ssl.PEM_cert_to_DER_cert(publisher_pem)
+        publisher_sha256 = hashlib.sha256(publisher_der).hexdigest()
+        profiles = sorted(
+            path
+            for path in profile_dir.iterdir()
+            if path.is_file()
+            and re.fullmatch(r"matrix-profile-[a-z][a-z0-9_]{0,63}\.apk", path.name)
+        )
+        if not profiles:
+            raise RuntimeError("No signed profiles found")
+        for profile in profiles:
+            signatures = checked(
+                [str(apksigner), "verify", "--print-certs", str(profile)]
+            )
+            if certificate_digests(signatures) != {publisher_sha256}:
+                raise RuntimeError(
+                    f"Profile signer differs from the trusted publisher: {profile.name}"
+                )
+        command.extend(
+            [
+                f"-PmatrixBridgeDir={bridge}",
+                f"-PmatrixBundleDir={bundle}",
+                f"-PmatrixProfileDir={profile_dir}",
+                f"-PmatrixProfileSignerSha256={publisher_sha256}",
+            ]
+        )
     print("Building Android release…", flush=True)
     checked(command, cwd=android)
     release_dir = android / "app" / "build" / "outputs" / "apk" / "release"
@@ -217,6 +255,29 @@ def main() -> None:
             raise RuntimeError(
                 "APK compatibility assets do not match the requested build"
             )
+        if profiles:
+            manifest = (bundle / "bundle.json").read_bytes()
+            if archive.read("assets/matrix-bridge/bundle.json") != manifest:
+                raise RuntimeError("Packaged runtime bundle differs")
+            for name, expected in json.loads(manifest)["files"].items():
+                data = archive.read("assets/matrix-bridge/" + name)
+                if (
+                    len(data) != expected["bytes"]
+                    or hashlib.sha256(data).hexdigest() != expected["sha256"]
+                ):
+                    raise RuntimeError("Packaged runtime member differs: " + name)
+            packaged = {
+                name.removeprefix("assets/")
+                for name in archive.namelist()
+                if re.fullmatch(
+                    r"assets/matrix-profile-[a-z][a-z0-9_]{0,63}\.apk", name
+                )
+            }
+            if packaged != {profile.name for profile in profiles}:
+                raise RuntimeError("Packaged profile set differs")
+            for profile in profiles:
+                if archive.read("assets/" + profile.name) != profile.read_bytes():
+                    raise RuntimeError("Packaged profile differs: " + profile.name)
     if args.previous_apk:
         previous = args.previous_apk.expanduser().resolve(strict=True)
         # Older releases may be debuggable; continuity only needs identity, signature and version code.

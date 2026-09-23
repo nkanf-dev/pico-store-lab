@@ -2,12 +2,19 @@
 
 All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and semantic versioning.
 
-## [0.2.0] - Unreleased
+## [0.2.0] - 2026-09-23
 
 ### Added
 
 - Android Lab shows the latest Lab release announcement once per version and keeps it available from the account menu.
 - Android Lab supports independently updated Matrix compatibility profiles.
+- Android Lab offers international-region PICO sign-in adaptation for supported apps, including a Virtual Desktop profile and a general profile for other Matrix apps.
+- Virtual Desktop has its own catalog page and appears among the recommended apps; the website includes a sign-in guide and a technical explanation.
+
+### Changed
+
+- Profile matching prioritizes app-specific profiles and can attempt a profile when the installed app version differs from the validated version.
+- Android warns before installing an unadapted app that depends on PICO account components.
 
 ## [0.1.3] - 2026-09-22
 
