@@ -7,10 +7,14 @@ import sys
 
 from keyring.backend import KeyringBackend
 
-from pico_store_lab.protocol import PicoAuth
+from pico_store_lab.protocol import PicoAuth, StoreRegion, validate_region
 
 SERVICE = "dev.nkanf.picostore.python"
 ACCOUNT = "current"
+
+
+def _account(region: str) -> str:
+    return ACCOUNT if validate_region(region) == "global" else "cn"
 
 
 def _backend() -> KeyringBackend:
@@ -34,33 +38,54 @@ def save(auth: PicoAuth) -> None:
     """Save a usable account session."""
     if not auth.x_tt_token and not auth.cookies:
         raise ValueError("Sign-in returned no usable session. Please sign in again.")
-    value = json.dumps({"uid": auth.uid, "x_tt_token": auth.x_tt_token, "cookies": auth.cookies})
+    account = _account(auth.region)
+    value = json.dumps(
+        {
+            "uid": auth.uid,
+            "x_tt_token": auth.x_tt_token,
+            "cookies": auth.cookies,
+            "region": auth.region,
+        }
+    )
     try:
-        _backend().set_password(SERVICE, ACCOUNT, value)
+        _backend().set_password(SERVICE, account, value)
     except Exception:
         raise RuntimeError(
             "Unable to save sign-in. Unlock the system credential store and try again."
         ) from None
 
 
-def load() -> PicoAuth:
-    """Read the current account session."""
+def load(region: StoreRegion = "global") -> PicoAuth:
+    """Read only the requested region; legacy entries belong to global."""
+    account = _account(region)
     try:
-        raw = _backend().get_password(SERVICE, ACCOUNT)
+        raw = _backend().get_password(SERVICE, account)
     except Exception:
         raise RuntimeError(
             "Unable to read sign-in. Unlock the system credential store and try again."
         ) from None
     if raw is None:
-        raise ValueError("Please run pico-store-py login first.")
+        raise ValueError(f"Please run pico-store-py --region {region} login first.")
     try:
         data = json.loads(raw)
         if not isinstance(data, dict) or not isinstance(data.get("cookies", {}), dict):
             raise ValueError
+        stored_region = data.get("region", "global")
+        if stored_region != region:
+            raise ValueError
+        if not isinstance(data.get("uid", "0"), str) or not isinstance(
+            data.get("x_tt_token", ""), str
+        ):
+            raise ValueError
+        if not all(
+            isinstance(k, str) and isinstance(v, str) for k, v in data.get("cookies", {}).items()
+        ):
+            raise ValueError
         auth = PicoAuth(
-            str(data.get("uid", "0")),
-            str(data.get("x_tt_token", "")),
-            {str(key): str(value) for key, value in data.get("cookies", {}).items()},
+            data.get("uid", "0"),
+            data.get("x_tt_token", ""),
+            data.get("cookies", {}),
+            validate_region(stored_region),
         )
         if not auth.x_tt_token and not auth.cookies:
             raise ValueError
@@ -69,12 +94,13 @@ def load() -> PicoAuth:
     return auth
 
 
-def clear() -> None:
-    """Remove the current account session."""
+def clear(region: StoreRegion = "global") -> None:
+    """Remove only the selected region's account session."""
+    account = _account(region)
     try:
         backend = _backend()
-        if backend.get_password(SERVICE, ACCOUNT) is not None:
-            backend.delete_password(SERVICE, ACCOUNT)
+        if backend.get_password(SERVICE, account) is not None:
+            backend.delete_password(SERVICE, account)
     except Exception:
         raise RuntimeError(
             "Could not sign out. Unlock the system credential store and try again."

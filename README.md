@@ -88,6 +88,17 @@ pico-store-py logout
 
 On Windows, activate the environment with `.venv\Scripts\Activate.ps1` instead. Choose a new output filename. After downloading, install the APK on your headset using its installer or `adb install -r ./selected-app.apk`. Run `pico-store-py --help` for more options.
 
+The Python CLI also supports the mainland China store. Use `--region cn` with your China account's phone number:
+
+```sh
+pico-store-py --region cn search AeriPane
+pico-store-py --region cn send-code --mobile YOUR_PHONE_NUMBER
+pico-store-py --region cn login --mobile YOUR_PHONE_NUMBER
+pico-store-py --region cn download --item-id 7680447105202274345 --package com.aeripane.pico --output ./AeriPane.apk
+```
+
+Enter your SMS code when prompted. Need a China account? [Register with PICO](https://sso.picoxr.com/passport), then return to sign in. International and China sign-ins stay separate; omit `--region` to continue using the international store. See the [Python guide](packages/python/README.md) for more options.
+
 ## For developers
 
 PICO Store Lab includes SDKs for searching apps, retrieving app details, email sign-in, and downloads. See each package’s README for examples and configuration.

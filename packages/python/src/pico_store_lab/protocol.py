@@ -16,6 +16,14 @@ ACCOUNT_HOST = "https://matrix-us.picovr.com"
 OFFICIAL_STORE_URL = f"https://store-global.picoxr.com/jp/detail/1/{PICO_ITEM_ID}"
 STORE_VERSION = "401200000"
 DEVICE_NAME = "A9210"
+StoreRegion = Literal["global", "cn"]
+
+
+def validate_region(region: str) -> StoreRegion:
+    """Accept only an explicit supported account region."""
+    if region not in ("global", "cn"):
+        raise ValueError("region must be global or cn")
+    return region  # type: ignore[return-value]
 
 
 @dataclass(frozen=True, slots=True)
@@ -64,6 +72,36 @@ class StoreConfig:
     zone: str = "Asia/Shanghai"
     passport_aid: str = "308733"
     device_platform: str = "android"
+    region: StoreRegion = "global"
+
+    def __post_init__(self) -> None:
+        """Reject contradictory official endpoint and account regions."""
+        validate_region(self.region)
+        for host, cn_host, global_host in (
+            (self.store_host, "https://appstore-cn.picoxr.com", STORE_HOST),
+            (self.account_host, "https://matrix-cn.picovr.com", ACCOUNT_HOST),
+            (self.web_store_host, "https://store.picoxr.com", "https://store-global.picoxr.com"),
+        ):
+            if host.rstrip("/") == (global_host if self.region == "cn" else cn_host):
+                raise ValueError("official endpoint does not match the selected region")
+
+    @classmethod
+    def for_region(cls, region: str) -> StoreConfig:
+        """Select the international store or mainland China store."""
+        if validate_region(region) == "global":
+            return cls()
+        return cls(
+            region="cn",
+            store_host="https://appstore-cn.picoxr.com",
+            account_host="https://matrix-cn.picovr.com",
+            web_store_host="https://store.picoxr.com",
+            web_region="cn",
+            manifest_version_code="401000505",
+            device_name="B3110",
+            app_id="8562",
+            language="zh",
+            passport_aid="305817",
+        )
 
 
 DEFAULT_CONFIG = StoreConfig()
@@ -93,8 +131,13 @@ class PicoAuth:
     """PICO account session for download metadata requests."""
 
     uid: str = "0"
-    x_tt_token: str = ""
-    cookies: dict[str, str] = field(default_factory=dict)
+    x_tt_token: str = field(default="", repr=False)
+    cookies: dict[str, str] = field(default_factory=dict, repr=False)
+    region: StoreRegion = "global"
+
+    def __post_init__(self) -> None:
+        """Keep region identity explicit without displaying credentials."""
+        validate_region(self.region)
 
 
 @dataclass(frozen=True, slots=True)
@@ -185,7 +228,9 @@ def make_public_item_request(
     )
 
 
-def _auth_headers(auth: PicoAuth) -> dict[str, str]:
+def _auth_headers(auth: PicoAuth, config: StoreConfig) -> dict[str, str]:
+    if auth.region != config.region:
+        raise ValueError("session region does not match the selected store region")
     if not auth.x_tt_token and not auth.cookies:
         raise ValueError("authenticated PICO session required")
     headers: dict[str, str] = {}
@@ -212,7 +257,7 @@ def make_account_item_request(
             config=config,
         ),
         "POST",
-        {**request.headers, **_auth_headers(auth)},
+        {**request.headers, **_auth_headers(auth, config)},
         request.body,
     )
 
@@ -237,7 +282,11 @@ def make_free_acquisition_request(
             config=config,
         ),
         "POST",
-        {"Content-Type": "application/json", "Locale": config.language, **_auth_headers(auth)},
+        {
+            "Content-Type": "application/json",
+            "Locale": config.language,
+            **_auth_headers(auth, config),
+        },
         body,
     )
 
@@ -365,6 +414,8 @@ def make_account_request(
     config: StoreConfig = DEFAULT_CONFIG,
 ) -> RequestSpec:
     """Build a PICO email verification or login request."""
+    if config.region != "global":
+        raise ValueError("use mobile verification for the China region")
     if re.fullmatch(r"\S+@\S+\.\S+", email) is None:
         raise ValueError("valid email required")
     if kind not in ("send-code", "login") or (kind == "login" and not code):
@@ -372,6 +423,62 @@ def make_account_request(
     path = (
         "/passport/email/send_code/" if kind == "send-code" else "/passport/app/email/code_login/"
     )
+    return _account_form(
+        path,
+        fields=(
+            {
+                "email": encode_account_field(email),
+                "type": encode_account_field("13"),
+                "email_logic_type": "0",
+                "mix_mode": "1",
+            }
+            if kind == "send-code"
+            else {
+                "email": encode_account_field(email),
+                "ect_type": "13",
+                "code": encode_account_field(code or ""),
+                "mix_mode": "1",
+                "email_logic_type": "0",
+            }
+        ),
+        config=config,
+    )
+
+
+def make_mobile_account_request(
+    kind: Literal["send-code", "login"],
+    mobile: str,
+    code: str | None = None,
+    *,
+    country_code: str = "86",
+    config: StoreConfig = DEFAULT_CONFIG,
+) -> RequestSpec:
+    """Build China's SMS code request or existing-account sign-in request."""
+    if config.region != "cn":
+        raise ValueError("mobile verification requires the China region")
+    if re.fullmatch(r"[1-9][0-9]{0,2}", country_code) is None:
+        raise ValueError("country code must contain digits without +")
+    if re.fullmatch(r"[0-9]{5,14}", mobile) is None or len(country_code + mobile) > 15:
+        raise ValueError("valid mobile number required; pass the country code separately")
+    if country_code == "86" and re.fullmatch(r"1[3-9][0-9]{9}", mobile) is None:
+        raise ValueError("valid mainland China mobile number required")
+    if kind not in ("send-code", "login"):
+        raise ValueError("invalid account action")
+    if kind == "login" and (not code or re.fullmatch(r"[0-9]{6}", code) is None):
+        raise ValueError("six-digit SMS verification code required")
+    fields = {"mobile": encode_account_field(f"+{country_code} {mobile}"), "mix_mode": "1"}
+    if kind == "send-code":
+        fields.update(
+            type=encode_account_field("24"), unbind_exist=encode_account_field("0"), auto_read="0"
+        )
+        path = "/passport/mobile/send_code/v1/"
+    else:
+        fields["code"] = encode_account_field(code or "")
+        path = "/passport/mobile/sms_login_only/"
+    return _account_form(path, fields, config)
+
+
+def _account_form(path: str, fields: dict[str, str], config: StoreConfig) -> RequestSpec:
     query = urlencode(
         {
             "multi_login": "1",
@@ -379,22 +486,6 @@ def make_account_request(
             "passport-sdk-version": "30490",
             "aid": config.passport_aid,
             "device_platform": config.device_platform,
-        }
-    )
-    fields = (
-        {
-            "email": encode_account_field(email),
-            "type": encode_account_field("13"),
-            "email_logic_type": "0",
-            "mix_mode": "1",
-        }
-        if kind == "send-code"
-        else {
-            "email": encode_account_field(email),
-            "ect_type": "13",
-            "code": encode_account_field(code or ""),
-            "mix_mode": "1",
-            "email_logic_type": "0",
         }
     )
     return RequestSpec(
@@ -416,7 +507,11 @@ def make_download_info_request(
 ) -> RequestSpec:
     """Build an authenticated download-info request without rounding the item ID."""
     language = language or config.language
-    headers = {"Content-Type": "application/json", "Locale": language, **_auth_headers(auth)}
+    headers = {
+        "Content-Type": "application/json",
+        "Locale": language,
+        **_auth_headers(auth, config),
+    }
     return RequestSpec(
         _store_url(
             "/api/app/v1/download/info",

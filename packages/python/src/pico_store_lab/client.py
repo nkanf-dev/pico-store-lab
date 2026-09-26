@@ -26,6 +26,7 @@ from pico_store_lab.protocol import (
     make_account_request,
     make_download_info_request,
     make_free_acquisition_request,
+    make_mobile_account_request,
     make_public_item_request,
     make_search_request,
     parse_download_info,
@@ -76,6 +77,16 @@ def send_request(spec: RequestSpec, retries: int = 3) -> StoreResponse:
 def _account_data(response: StoreResponse) -> dict[str, object]:
     data = response.data
     if not isinstance(data, dict) or data.get("message") != "success":
+        body = data.get("data") if isinstance(data, dict) else None
+        code = body.get("error_code") if isinstance(body, dict) else None
+        if type(code) is int:
+            if code == 7:
+                raise RuntimeError("PICO rate limit reached. Wait before requesting another code.")
+            if code in (1104, 1105):
+                raise RuntimeError(
+                    "PICO requires additional verification. Complete it on PICO's sign-in page."
+                )
+            raise RuntimeError(f"PICO account request rejected (code {code})")
         raise RuntimeError("PICO account request rejected")
     body = data.get("data")
     return body if isinstance(body, dict) else {}
@@ -192,18 +203,43 @@ class PicoStoreClient:
     def login(self, email: str, code: str) -> PicoAuth:
         """Exchange the email code for the caller's PICO account session."""
         response = self.transport(make_account_request("login", email, code, self.config), 1)
+        return self._login_session(response)
+
+    def send_mobile_code(self, mobile: str, *, country_code: str = "86") -> None:
+        """Send one SMS code to an existing China-region account."""
+        request = make_mobile_account_request(
+            "send-code", mobile, country_code=country_code, config=self.config
+        )
+        _account_data(self.transport(request, 1))
+
+    def login_mobile(self, mobile: str, code: str, *, country_code: str = "86") -> PicoAuth:
+        """Exchange a China SMS code without registering a new account."""
+        request = make_mobile_account_request(
+            "login", mobile, code, country_code=country_code, config=self.config
+        )
+        return self._login_session(self.transport(request, 1))
+
+    def _login_session(self, response: StoreResponse) -> PicoAuth:
         data = _account_data(response)
+        if self.config.region == "cn" and data.get("sms_code_key"):
+            raise RuntimeError("Register your account on PICO's website, then sign in again.")
+        user_id = data.get("user_id_str") or data.get("user_id")
+        if isinstance(user_id, bool) or re.fullmatch(r"[1-9][0-9]{0,19}", str(user_id)) is None:
+            raise RuntimeError("PICO login returned no valid account identity")
         cookies: dict[str, str] = {}
         for line in response.headers.get_all("Set-Cookie", []):
             key, separator, value = line.split(";", 1)[0].partition("=")
             if separator:
                 cookies[key] = value
         auth = PicoAuth(
-            str(data.get("user_id_str") or data.get("user_id") or "0"),
+            str(user_id),
             str(response.headers.get("x-tt-token", "")),
             cookies,
+            self.config.region,
         )
-        if not auth.x_tt_token and not auth.cookies:
+        if not auth.x_tt_token and not any(
+            auth.cookies.get(name) for name in ("sessionid", "sessionid_ss", "sid_tt")
+        ):
             raise RuntimeError("PICO login returned no usable session")
         return auth
 

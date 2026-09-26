@@ -17,13 +17,41 @@ auth = client.login(email, code_from_user)
 client.download(target, auth, Path("selected-app.apk"))
 ```
 
-Configure the request identity and region with `StoreConfig`:
+Choose the store with `StoreConfig.for_region("global")` (the default) or `StoreConfig.for_region("cn")` for mainland China. China accounts sign in with a phone number and SMS code:
 
 ```python
 from pico_store_lab import StoreConfig
 
+client = PicoStoreClient(config=StoreConfig.for_region("cn"))
+client.send_mobile_code(mobile, country_code="86")
+auth = client.login_mobile(mobile, code_from_user, country_code="86")
+found = client.search("AeriPane").items[0]
+client.download(StoreTarget(found.item_id, found.package_name), auth, Path("AeriPane.apk"))
+```
+
+Use the same region throughout search, sign-in, and download. International and China accounts have separate sign-ins and app libraries. The China login method signs in to an existing account; register at [PICO](https://sso.picoxr.com/passport) first if needed. If PICO asks for extra verification or limits code requests, finish its verification or wait before trying again.
+
+The CLI keeps each region's sign-in available independently. Replace `YOUR_PHONE_NUMBER` with your number, without the country code:
+
+```sh
+pico-store-py --region cn search AeriPane
+pico-store-py --region cn send-code --mobile YOUR_PHONE_NUMBER
+pico-store-py --region cn login --mobile YOUR_PHONE_NUMBER
+pico-store-py --region cn download --item-id 7680447105202274345 --package com.aeripane.pico --output ./AeriPane.apk
+pico-store-py --region cn logout
+```
+
+Enter the SMS code at the hidden prompt. Use `--country-code` on `send-code` and `login` for a different dialing code. Omit `--region` to use your international account as before. `--locale zh-CN` changes CLI messages; it does not change the store. To select a headset model, use `--device`, for example `pico-store-py --region cn --device B3110 search AeriPane`.
+
+Customize a region's request identity with `dataclasses.replace`:
+
+```python
+from dataclasses import replace
+from pico_store_lab import StoreConfig
+
 client = PicoStoreClient(
-    config=StoreConfig(
+    config=replace(
+        StoreConfig.for_region("global"),
         device_name="YOUR_DEVICE", language="en", zone="Europe/London", web_region="uk"
     )
 )
