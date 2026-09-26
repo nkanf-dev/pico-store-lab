@@ -88,6 +88,17 @@ pico-store-py logout
 
 Windows 用户请改用 `.venv\Scripts\Activate.ps1` 激活虚拟环境。请选择尚未存在的输出文件名。下载后，用头显安装器或 `adb install -r ./selected-app.apk` 安装。更多选项见 `pico-store-py --help`。
 
+Python 命令行也支持国区商店。添加 `--region cn`，使用国区账号的手机号登录：
+
+```sh
+pico-store-py --region cn search AeriPane
+pico-store-py --region cn send-code --mobile 你的手机号
+pico-store-py --region cn login --mobile 你的手机号
+pico-store-py --region cn download --item-id 7680447105202274345 --package com.aeripane.pico --output ./AeriPane.apk
+```
+
+按提示输入短信验证码即可。还没有国区账号？先到 [PICO 官网注册](https://sso.picoxr.com/passport)，再回来登录。国区和国际区分别登录；不加 `--region` 时仍使用国际区商店。更多用法见 [Python 指南](packages/python/README.md)。
+
 ## 开发者文档
 
 项目提供四种语言的 SDK，支持应用搜索、详情查询、邮箱登录和下载。使用示例和配置方法见各 SDK 的 README。

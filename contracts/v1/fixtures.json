@@ -7,5 +7,44 @@
   "apkSize": 333887069,
   "md5": "30de936aef365fb14a7d6e8d3cd1a5ec",
   "publicResponse": "{\"code\":0,\"data\":{\"item_id\":7288745304105664518,\"package_name\":\"com.vrchat.android\",\"name\":\"VRChat\",\"version_code\":972240,\"price\":\"0\"}}",
-  "downloadResponse": "{\"code\":0,\"data\":{\"item_id\":7288745304105664518,\"package\":{\"package_name\":\"com.vrchat.android\",\"path\":\"https://cdn.example.test/app.apk\",\"size\":333887069,\"md5\":\"30de936aef365fb14a7d6e8d3cd1a5ec\",\"version_code\":972240,\"version\":\"2026.3.2p2\"}}}"
+  "downloadResponse": "{\"code\":0,\"data\":{\"item_id\":7288745304105664518,\"package\":{\"package_name\":\"com.vrchat.android\",\"path\":\"https://cdn.example.test/app.apk\",\"size\":333887069,\"md5\":\"30de936aef365fb14a7d6e8d3cd1a5ec\",\"version_code\":972240,\"version\":\"2026.3.2p2\"}}}",
+  "china": {
+    "storeAppId": "8562",
+    "passportAid": "305817",
+    "itemId": "7680447105202274345",
+    "packageName": "com.aeripane.pico",
+    "publicResponse": {
+      "code": 0,
+      "data": {
+        "item_id": 7680447105202274345,
+        "package_name": "com.aeripane.pico",
+        "name": "AeriPane",
+        "version_code": 26,
+        "price": "0.00",
+        "currency": "CNY",
+        "entitlement_status": 2,
+        "is_offer_exist": true
+      }
+    },
+    "sms": {
+      "send-code": {
+        "path": "/passport/mobile/send_code/v1/",
+        "fields": {
+          "mobile": "2e3d3325343c3c3535353535353535",
+          "type": "3731",
+          "unbind_exist": "35",
+          "mix_mode": "1",
+          "auto_read": "0"
+        }
+      },
+      "login": {
+        "path": "/passport/mobile/sms_login_only/",
+        "fields": {
+          "mobile": "2e3d3325343c3c3535353535353535",
+          "code": "343736313033",
+          "mix_mode": "1"
+        }
+      }
+    }
+  }
 }
