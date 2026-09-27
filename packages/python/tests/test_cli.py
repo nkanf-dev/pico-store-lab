@@ -4,7 +4,7 @@ import io
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from pico_store_lab import PicoAuth
 from pico_store_lab.cli import main
@@ -79,6 +79,20 @@ class CliTests(unittest.TestCase):
             self.assertEqual(caught.exception.code, 2)
             factory.assert_not_called()
             prompt.assert_not_called()
+
+    def test_search_prints_utf8_chinese_without_unicode_escapes(self) -> None:
+        r"""Non-ASCII names are printed literally instead of \uXXXX escapes."""
+        fake_item = Mock(item_id="1", package_name="com.example", version_code=1)
+        fake_item.name = "互联"
+        with (
+            patch("pico_store_lab.cli.PicoStoreClient") as factory,
+            redirect_stdout(io.StringIO()) as out,
+        ):
+            factory.return_value.search.return_value.items = [fake_item]
+            self.assertEqual(main(["--region", "cn", "search", "互联"]), 0)
+        rendered = out.getvalue()
+        self.assertIn("互联", rendered)
+        self.assertNotIn("\\u4e92", rendered)
 
     def test_failed_login_preserves_existing_session(self) -> None:
         """Never replace a good saved session after a rejected verification code."""

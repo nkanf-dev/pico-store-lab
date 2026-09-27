@@ -80,6 +80,11 @@ def main(argv: list[str] | None = None) -> int:
     """Run one command; return a process exit status without leaking credentials."""
     parser = build_parser()
     args = parser.parse_args(argv)
+    if hasattr(sys.stdout, "reconfigure"):
+        try:
+            sys.stdout.reconfigure(encoding="utf-8")
+        except Exception:  # noqa: BLE001 - best-effort console encoding
+            pass
     if args.command in ("send-code", "login"):
         if args.region == "cn" and not args.mobile:
             parser.error("--region cn requires --mobile")
@@ -104,6 +109,7 @@ def main(argv: list[str] | None = None) -> int:
                         for item in result.items
                     ],
                     indent=2,
+                    ensure_ascii=False,
                 )
             )
         elif args.command == "status":
@@ -118,6 +124,7 @@ def main(argv: list[str] | None = None) -> int:
                         "officialUrl": item.official_url,
                     },
                     indent=2,
+                    ensure_ascii=False,
                 )
             )
         elif args.command == "send-code":
