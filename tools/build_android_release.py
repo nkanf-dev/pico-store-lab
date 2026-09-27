@@ -189,7 +189,7 @@ def main() -> None:
         str(android / ("gradlew.bat" if os.name == "nt" else "gradlew")),
         "--no-daemon",
         "--no-configuration-cache",
-        ":app:testReleaseUnitTest",
+        ":app:testDebugUnitTest",
         ":app:assembleRelease",
         "--console=plain",
     ]
