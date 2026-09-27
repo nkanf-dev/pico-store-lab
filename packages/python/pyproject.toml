@@ -8,7 +8,7 @@ version = "0.2.1"
 description = "PICO app search, sign-in, and downloads for Python and the command line"
 readme = "README.md"
 requires-python = ">=3.11"
-dependencies = ["keyring>=25.6,<26"]
+dependencies = ["keyring>=25.6,<26", "websocket-client>=1.8,<2"]
 license = "MIT"
 authors = [{ name = "PICO Store Lab contributors" }]
 keywords = ["pico", "vr", "sdk", "store"]

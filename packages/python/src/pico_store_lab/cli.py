@@ -63,6 +63,11 @@ def build_parser() -> argparse.ArgumentParser:
         account.add_argument(
             "--country-code", default="86", help="Phone country code (default: 86)"
         )
+    sub.add_parser(
+        "login-window",
+        aliases=["login-gui"],
+        help="Open the official login window, then save the session automatically",
+    )
     sub.add_parser("logout", help="Sign out")
     download = sub.add_parser("download", help="Download an app")
     download.add_argument("--output", required=True, type=Path)
@@ -129,6 +134,12 @@ def main(argv: list[str] | None = None) -> int:
             else:
                 code = getpass.getpass("PICO email code: ")
                 auth = client.login(args.email, code)
+            credentials.save(auth)
+            print(_message(args.locale, "saved"))
+        elif args.command in ("login-window", "login-gui"):
+            from pico_store_lab.browser_login import capture_login
+
+            auth = capture_login(config)
             credentials.save(auth)
             print(_message(args.locale, "saved"))
         elif args.command == "logout":

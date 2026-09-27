@@ -43,6 +43,22 @@ pico-store-py --region cn logout
 
 Enter the SMS code at the hidden prompt. Use `--country-code` on `send-code` and `login` for a different dialing code. Omit `--region` to use your international account as before. `--locale zh-CN` changes CLI messages; it does not change the store. To select a headset model, use `--device`, for example `pico-store-py --region cn --device B3110 search AeriPane`.
 
+For a sign-in without copying cookies, use `login-window` (alias `login-gui`). It opens the official PICO login page in a dedicated browser window, closes the window automatically after you sign in, verifies the session with the account service, and saves that region's sign-in:
+
+```sh
+pico-store-py --region cn login-window
+```
+
+Microsoft Edge or Google Chrome must be installed. The window uses an isolated temporary browser profile, so your normal browser profile and cookies are never touched. Closing the window before signing in cancels the command. From Python, call `capture_login`:
+
+```python
+from pico_store_lab import StoreConfig, credentials
+from pico_store_lab.browser_login import capture_login
+
+auth = capture_login(StoreConfig.for_region("cn"))
+credentials.save(auth)
+```
+
 Customize a region's request identity with `dataclasses.replace`:
 
 ```python

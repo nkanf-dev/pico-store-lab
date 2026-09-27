@@ -99,6 +99,14 @@ pico-store-py --region cn download --item-id 7680447105202274345 --package com.a
 
 按提示输入短信验证码即可。还没有国区账号？先到 [PICO 官网注册](https://sso.picoxr.com/passport)，再回来登录。国区和国际区分别登录；不加 `--region` 时仍使用国际区商店。更多用法见 [Python 指南](packages/python/README.md)。
 
+不想手动抓 Cookie，可以用弹窗登录命令 `login-window`（别名 `login-gui`）。它会打开 PICO 官方登录窗口，登录成功后自动关闭窗口，校验会话并保存：
+
+```sh
+pico-store-py --region cn login-window
+```
+
+需要本机安装 Microsoft Edge 或 Google Chrome。窗口使用独立的临时浏览器配置，不会读取或改动你日常浏览器的资料；在登录前关闭窗口即取消本次登录。
+
 ## 开发者文档
 
 项目提供四种语言的 SDK，支持应用搜索、详情查询、邮箱登录和下载。使用示例和配置方法见各 SDK 的 README。
