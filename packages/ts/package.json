@@ -1,6 +1,6 @@
 {
   "name": "@nkanf-dev/pico-store-sdk",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "type": "module",
   "description": "Typed PICO store protocol and release policy SDK",
   "license": "MIT",

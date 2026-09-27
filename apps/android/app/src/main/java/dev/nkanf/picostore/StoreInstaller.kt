@@ -2,20 +2,14 @@ package dev.nkanf.picostore
 
 import android.app.PendingIntent
 import android.content.BroadcastReceiver
-import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageInstaller
-import android.net.Uri
 import android.os.Environment
-import android.provider.MediaStore
 import androidx.core.content.ContextCompat
 import dev.nkanf.picostore.sdk.DownloadInfo
 import java.io.File
-import java.net.HttpURLConnection
-import java.net.URL
-import java.security.MessageDigest
 
 internal class StoreInstaller(private val context: Context, private val onInstalled: () -> Unit = {}, private val report: (String) -> Unit) {
     private val action = "${context.packageName}.INSTALL_RESULT"
@@ -44,91 +38,22 @@ internal class StoreInstaller(private val context: Context, private val onInstal
 
     fun close() = context.unregisterReceiver(receiver)
 
-    fun download(info: DownloadInfo, onProgress: (Long, Long?) -> Unit): File {
-        val name = "${info.packageName}-${info.versionCode}.apk"
-        val dir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "PICO Store Lab")
-        val preferredFile = File(dir, name)
-        if (preferredFile.exists() && isVerified(preferredFile, info)) {
-            onProgress(preferredFile.length(), preferredFile.length())
-            return preferredFile
-        }
-        val values = ContentValues().apply {
-            put(MediaStore.Downloads.DISPLAY_NAME, name)
-            put(MediaStore.Downloads.MIME_TYPE, "application/vnd.android.package-archive")
-            put(MediaStore.Downloads.RELATIVE_PATH, "${Environment.DIRECTORY_DOWNLOADS}/PICO Store Lab/")
-            put(MediaStore.Downloads.IS_PENDING, 1)
-        }
-        val resolver = context.contentResolver
-        val collection = MediaStore.Downloads.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
-        var failure: Exception? = null
-        repeat(3) { attempt ->
-            val row = resolver.insert(collection, values) ?: error("Unable to create Downloads entry")
-            try {
-                val digest = MessageDigest.getInstance("MD5")
-                val connection = URL(info.url).openConnection() as HttpURLConnection
-                try {
-                    connection.connectTimeout = 60_000
-                    connection.readTimeout = 60_000
-                    check(connection.responseCode in 200..299) { "APK HTTP ${connection.responseCode}" }
-                    val total = connection.contentLengthLong.takeIf { it > 0 }
-                    var received = 0L
-                    var reported = 0L
-                    onProgress(0, total)
-                    resolver.openOutputStream(row, "w")!!.use { output ->
-                        connection.inputStream.use { input ->
-                            val buffer = ByteArray(65_536)
-                            while (true) {
-                                val size = input.read(buffer)
-                                if (size < 0) break
-                                digest.update(buffer, 0, size)
-                                output.write(buffer, 0, size)
-                                received += size
-                                if (received - reported >= 1_048_576 || received == total) {
-                                    onProgress(received, total)
-                                    reported = received
-                                }
-                            }
-                        }
-                        output.flush()
-                    }
-                    onProgress(received, total)
-                } finally { connection.disconnect() }
-                check(digest.digest().joinToString("") { "%02x".format(it.toInt() and 255) } == info.md5) {
-                    "APK checksum mismatch"
-                }
-                resolver.update(row, ContentValues().apply { put(MediaStore.Downloads.IS_PENDING, 0) }, null, null)
-                val path = resolver.query(row, arrayOf(MediaStore.MediaColumns.DATA), null, null, null)
-                    ?.use { cursor ->
-                        if (cursor.moveToFirst()) cursor.getString(0) else null
-                    } ?: error("Downloaded APK path unavailable")
-                val downloadedFile = File(path)
-                check(isVerified(downloadedFile, info)) { "Downloaded APK package or version mismatch" }
-                return downloadedFile
-            } catch (error: Exception) {
-                resolver.delete(row, null, null)
-                failure = error
-                if (error.message == "APK checksum mismatch" || error.message == "Downloaded APK package or version mismatch") throw error
-                if (attempt < 2) Thread.sleep((attempt + 1) * 1_000L)
-            }
-        }
-        error("APK download failed: ${failure?.message}")
-    }
+    private val downloads = ApkDownload(File(
+        context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS) ?: context.filesDir, "original-apks"))
 
-    private fun isVerified(file: File, info: DownloadInfo): Boolean {
-        if (!file.exists() || file.length() == 0L) return false
-        val packageInfo = context.packageManager.getPackageArchiveInfo(file.absolutePath, 0) ?: return false
-        if (packageInfo.packageName != info.packageName || packageInfo.longVersionCode != info.versionCode) return false
-        val digest = MessageDigest.getInstance("MD5")
-        file.inputStream().use { stream ->
-            val buffer = ByteArray(65_536)
-            while (true) {
-                val size = stream.read(buffer)
-                if (size < 0) break
-                digest.update(buffer, 0, size)
+    fun download(info: DownloadInfo, onProgress: (Long, Long?) -> Unit): File =
+        try { downloads.download(info, onProgress) }
+        catch (error: ApkDownloadException) {
+            val message = when (error.code) {
+                "apk_package" -> R.string.apk_package_mismatch
+                "apk_version" -> R.string.apk_version_mismatch
+                "apk_integrity" -> R.string.apk_integrity_failed
+                "apk_invalid" -> R.string.apk_invalid
+                "apk_network" -> R.string.apk_network_failed
+                else -> R.string.apk_transfer_failed
             }
+            throw IllegalStateException(context.getString(message), error)
         }
-        return digest.digest().joinToString("") { "%02x".format(it.toInt() and 255) } == info.md5
-    }
 
     fun install(apk: File) {
         val installer = context.packageManager.packageInstaller

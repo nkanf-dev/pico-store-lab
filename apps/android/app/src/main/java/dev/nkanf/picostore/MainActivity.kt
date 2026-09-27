@@ -330,7 +330,7 @@ class MainActivity : ComponentActivity() {
             error(getString(resource))
         }
         runOnUiThread { downloadProgress.value = null }
-        installation.install(apk, InstallVariant.ORIGINAL)
+        installer.install(apk)
     }
 
     private fun checkProfileUpdates() = work {
@@ -430,27 +430,22 @@ class MainActivity : ComponentActivity() {
                 message.value = getString(R.string.checking_application)
             }
             if (installationChoice == InstallVariant.ORIGINAL) {
-                // Keep detection history while honoring an explicit original install or a no-adaptation rule.
-                val inspected = runCatching {
-                    val inspected = installation.inspect(apk)
-                    check(inspected.packageName == target.packageName && inspected.versionCode == info.versionCode)
-                    compatibilityHistory.remember(inspected)
-                    inspected
-                }.getOrNull()
                 showDetail(current.copy(versionCode = info.versionCode, appVersion = info.version))
-                if (noAdaptation.reason(target.packageName) == null &&
-                    inspected?.compatibility in setOf(AppCompatibility.PROFILE, AppCompatibility.PROFILE_CANDIDATE, AppCompatibility.MATRIX)) {
-                    runOnUiThread {
-                        pendingInstallation = PendingInstallation(apk, target.packageName)
-                        originalWarningName.value = current.name
-                        message.value = ""
-                    }
-                } else installDownloaded(apk, target.packageName, InstallVariant.ORIGINAL)
+                installDownloaded(apk, target.packageName, InstallVariant.ORIGINAL)
                 return@work
             }
-            val inspected = installation.inspect(apk)
-            check(inspected.packageName == target.packageName && inspected.versionCode == info.versionCode) {
-                getString(R.string.install_failed)
+            val inspected = inspectForAdaptation(installationChoice) {
+                installation.inspect(apk).also {
+                    check(it.packageName == target.packageName && it.versionCode == info.versionCode) {
+                        getString(R.string.application_check_failed)
+                    }
+                }
+            }
+            if (inspected == null) {
+                // The download has already passed byte integrity and manifest identity checks.
+                showDetail(current.copy(versionCode = info.versionCode, appVersion = info.version))
+                installDownloaded(apk, target.packageName, InstallVariant.ORIGINAL)
+                return@work
             }
             // Persist the detection before showing a choice, including when it is declined.
             compatibilityHistory.remember(inspected)
@@ -491,8 +486,12 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun installDownloaded(apk: File, packageName: String, variant: InstallVariant) {
-        val updating = installation.installed(packageName).copyFor(variant) != null
-        try { installation.install(apk, variant) }
+        val updating = if (variant == InstallVariant.ORIGINAL) InstalledApplications.read(this, packageName) != null
+            else installation.installed(packageName).adapted != null
+        try {
+            if (variant == InstallVariant.ORIGINAL) installer.install(apk)
+            else installation.install(apk, variant)
+        }
         catch (failure: Exception) {
             val reason = failure.message ?: getString(R.string.install_failed)
             error(if (updating) "$reason\n${getString(R.string.current_version_retained)}" else reason)

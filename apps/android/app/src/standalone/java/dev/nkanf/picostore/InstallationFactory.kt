@@ -7,8 +7,8 @@ internal object InstallationFactory {
     fun create(context: Context, downloader: StoreInstaller, changed: () -> Unit = {}, report: (String) -> Unit): AppInstallation =
         object : AppInstallation {
             override fun inspect(apk: File): InspectedApp {
-                val info = checkNotNull(context.packageManager.getPackageArchiveInfo(apk.absolutePath, 0))
-                return InspectedApp(AppCompatibility.ORDINARY, info.packageName, info.longVersionCode, "")
+                val info = ApkIdentity.read(apk)
+                return InspectedApp(AppCompatibility.ORDINARY, info.packageName, info.versionCode, "")
             }
             override fun install(apk: File, variant: InstallVariant) = downloader.install(apk)
             override fun installed(packageName: String) = InstalledCopies(InstalledApplications.read(context, packageName))

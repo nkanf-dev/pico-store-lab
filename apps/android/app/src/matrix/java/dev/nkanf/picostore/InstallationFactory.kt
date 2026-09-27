@@ -101,6 +101,10 @@ internal object InstallationFactory {
                 return InspectedApp(compatibility, result.packageName, result.versionCode, result.inputSha256)
             }
             override fun install(apk: File, variant: InstallVariant) {
+                if (variant == InstallVariant.ORIGINAL) {
+                    downloader.install(apk)
+                    return
+                }
                 try {
                     val mode = if (variant == InstallVariant.ORIGINAL) MatrixInstaller.Mode.ORIGINAL
                         else MatrixInstaller.Mode.ADAPTED

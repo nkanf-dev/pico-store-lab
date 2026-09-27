@@ -1,0 +1,1 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="org.picolab.fixture" android:versionCode="42" android:versionCodeMajor="1"><uses-sdk android:minSdkVersion="35" android:targetSdkVersion="35"/><application android:hasCode="false"/></manifest>

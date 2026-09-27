@@ -27,7 +27,13 @@
     <string name="complete_purchase">Complete the purchase on the official store, then return here.</string>
     <string name="purchase_ready">This app is now in your account. Tap Download.</string>
     <string name="purchase_not_confirmed">This app has not been added to your account yet.</string>
-    <string name="downloading">Downloading to Downloads/PICO Store Lab…</string>
+    <string name="downloading">Downloading app…</string>
+    <string name="apk_package_mismatch">PICO returned a different app. Please select the app again and retry.</string>
+    <string name="apk_version_mismatch">The downloaded version differs from PICO’s download information. Please try again later.</string>
+    <string name="apk_integrity_failed">The download is incomplete or damaged. Please download it again.</string>
+    <string name="apk_invalid">Could not read this installation package. Please download it again.</string>
+    <string name="apk_network_failed">Could not download from PICO. Please check your connection and try again.</string>
+    <string name="apk_transfer_failed">Could not save the download. Check your connection and available storage, then try again.</string>
     <string name="download_progress">%1$d / %2$d MiB</string>
     <string name="download_received">%1$d MiB received</string>
     <string name="theme_system">Theme: System</string>
