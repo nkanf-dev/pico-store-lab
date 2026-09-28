@@ -108,6 +108,21 @@ class CliTests(unittest.TestCase):
             self.assertEqual(main(["--region", "cn", "login", "--mobile", "19900000000"]), 1)
             save.assert_not_called()
 
+    def test_login_window_accepts_explicit_browser_path(self) -> None:
+        """Pass a path with spaces through argparse to the login window."""
+        auth = PicoAuth("123", "", region="global")
+        browser = Path("/opt/Custom Browser/chrome")
+        with (
+            patch("pico_store_lab.cli.PicoStoreClient"),
+            patch("pico_store_lab.browser_login.capture_login", return_value=auth) as capture,
+            patch("pico_store_lab.cli.credentials.save") as save,
+            redirect_stdout(io.StringIO()),
+        ):
+            self.assertEqual(main(["login-window", "--browser", str(browser)]), 0)
+        capture.assert_called_once()
+        self.assertEqual(capture.call_args.kwargs["browser_path"], browser)
+        save.assert_called_once_with(auth)
+
 
 if __name__ == "__main__":
     unittest.main()

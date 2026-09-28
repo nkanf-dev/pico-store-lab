@@ -63,10 +63,16 @@ def build_parser() -> argparse.ArgumentParser:
         account.add_argument(
             "--country-code", default="86", help="Phone country code (default: 86)"
         )
-    sub.add_parser(
+    login_window = sub.add_parser(
         "login-window",
         aliases=["login-gui"],
         help="Open the official login window, then save the session automatically",
+    )
+    login_window.add_argument(
+        "--browser",
+        type=Path,
+        metavar="PATH",
+        help="Browser executable to use instead of discovery",
     )
     sub.add_parser("logout", help="Sign out")
     download = sub.add_parser("download", help="Download an app")
@@ -146,7 +152,7 @@ def main(argv: list[str] | None = None) -> int:
         elif args.command in ("login-window", "login-gui"):
             from pico_store_lab.browser_login import capture_login
 
-            auth = capture_login(config)
+            auth = capture_login(config, browser_path=args.browser)
             credentials.save(auth)
             print(_message(args.locale, "saved"))
         elif args.command == "logout":
