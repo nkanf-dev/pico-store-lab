@@ -99,7 +99,7 @@ pico-store-py --region cn download --item-id 7680447105202274345 --package com.a
 
 Enter your SMS code when prompted. Need a China account? [Register with PICO](https://sso.picoxr.com/passport), then return to sign in. International and China sign-ins stay separate; omit `--region` to continue using the international store. See the [Python guide](packages/python/README.md) for more options.
 
-For a sign-in without copying cookies, use `login-window` (alias `login-gui`). It opens the official PICO login page in a dedicated browser window, closes the window automatically after you sign in, verifies the session with the account service, and saves that region's sign-in:
+If you prefer to sign in through PICO's official browser page, use `login-window` (alias `login-gui`). It opens the official PICO login page in a dedicated browser window, closes the window automatically after you sign in, verifies the session with the account service, and saves that region's sign-in:
 
 ```sh
 pico-store-py --region cn login-window
