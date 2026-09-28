@@ -2,6 +2,16 @@
 
 All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and semantic versioning.
 
+## [Unreleased]
+
+### Added
+
+- Python CLI `login-window` (alias `login-gui`) opens the official PICO login page in a dedicated browser window, captures the signed-in session via the Chrome DevTools Protocol, verifies it with the account service, closes the window automatically, and saves the region session. Microsoft Edge or Google Chrome is required; the window uses an isolated temporary browser profile.
+
+### Fixed
+
+- Python CLI `search` and `status` print non-ASCII app names directly (UTF-8) instead of `\uXXXX` Unicode escapes.
+
 ## [0.2.0] - 2026-09-23
 
 ### Added

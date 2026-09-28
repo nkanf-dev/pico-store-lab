@@ -63,6 +63,17 @@ def build_parser() -> argparse.ArgumentParser:
         account.add_argument(
             "--country-code", default="86", help="Phone country code (default: 86)"
         )
+    login_window = sub.add_parser(
+        "login-window",
+        aliases=["login-gui"],
+        help="Open the official login window, then save the session automatically",
+    )
+    login_window.add_argument(
+        "--browser",
+        type=Path,
+        metavar="PATH",
+        help="Browser executable to use instead of discovery",
+    )
     sub.add_parser("logout", help="Sign out")
     download = sub.add_parser("download", help="Download an app")
     download.add_argument("--output", required=True, type=Path)
@@ -75,6 +86,11 @@ def main(argv: list[str] | None = None) -> int:
     """Run one command; return a process exit status without leaking credentials."""
     parser = build_parser()
     args = parser.parse_args(argv)
+    if hasattr(sys.stdout, "reconfigure"):
+        try:
+            sys.stdout.reconfigure(encoding="utf-8")
+        except Exception:  # noqa: BLE001 - best-effort console encoding
+            pass
     if args.command in ("send-code", "login"):
         if args.region == "cn" and not args.mobile:
             parser.error("--region cn requires --mobile")
@@ -99,6 +115,7 @@ def main(argv: list[str] | None = None) -> int:
                         for item in result.items
                     ],
                     indent=2,
+                    ensure_ascii=False,
                 )
             )
         elif args.command == "status":
@@ -113,6 +130,7 @@ def main(argv: list[str] | None = None) -> int:
                         "officialUrl": item.official_url,
                     },
                     indent=2,
+                    ensure_ascii=False,
                 )
             )
         elif args.command == "send-code":
@@ -129,6 +147,12 @@ def main(argv: list[str] | None = None) -> int:
             else:
                 code = getpass.getpass("PICO email code: ")
                 auth = client.login(args.email, code)
+            credentials.save(auth)
+            print(_message(args.locale, "saved"))
+        elif args.command in ("login-window", "login-gui"):
+            from pico_store_lab.browser_login import capture_login
+
+            auth = capture_login(config, browser_path=args.browser)
             credentials.save(auth)
             print(_message(args.locale, "saved"))
         elif args.command == "logout":

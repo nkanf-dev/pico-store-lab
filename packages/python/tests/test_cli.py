@@ -4,7 +4,7 @@ import io
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from pico_store_lab import PicoAuth
 from pico_store_lab.cli import main
@@ -80,6 +80,20 @@ class CliTests(unittest.TestCase):
             factory.assert_not_called()
             prompt.assert_not_called()
 
+    def test_search_prints_utf8_chinese_without_unicode_escapes(self) -> None:
+        r"""Non-ASCII names are printed literally instead of \uXXXX escapes."""
+        fake_item = Mock(item_id="1", package_name="com.example", version_code=1)
+        fake_item.name = "互联"
+        with (
+            patch("pico_store_lab.cli.PicoStoreClient") as factory,
+            redirect_stdout(io.StringIO()) as out,
+        ):
+            factory.return_value.search.return_value.items = [fake_item]
+            self.assertEqual(main(["--region", "cn", "search", "互联"]), 0)
+        rendered = out.getvalue()
+        self.assertIn("互联", rendered)
+        self.assertNotIn("\\u4e92", rendered)
+
     def test_failed_login_preserves_existing_session(self) -> None:
         """Never replace a good saved session after a rejected verification code."""
         with (
@@ -93,6 +107,21 @@ class CliTests(unittest.TestCase):
             )
             self.assertEqual(main(["--region", "cn", "login", "--mobile", "19900000000"]), 1)
             save.assert_not_called()
+
+    def test_login_window_accepts_explicit_browser_path(self) -> None:
+        """Pass a path with spaces through argparse to the login window."""
+        auth = PicoAuth("123", "", region="global")
+        browser = Path("/opt/Custom Browser/chrome")
+        with (
+            patch("pico_store_lab.cli.PicoStoreClient"),
+            patch("pico_store_lab.browser_login.capture_login", return_value=auth) as capture,
+            patch("pico_store_lab.cli.credentials.save") as save,
+            redirect_stdout(io.StringIO()),
+        ):
+            self.assertEqual(main(["login-window", "--browser", str(browser)]), 0)
+        capture.assert_called_once()
+        self.assertEqual(capture.call_args.kwargs["browser_path"], browser)
+        save.assert_called_once_with(auth)
 
 
 if __name__ == "__main__":

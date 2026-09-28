@@ -13,6 +13,8 @@ PICO_ITEM_ID = "7288745304105664518"
 PICO_PACKAGE = "com.vrchat.android"
 STORE_HOST = "https://appstore-us.picoxr.com"
 ACCOUNT_HOST = "https://matrix-us.picovr.com"
+GLOBAL_SSO_HOST = "https://sso-global.picoxr.com"
+CN_SSO_HOST = "https://sso.picoxr.com"
 OFFICIAL_STORE_URL = f"https://store-global.picoxr.com/jp/detail/1/{PICO_ITEM_ID}"
 STORE_VERSION = "401200000"
 DEVICE_NAME = "A9210"
@@ -73,6 +75,7 @@ class StoreConfig:
     passport_aid: str = "308733"
     device_platform: str = "android"
     region: StoreRegion = "global"
+    sso_host: str = GLOBAL_SSO_HOST
 
     def __post_init__(self) -> None:
         """Reject contradictory official endpoint and account regions."""
@@ -81,6 +84,7 @@ class StoreConfig:
             (self.store_host, "https://appstore-cn.picoxr.com", STORE_HOST),
             (self.account_host, "https://matrix-cn.picovr.com", ACCOUNT_HOST),
             (self.web_store_host, "https://store.picoxr.com", "https://store-global.picoxr.com"),
+            (self.sso_host, CN_SSO_HOST, GLOBAL_SSO_HOST),
         ):
             if host.rstrip("/") == (global_host if self.region == "cn" else cn_host):
                 raise ValueError("official endpoint does not match the selected region")
@@ -92,6 +96,7 @@ class StoreConfig:
             return cls()
         return cls(
             region="cn",
+            sso_host=CN_SSO_HOST,
             store_host="https://appstore-cn.picoxr.com",
             account_host="https://matrix-cn.picovr.com",
             web_store_host="https://store.picoxr.com",

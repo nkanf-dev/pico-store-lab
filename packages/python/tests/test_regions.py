@@ -35,6 +35,8 @@ class RegionTests(unittest.TestCase):
     def test_region_profiles(self) -> None:
         """The legacy profile stays unchanged; China gets its own identity."""
         self.assertEqual(StoreConfig.for_region("global"), StoreConfig())
+        self.assertEqual(StoreConfig().sso_host, "https://sso-global.picoxr.com")
+        self.assertEqual(self.config.sso_host, "https://sso.picoxr.com")
         spec = make_public_item_request(config=self.config, target=self.target, timestamp=1)
         self.assertEqual(urlsplit(spec.url).hostname, "appstore-cn.picoxr.com")
         query = parse_qs(urlsplit(spec.url).query)
