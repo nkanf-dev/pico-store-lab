@@ -88,6 +88,8 @@ pico-store-py logout
 
 Windows 用户请改用 `.venv\Scripts\Activate.ps1` 激活虚拟环境。请选择尚未存在的输出文件名。下载后，用头显安装器或 `adb install -r ./selected-app.apk` 安装。更多选项见 `pico-store-py --help`。
 
+如需缩小搜索范围，可加 `--price free` 或 `--price paid`，例如 `pico-store-py --region cn search 视频 --price free`。筛选作用于当前搜索页。
+
 Python 命令行也支持国区商店。添加 `--region cn`，使用国区账号的手机号登录：
 
 ```sh

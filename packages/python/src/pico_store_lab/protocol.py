@@ -19,6 +19,7 @@ OFFICIAL_STORE_URL = f"https://store-global.picoxr.com/jp/detail/1/{PICO_ITEM_ID
 STORE_VERSION = "401200000"
 DEVICE_NAME = "A9210"
 StoreRegion = Literal["global", "cn"]
+PriceFilter = Literal["free", "paid"]
 
 
 def validate_region(region: str) -> StoreRegion:
@@ -374,6 +375,31 @@ def parse_search_results(response: object) -> SearchResults:
         if group.get("has_more") and isinstance(cursor, int) and cursor > 0 and next_id is None:
             next_id = cursor
     return SearchResults(items, next_id)
+
+
+def validate_price_filter(price: str) -> PriceFilter:
+    """Accept only an explicit free/paid search filter."""
+    if price not in ("free", "paid"):
+        raise ValueError("price filter must be free or paid")
+    return price  # type: ignore[return-value]
+
+
+def is_free_price(price: str) -> bool:
+    """Return True when an official price string normalizes to zero."""
+    return re.fullmatch(r"\s*0+(?:\.0+)?\s*", price or "") is not None
+
+
+def is_paid_price(price: str) -> bool:
+    """Return True when an official price string is a positive amount."""
+    match = re.fullmatch(r"\s*([0-9]+(?:\.[0-9]+)?)\s*", price or "")
+    return match is not None and float(match.group(1)) > 0
+
+
+def filter_search_items(items: list[SearchItem], price: str) -> list[SearchItem]:
+    """Keep only free or only paid installable items from one search page."""
+    selected = validate_price_filter(price)
+    predicate = is_free_price if selected == "free" else is_paid_price
+    return [item for item in items if predicate(item.price)]
 
 
 def parse_public_item(

@@ -67,6 +67,8 @@ credentials.save(auth)
 # auth = capture_login(StoreConfig.for_region("cn"), browser_path="/path/to/chromium")
 ```
 
+Filter search by price in the SDK with `client.search(word, price="free")` or `price="paid"`, or on the CLI with `search --price free` / `search --price paid`, for example `pico-store-py --region cn search 视频 --price free`. Zero prices count as free, positive numeric prices as paid, and items without a recognizable price are excluded. The filter applies to the current search page; the helpers `filter_search_items`, `is_free_price`, and `is_paid_price` are also public.
+
 Customize a region's request identity with `dataclasses.replace`:
 
 ```python
@@ -76,7 +78,10 @@ from pico_store_lab import StoreConfig
 client = PicoStoreClient(
     config=replace(
         StoreConfig.for_region("global"),
-        device_name="YOUR_DEVICE", language="en", zone="Europe/London", web_region="uk"
+        device_name="YOUR_DEVICE",
+        language="en",
+        zone="Europe/London",
+        web_region="uk",
     )
 )
 ```

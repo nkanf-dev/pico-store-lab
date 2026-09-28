@@ -22,6 +22,7 @@ from pico_store_lab.protocol import (
     SearchResults,
     StoreConfig,
     StoreTarget,
+    filter_search_items,
     make_account_item_request,
     make_account_request,
     make_download_info_request,
@@ -131,15 +132,18 @@ class PicoStoreClient:
         self.transport = transport
         self.config = config
 
-    def search(self, word: str, next_id: int = 1) -> SearchResults:
-        """Search the official public app catalog."""
+    def search(self, word: str, next_id: int = 1, price: str | None = None) -> SearchResults:
+        """Search the official public app catalog, optionally filtering by price."""
         response = self.transport(
             make_search_request(
                 word, next_id=next_id, language=self.config.language, config=self.config
             ),
             3,
         )
-        return parse_search_results(response.data)
+        results = parse_search_results(response.data)
+        if price is not None:
+            return SearchResults(filter_search_items(results.items, price), results.next_id)
+        return results
 
     def item(self, target: StoreTarget, auth: PicoAuth | None = None) -> PublicItem:
         """Read and validate public metadata for the selected app."""
