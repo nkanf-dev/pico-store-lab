@@ -13,6 +13,23 @@ from pico_store_lab.cli import main
 class CliTests(unittest.TestCase):
     """Exercise complete commands without a network or native keychain."""
 
+    def test_search_price_filter_routes_to_client(self) -> None:
+        """--price free/paid is forwarded; without it the filter stays None."""
+        with (
+            patch("pico_store_lab.cli.PicoStoreClient") as factory,
+            redirect_stdout(io.StringIO()),
+        ):
+            factory.return_value.search.return_value.items = []
+            self.assertEqual(main(["--region", "cn", "search", "x", "--price", "free"]), 0)
+            factory.return_value.search.assert_called_once_with("x", price="free")
+        with (
+            patch("pico_store_lab.cli.PicoStoreClient") as factory,
+            redirect_stdout(io.StringIO()),
+        ):
+            factory.return_value.search.return_value.items = []
+            self.assertEqual(main(["--region", "cn", "search", "x"]), 0)
+            factory.return_value.search.assert_called_once_with("x", price=None)
+
     def test_china_sms_signin_uses_hidden_code(self) -> None:
         """The selected account is saved only after successful sign-in."""
         auth = PicoAuth("123", "secret", region="cn")

@@ -21,6 +21,7 @@ from pico_store_lab.protocol import (
     STORE_HOST,
     DownloadInfo,
     PicoAuth,
+    PriceFilter,
     PublicItem,
     RequestSpec,
     SearchItem,
@@ -29,6 +30,9 @@ from pico_store_lab.protocol import (
     StoreRegion,
     StoreTarget,
     encode_account_field,
+    filter_search_items,
+    is_free_price,
+    is_paid_price,
     make_account_item_request,
     make_account_request,
     make_download_info_request,
@@ -41,6 +45,7 @@ from pico_store_lab.protocol import (
     parse_official_json,
     parse_public_item,
     parse_search_results,
+    validate_price_filter,
 )
 
 __all__ = [
@@ -56,6 +61,7 @@ __all__ = [
     "MirrorPolicy",
     "PicoAuth",
     "PicoStoreClient",
+    "PriceFilter",
     "PublicItem",
     "RequestSpec",
     "StoreTarget",
@@ -79,5 +85,9 @@ __all__ = [
     "parse_official_json",
     "parse_public_item",
     "parse_search_results",
+    "filter_search_items",
+    "is_free_price",
+    "is_paid_price",
+    "validate_price_filter",
     "send_request",
 ]

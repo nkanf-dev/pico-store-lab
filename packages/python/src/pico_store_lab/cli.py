@@ -51,6 +51,11 @@ def build_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="command", required=True)
     search = sub.add_parser("search", help="Search official PICO apps")
     search.add_argument("word")
+    search.add_argument(
+        "--price",
+        choices=("free", "paid"),
+        help="Filter results to free or paid apps",
+    )
     status = sub.add_parser("status", help="Show an official PICO item")
     status.add_argument("--item-id", required=True)
     status.add_argument("--package", required=True)
@@ -102,7 +107,7 @@ def main(argv: list[str] | None = None) -> int:
             config = replace(config, device_name=args.device)
         client = PicoStoreClient(config=config)
         if args.command == "search":
-            result = client.search(args.word)
+            result = client.search(args.word, price=args.price)
             print(
                 json.dumps(
                     [
