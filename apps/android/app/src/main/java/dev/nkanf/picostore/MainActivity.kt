@@ -119,6 +119,10 @@ class MainActivity : ComponentActivity() {
                 message = message.value,
                 diagnosticReport = diagnosticReport.value,
                 onCopyReport = ::copyDiagnosticReport,
+                onCollectReport = {
+                    diagnosticReport.value = diagnostics.snapshot()
+                    copyDiagnosticReport()
+                },
                 onSaveReport = {
                     runCatching { saveReport.launch("pico-store-lab-diagnostics.json") }
                         .onFailure { copyDiagnosticReport() }

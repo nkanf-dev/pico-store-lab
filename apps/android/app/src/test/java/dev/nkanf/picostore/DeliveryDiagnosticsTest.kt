@@ -37,4 +37,12 @@ class DeliveryDiagnosticsTest {
         assertFalse(report.snapshot().contains("private"))
         assertFalse(report.snapshot().contains("httpStatus"))
     }
+    @Test fun numericBusinessCodesRemainActionableWithoutCopyingResponseBodies() {
+        val report = DeliveryDiagnostics("0.2.1", "PICO", 29)
+        report.fail(IllegalArgumentException("PICO download info failed: -4301"))
+        assertEquals(-4301, JSONObject(report.snapshot()).getJSONObject("failure").getJSONArray("causes").getJSONObject(0).getInt("upstreamCode"))
+        report.fail(IllegalArgumentException("PICO download info failed: -4301 private-token"))
+        assertFalse(report.snapshot().contains("private"))
+        assertFalse(report.snapshot().contains("upstreamCode"))
+    }
 }

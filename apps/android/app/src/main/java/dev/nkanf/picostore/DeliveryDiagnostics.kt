@@ -32,6 +32,7 @@ internal class DeliveryDiagnostics(private val version: String, private val mode
                 .put("frames", JSONArray(value.stackTrace.take(8).map { "${it.className}.${it.methodName}:${it.lineNumber}" }))
             // Only parse the SDK's exact numeric HTTP error format, never raw text.
             httpError.matchEntire(value.message.orEmpty())?.groupValues?.get(1)?.let { cause.put("httpStatus", it.toInt()) }
+            upstreamError.matchEntire(value.message.orEmpty())?.groupValues?.get(2)?.toIntOrNull()?.let { cause.put("upstreamCode", it) }
             causes.put(cause)
             current = value.cause
         }
@@ -42,6 +43,7 @@ internal class DeliveryDiagnostics(private val version: String, private val mode
         .put("stage", stage).put("application", application).put("events", events).put("failure", failure).toString(2)
     private companion object {
         val httpError = Regex("(?:PICO request failed: )?(?:PICO|APK) HTTP ([1-5][0-9]{2})")
+        val upstreamError = Regex("PICO (search|item lookup|download info|free acquisition) failed: (-?[0-9]{1,10})")
         val allowedFields = setOf("attempt", "reason", "httpStatus", "status", "legacyStatus", "expectedSize", "actualSize",
             "expectedMd5", "actualMd5", "expectedPackage", "actualPackage", "expectedVersion", "actualVersion", "variant")
     }

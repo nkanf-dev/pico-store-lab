@@ -59,7 +59,7 @@ private val darkScheme = darkColorScheme(
 @Composable
 fun StoreScreen(
     entries: List<StoreEntry>, selected: PublicItem?, busy: Boolean, message: String,
-    diagnosticReport: String?, onCopyReport: () -> Unit, onSaveReport: () -> Unit,
+    diagnosticReport: String?, onCopyReport: () -> Unit, onSaveReport: () -> Unit, onCollectReport: () -> Unit,
     downloadProgress: Pair<Long, Long?>?, themeMode: ThemeMode,
     imageLoader: StoreImageLoader,
     email: String, signedIn: Boolean, favorites: Set<String>,
@@ -216,6 +216,10 @@ fun StoreScreen(
                         if (expanded) androidx.compose.foundation.text.selection.SelectionContainer(
                             Modifier.heightIn(max = 180.dp).verticalScroll(rememberScrollState())) {
                             Text(diagnosticReport, fontSize = 11.sp, lineHeight = 16.sp)
+                        }
+                    } else if (settingsOpen) {
+                        TextButton(onClick = onCollectReport, modifier = Modifier.padding(horizontal = gutter)) {
+                            Text(stringResource(R.string.copy_report))
                         }
                     }
                 }
