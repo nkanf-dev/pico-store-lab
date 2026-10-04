@@ -14,6 +14,7 @@ const template = (await readFile(new URL('index.html', source), 'utf8'))
   .replaceAll('__STORE_PLAYER_GUIDE_URL__', playerGuideUrl)
   .replaceAll('__PICO_REGISTRATION_URL__', registerUrl);
 const client = await readFile(new URL('app.js', source), 'utf8');
+const buildId = createHash('sha256').update(client).digest('hex').slice(0, 12);
 const translations = JSON.parse(client.match(/const translations = (\{[\s\S]*?\n\});/)[1]);
 const media = JSON.parse(await readFile(new URL('../content/app-media.json', import.meta.url), 'utf8'));
 const escape = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
@@ -124,7 +125,7 @@ async function page({ path, lang, title, description, body, app, interactive = f
 <link rel="alternate" hreflang="zh-CN" href="${origin}${path}"><link rel="alternate" hreflang="en" href="${origin}/en${path}"><link rel="alternate" hreflang="x-default" href="${origin}${path}">
 <meta property="og:type" content="website"><meta property="og:site_name" content="PICO Store Lab"><meta property="og:title" content="${escape(title)}"><meta property="og:description" content="${escape(description)}"><meta property="og:url" content="${canonical}"><meta property="og:locale" content="${lang === 'zh' ? 'zh_CN' : 'en_US'}"><meta property="og:image" content="${ogImage}"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta name="twitter:card" content="summary_large_image"><script type="application/ld+json">${json(structured)}</script>`;
   const initialCatalog = catalog.map(item => { const known = apps.find(app => app.itemId === item.itemId); return { ...item, ...(known ? { state:appState(known, lang) } : {}) }; });
-  const html = `<!doctype html><html lang="${lang === 'zh' ? 'zh-CN' : 'en'}" data-seo="true" data-page="${app ? 'app' : path === '/' ? 'home' : 'reading'}"${app ? ` data-item-id="${app.itemId}"` : ''}><head>${head}</head><body class="${app ? 'page-app' : path === '/' ? 'page-home' : 'page-reading'}"><a class="skip-link" href="#main">${lang === 'zh' ? '跳至正文' : 'Skip to content'}</a><div class="shell">${masthead(lang, path)}<main id="main">${translate(body, lang)}</main>${footer(lang)}</div>${interactive ? `<script type="application/json" id="catalog-data">${json(initialCatalog)}</script>` : ''}</body></html>`;
+  const html = `<!doctype html><html lang="${lang === 'zh' ? 'zh-CN' : 'en'}" data-seo="true" data-build="${buildId}" data-page="${app ? 'app' : path === '/' ? 'home' : 'reading'}"${app ? ` data-item-id="${app.itemId}"` : ''}><head>${head}</head><body class="${app ? 'page-app' : path === '/' ? 'page-home' : 'page-reading'}"><a class="skip-link" href="#main">${lang === 'zh' ? '跳至正文' : 'Skip to content'}</a><div class="shell">${masthead(lang, path)}<main id="main">${translate(body, lang)}</main>${footer(lang)}</div>${interactive ? `<script type="application/json" id="catalog-data">${json(initialCatalog)}</script>` : ''}</body></html>`;
   const destination = new URL(`.${pathname}index.html`, output);
   await mkdir(new URL('./', destination), { recursive:true });
   await writeFile(destination, html);

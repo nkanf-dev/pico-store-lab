@@ -1,8 +1,7 @@
-import { createHash } from 'node:crypto';
-import { createWriteStream } from 'node:fs';
-import { access, link, mkdir, unlink } from 'node:fs/promises';
+import { createHash, randomUUID } from 'node:crypto';
+import { access, link, mkdir, open, unlink, type FileHandle } from 'node:fs/promises';
 import { basename, dirname, join } from 'node:path';
-import { Readable, Transform } from 'node:stream';
+import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import {
   type DownloadInfo, type PicoAuth, type PublicItem, type RequestSpec,
@@ -122,26 +121,39 @@ export async function downloadVerifiedApk(info: DownloadInfo, output: string, re
   try { await access(output); throw new Error('output APK already exists'); }
   catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
   await mkdir(dirname(output), { recursive: true });
-  const temporary = join(dirname(output), `${basename(output)}.${process.pid}.part`);
   let lastError: unknown;
   for (let attempt = 0; attempt < retries; attempt++) {
+    const temporary = join(dirname(output), `${basename(output)}.${randomUUID()}.part`);
+    let file: FileHandle | undefined;
     try {
       const response = await fetch(info.url, { signal: AbortSignal.timeout(60_000) });
       if (!response.ok || !response.body) throw new Error(`APK HTTP ${response.status}`);
+      file = await open(temporary, 'wx');
+      await pipeline(Readable.from(response.body as unknown as AsyncIterable<Uint8Array>),
+        file.createWriteStream());
+      file = await open(temporary, 'r');
       const digest = createHash('md5');
-      const hashStream = new Transform({ transform(chunk: Buffer, _encoding, done) {
-        digest.update(chunk); done(null, chunk);
-      } });
-      await pipeline(Readable.from(response.body as unknown as AsyncIterable<Uint8Array>), hashStream, createWriteStream(temporary));
+      const buffer = Buffer.alloc(65_536);
+      let position = 0;
+      while (true) {
+        const { bytesRead } = await file.read(buffer, 0, buffer.length, position);
+        if (bytesRead === 0) break;
+        digest.update(buffer.subarray(0, bytesRead));
+        position += bytesRead;
+      }
       if (digest.digest('hex') !== info.md5) throw new Error('APK digest mismatch');
       await link(temporary, output);
-      await unlink(temporary);
       return output;
     } catch (error) {
       lastError = error;
-      await unlink(temporary).catch(() => {});
-      if (error instanceof Error && /already exists|digest mismatch/.test(error.message)) throw error;
+      if ((error as NodeJS.ErrnoException).code === 'EEXIST' ||
+          error instanceof Error && error.message === 'APK digest mismatch') throw error;
       if (attempt + 1 < retries) await new Promise(resolve => setTimeout(resolve, Math.min(attempt + 1, 5) * 1000));
+    } finally {
+      if (file) {
+        await file.close().catch(() => {});
+        await unlink(temporary).catch(() => {});
+      }
     }
   }
   throw new Error(`APK download failed: ${String(lastError)}`);

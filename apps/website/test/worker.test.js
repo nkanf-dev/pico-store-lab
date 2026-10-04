@@ -414,7 +414,7 @@ test('an entitled free app streams the APK with verifiable metadata', async () =
       assert.equal(apk.headers.get('content-length'), String(APK_BYTES.length));
       assert.equal(apk.headers.get('etag'), `"${APK_MD5}"`);
       assert.equal(apk.headers.get('x-apk-md5'), APK_MD5);
-      assert.equal(apk.headers.get('digest'), `md5=${Buffer.from(APK_MD5, 'hex').toString('base64')}`);
+      assert.equal(apk.headers.get('digest'), null, 'metadata checksum is not a byte verification claim');
       assert.equal(apk.headers.get('cache-control'), 'private, no-store');
       assert.deepEqual(new Uint8Array(await apk.arrayBuffer()), APK_BYTES);
       assert.equal(calls.filter(call => call.url.includes('/api/app/v1/item/price')).length, 0, 'an entitled account is never charged');
@@ -529,7 +529,7 @@ test('ownership decides access: a paid app already in the account downloads', as
   } finally { env.DB.close(); }
 });
 
-test('APK size is PICO\'s business, not a distribution gate', async () => {
+test('large or stale APK metadata does not block a usable CDN result', async () => {
   const env = testEnv();
   const giant = 900 * 1024 * 1024;
   const { stub } = upstreamStub({ size: giant });
@@ -541,7 +541,8 @@ test('APK size is PICO\'s business, not a distribution gate', async () => {
       assert.equal((await info.json()).size, giant);
       const apk = await worker.fetch(request(`/api/download?itemId=${PICO_ITEM_ID}`, { headers: { cookie } }), env);
       assert.equal(apk.status, 200);
-      assert.equal(apk.headers.get('x-apk-size'), String(giant));
+      assert.equal(apk.headers.get('x-apk-metadata-notice'), 'size_changed');
+      assert.deepEqual(new Uint8Array(await apk.arrayBuffer()), APK_BYTES);
     });
   } finally { env.DB.close(); }
 });
@@ -600,7 +601,7 @@ test('If-Range is evaluated against the MD5 ETag before requesting partial bytes
   }
 });
 
-test('an unreachable PICO CDN fails the download instead of hanging', async () => {
+test('an unreachable proxy refreshes metadata before offering the authorized direct download', async () => {
   const env = testEnv();
   const { stub } = upstreamStub();
   const failing = async (url, init) => {
@@ -611,8 +612,102 @@ test('an unreachable PICO CDN fails the download instead of hanging', async () =
     await withFetch(failing, async () => {
       const cookie = await signIn(env);
       const response = await worker.fetch(request(`/api/download?itemId=${PICO_ITEM_ID}`, { headers: { cookie } }), env);
-      assert.equal(response.status, 502);
-      assert.equal((await response.json()).error, 'apk_unavailable');
+      assert.equal(response.status, 302);
+      assert.equal(response.headers.get('x-apk-recovery'), 'direct_download');
+      assert.match(response.headers.get('location'), /^https:\/\/cdn\.picoxr\.com\//);
+    });
+  } finally { env.DB.close(); }
+});
+
+
+test('expired APK links recover with fresh metadata without exposing a proxy error', async () => {
+  const env = testEnv();
+  const { stub, calls } = upstreamStub();
+  let reads = 0;
+  const refresh = async (url, init) => {
+    if (String(url).includes('/api/app/v1/download/info')) {
+      reads++;
+      const result = await stub(url, init);
+      if (reads > 1) return new Response((await result.text()).replace('vrchat.apk', 'fresh.apk'));
+      return result;
+    }
+    if (String(url).endsWith('/vrchat.apk')) return new Response('expired', { status: 403 });
+    return stub(url, init);
+  };
+  try {
+    await withFetch(refresh, async () => {
+      const cookie = await signIn(env);
+      const response = await worker.fetch(request(`/api/download?itemId=${PICO_ITEM_ID}`, { headers: { cookie } }), env);
+      assert.equal(response.status, 200);
+      assert.deepEqual(new Uint8Array(await response.arrayBuffer()), APK_BYTES);
+      assert.equal(reads, 2);
+      assert.ok(calls.some(call => call.url.endsWith('/fresh.apk')));
+    });
+  } finally { env.DB.close(); }
+});
+
+test('ownership lost during link refresh never falls back to an old direct URL', async () => {
+  const env = testEnv();
+  const { stub, state } = upstreamStub();
+  const revoked = async (url, init) => {
+    if (String(url).includes('cdn.picoxr.com')) {
+      state.entitlement = 0; state.price = '9.99';
+      return new Response('revoked', { status: 403 });
+    }
+    return stub(url, init);
+  };
+  try {
+    await withFetch(revoked, async () => {
+      const cookie = await signIn(env);
+      const response = await worker.fetch(request(`/api/download?itemId=${PICO_ITEM_ID}`, { headers: { cookie } }), env);
+      assert.equal(response.status, 402);
+      assert.equal((await response.json()).error, 'entitlement_required');
+      assert.equal(response.headers.get('location'), null);
+    });
+  } finally { env.DB.close(); }
+});
+
+
+test('support probes request one byte, cancel even an ignored range, and exclude private URLs', async () => {
+  const env = testEnv();
+  const { stub } = upstreamStub();
+  let cancelled = false, probes = 0;
+  const probe = async (url, init) => {
+    if (String(url).includes('cdn.picoxr.com')) {
+      probes++;
+      assert.equal(new Headers(init.headers).get('range'), 'bytes=0-0');
+      return new Response(new ReadableStream({ cancel() { cancelled = true; } }), {
+        headers: { 'Content-Length': '1000000000' },
+      });
+    }
+    return stub(url, init);
+  };
+  try {
+    await withFetch(probe, async () => {
+      const cookie = await signIn(env);
+      const response = await worker.fetch(request(`/api/download/diagnostics?itemId=${PICO_ITEM_ID}`, { headers: { cookie } }), env);
+      assert.equal(response.status, 200);
+      const text = await response.text();
+      const report = JSON.parse(text);
+      assert.equal(report.response.contentLength, '1000000000');
+      assert.equal(report.events[0].httpStatus, 200);
+      assert.equal(cancelled, true);
+      assert.equal(probes, 1);
+      assert.doesNotMatch(text, /cdn.picoxr|token|sid=|email/);
+    });
+  } finally { env.DB.close(); }
+});
+
+test('support probes cannot claim apps or inspect an unauthorized account download', async () => {
+  const env = testEnv();
+  const { stub, calls } = upstreamStub({ entitlement: 0 });
+  try {
+    await withFetch(stub, async () => {
+      const path = `/api/download/diagnostics?itemId=${PICO_ITEM_ID}`;
+      assert.equal((await worker.fetch(request(path), env)).status, 401);
+      const cookie = await signIn(env);
+      assert.equal((await worker.fetch(request(path, { headers: { cookie } }), env)).status, 402);
+      assert.equal(calls.some(call => call.url.includes('cdn.picoxr') || call.url.includes('/item/price')), false);
     });
   } finally { env.DB.close(); }
 });

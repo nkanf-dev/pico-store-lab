@@ -45,6 +45,18 @@
     <string name="ready_to_install">Download complete. Opening installer…</string>
     <string name="installed">App installed.</string>
     <string name="install_failed">Installation failed.</string>
+    <string name="copy_report">Copy diagnostic report</string>
+    <string name="save_report">Save diagnostic report</string>
+    <string name="diagnostic_details">Error details</string>
+    <string name="report_copied">Diagnostic report copied. Send it to us so we can investigate.</string>
+    <string name="report_save_failed">Could not save the report. You can copy it instead.</string>
+    <string name="adaptation_original_available">Account adaptation could not finish. Your download is ready; you can install the original app.</string>
+    <string name="installation_invalid">The system could not install this package. Download it again; if it still fails, send us the app name and headset model.</string>
+    <string name="installation_incompatible">This version is not compatible with your headset or system. Check for a system update.</string>
+    <string name="installation_conflict">This installation conflicts with an app already on your headset. Your existing app has been kept.</string>
+    <string name="installation_blocked">The system blocked installation. Check the installation permissions and any message in the system installer.</string>
+    <string name="apk_storage_failed">Could not save the download. Check your headset’s storage and try again.</string>
+    <string name="apk_cancelled">Download interrupted. You can try again.</string>
     <string name="application_check_failed">Could not check this app. Try again, or choose the original app if available.</string>
     <string name="catalog_label">PICO APP CATALOG</string>
     <string name="hero_title">Your PICO apps.</string>
@@ -137,4 +149,5 @@
     <string name="profile_updated">Profile %1$s is ready. Lab did not need an update.</string>
     <string name="app_updates_partial">Some apps could not be checked for updates. Please try again later.</string>
     <string name="current_version_retained">Your installed version is still available to use.</string>
+    <string name="report_reference">Report ID: %1$s</string>
 </resources>

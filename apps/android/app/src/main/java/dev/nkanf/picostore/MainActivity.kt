@@ -13,6 +13,10 @@ import dev.nkanf.picostore.sdk.StoreTarget
 import org.json.JSONArray
 import java.io.File
 import java.util.concurrent.Executors
+import androidx.activity.result.contract.ActivityResultContracts
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.os.Build
 
 class MainActivity : ComponentActivity() {
     private val client = PicoStoreClient()
@@ -61,11 +65,24 @@ class MainActivity : ComponentActivity() {
     private var pendingPurchase: StoreTarget? = null
     private lateinit var installer: StoreInstaller
     private lateinit var installation: AppInstallation
+    private val diagnostics by lazy { DeliveryDiagnostics(BuildConfig.VERSION_NAME, Build.MODEL, Build.VERSION.SDK_INT) }
+    private val diagnosticReport = mutableStateOf<String?>(null)
+    private val saveReport = registerForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
+        val report = diagnosticReport.value
+        if (uri != null && report != null) runCatching { requireNotNull(contentResolver.openOutputStream(uri)).use { it.write(report.toByteArray()) } }
+            .onFailure { runOnUiThread { message.value = getString(R.string.report_save_failed) } }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        installer = StoreInstaller(this, onInstalled = ::refreshInstalled) { text -> runOnUiThread { message.value = text } }
-        installation = InstallationFactory.create(this, installer, changed = ::refreshInstalled) { text -> runOnUiThread { message.value = text } }
+        installer = StoreInstaller(this, onInstalled = ::refreshInstalled, diagnostic = diagnostics::event, failed = { status, legacy ->
+            diagnostics.event("system_install_failed", mapOf("status" to status.toString(), "legacyStatus" to legacy.toString()))
+            runOnUiThread { diagnosticReport.value = diagnostics.snapshot() }
+        }) { text -> runOnUiThread { message.value = text } }
+        installation = InstallationFactory.create(this, installer, changed = ::refreshInstalled,
+            diagnostic = diagnostics::event, failed = { runOnUiThread { diagnosticReport.value = diagnostics.snapshot() } }) {
+                text -> runOnUiThread { message.value = text }
+            }
         restoreSession()
         installation.recover()
         favorites.value = prefs.getStringSet("favorites", emptySet()).orEmpty().toSet()
@@ -100,6 +117,12 @@ class MainActivity : ComponentActivity() {
                 themeMode = themeMode.value,
                 imageLoader = imageLoader,
                 message = message.value,
+                diagnosticReport = diagnosticReport.value,
+                onCopyReport = {
+                    (getSystemService(CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("PICO Store Lab diagnostics", diagnosticReport.value.orEmpty()))
+                    message.value = getString(R.string.report_copied)
+                },
+                onSaveReport = { saveReport.launch("pico-store-lab-diagnostics.json") },
                 email = email.value,
                 signedIn = auth.value != null,
                 favorites = favorites.value,
@@ -163,9 +186,13 @@ class MainActivity : ComponentActivity() {
         busy.value = true
         message.value = ""
         downloadProgress.value = null
+        diagnosticReport.value = null
+        diagnostics.begin(selected.value?.packageName, selected.value?.itemId, selected.value?.versionCode)
         worker.execute {
             try { block() }
             catch (error: Exception) { runOnUiThread {
+                diagnostics.fail(error)
+                diagnosticReport.value = diagnostics.snapshot()
                 downloadProgress.value = null
                 message.value = error.message ?: "Request failed"
             } }
@@ -408,6 +435,7 @@ class MainActivity : ComponentActivity() {
             val session = currentAuth() ?: error(getString(R.string.sign_in_first))
             val target = StoreTarget(detail.itemId, detail.packageName, detail.name)
             val installationChoice = noAdaptation.installationChoice(target.packageName, variant)
+            diagnostics.event("account_item")
             val current = client.item(target, session)
             showDetail(current)
             if (current.entitlementStatus != 1 && current.price.toDoubleOrNull()?.let { it > 0.0 } == true) {
@@ -419,37 +447,47 @@ class MainActivity : ComponentActivity() {
                 }
                 return@work
             }
+            diagnostics.event("download_info")
             val info = client.entitledDownloadInfo(target, session)
+            diagnostics.event("downloading")
             runOnUiThread { message.value = getString(R.string.downloading) }
             val apk = installer.download(info) { received, total ->
                 runOnUiThread { downloadProgress.value = received to total }
             }
+            val actual = ApkIdentity.read(apk)
+            diagnostics.event("original_ready", mapOf("actualPackage" to actual.packageName, "actualVersion" to actual.versionCode.toString(),
+                "actualSize" to apk.length().toString(), "expectedVersion" to info.versionCode.toString(), "expectedSize" to info.size.toString()))
+            val downloaded = current.copy(versionCode = actual.versionCode,
+                appVersion = if (actual.versionCode == info.versionCode) info.version else actual.versionCode.toString())
             trackedApplications.remember(target)
             runOnUiThread {
                 downloadProgress.value = null
                 message.value = getString(R.string.checking_application)
             }
             if (installationChoice == InstallVariant.ORIGINAL) {
-                showDetail(current.copy(versionCode = info.versionCode, appVersion = info.version))
+                showDetail(downloaded)
                 installDownloaded(apk, target.packageName, InstallVariant.ORIGINAL)
                 return@work
             }
-            val inspected = inspectForAdaptation(installationChoice) {
+            diagnostics.event("inspection")
+            val inspected = try { inspectForAdaptation(installationChoice) {
                 installation.inspect(apk).also {
-                    check(it.packageName == target.packageName && it.versionCode == info.versionCode) {
+                    check(it.packageName == target.packageName) {
                         getString(R.string.application_check_failed)
                     }
                 }
+            } } catch (failure: Exception) {
+                offerOriginalAfterAdaptationFailure(apk, target.packageName, failure)
+                return@work
             }
             if (inspected == null) {
-                // The download has already passed byte integrity and manifest identity checks.
-                showDetail(current.copy(versionCode = info.versionCode, appVersion = info.version))
+                // A readable original remains installable when adaptation is not requested.
+                showDetail(downloaded)
                 installDownloaded(apk, target.packageName, InstallVariant.ORIGINAL)
                 return@work
             }
             // Persist the detection before showing a choice, including when it is declined.
             compatibilityHistory.remember(inspected)
-            val downloaded = current.copy(versionCode = info.versionCode, appVersion = info.version)
             showDetail(downloaded)
             when {
                 installationChoice != null -> installDownloaded(apk, target.packageName, installationChoice)
@@ -486,6 +524,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun installDownloaded(apk: File, packageName: String, variant: InstallVariant) {
+        diagnostics.event("installing", mapOf("variant" to variant.name))
         val updating = if (variant == InstallVariant.ORIGINAL) InstalledApplications.read(this, packageName) != null
             else installation.installed(packageName).adapted != null
         try {
@@ -493,8 +532,25 @@ class MainActivity : ComponentActivity() {
             else installation.install(apk, variant)
         }
         catch (failure: Exception) {
+            if (variant == InstallVariant.ADAPTED) {
+                offerOriginalAfterAdaptationFailure(apk, packageName, failure)
+                return
+            }
+            diagnostics.fail(failure)
+            runOnUiThread { diagnosticReport.value = diagnostics.snapshot() }
             val reason = failure.message ?: getString(R.string.install_failed)
             error(if (updating) "$reason\n${getString(R.string.current_version_retained)}" else reason)
+        }
+    }
+
+    private fun offerOriginalAfterAdaptationFailure(apk: File, packageName: String, failure: Exception) {
+        diagnostics.event("adaptation_failed_original_available")
+        diagnostics.fail(failure)
+        runOnUiThread {
+            diagnosticReport.value = diagnostics.snapshot()
+            pendingInstallation = PendingInstallation(apk, packageName)
+            originalWarningName.value = selected.value?.name ?: packageName
+            message.value = getString(R.string.adaptation_original_available)
         }
     }
 
