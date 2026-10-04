@@ -73,6 +73,13 @@ const translations = {
     "copyMd5": "Copy MD5",
     "md5Copied": "MD5 copied",
     "downloadHint": "Once the download starts, check its progress in your browser’s downloads.",
+    "diagnosticDetails": "Download report",
+    "copyReport": "Copy report",
+    "saveReport": "Save report",
+    "reportCopied": "Report copied. Send it to us with a description of what happened.",
+    "reportSaveHint": "Save the report and send it to us with a description of what happened.",
+    "reportReference": "Report ID",
+    "preparingReport": "Checking the download connection…",
     "selectApp": "Choose an app above to see its download options.",
     "apkUnavailable": "This app is unavailable to download here.",
     "errNotAuthenticated": "Sign in with your PICO international account first.",
@@ -187,6 +194,13 @@ const translations = {
     "copyMd5": "复制 MD5",
     "md5Copied": "已复制 MD5",
     "downloadHint": "下载开始后，可在浏览器的下载列表中查看进度。",
+    "diagnosticDetails": "下载诊断报告",
+    "copyReport": "复制报告",
+    "saveReport": "保存报告",
+    "reportCopied": "报告已复制，反馈时请一起发给我们，并描述遇到的问题。",
+    "reportSaveHint": "请保存报告，反馈时一起发给我们，并描述遇到的问题。",
+    "reportReference": "报告编号",
+    "preparingReport": "正在收集下载诊断…",
     "selectApp": "请先在上方选择一款应用。",
     "apkUnavailable": "暂时无法在这里下载这款应用。",
     "errNotAuthenticated": "请先登录 PICO 国际区账号。",
@@ -553,6 +567,71 @@ let apkRequest = 0;
 let accountRequest = 0;
 let accountBusy = false;
 let accountStatusKey = null;
+let downloadReport = null;
+
+// Deliberately select fields: API payloads and error messages can contain private
+// CDN links or account data. These never enter a shareable support report.
+function reportError(error) {
+  const payload = error.payload ?? {};
+  const code = value => typeof value === 'string' && /^[a-z_]{1,64}$/.test(value) ? value : undefined;
+  return {
+    error: code(payload.error) ?? 'request_failed',
+    stage: code(payload.stage), reason: code(payload.reason),
+    ...Object.fromEntries(['upstreamStatus', 'upstreamCode', 'attempts'].filter(key => Number.isInteger(payload[key])).map(key => [key, payload[key]])),
+    ...(Number.isInteger(error.status) ? { httpStatus: error.status } : {}),
+  };
+}
+
+function probeEvents(payload) {
+  return (Array.isArray(payload?.events) ? payload.events : []).slice(0, 8).map(event => {
+    const safe = reportError({ payload: event, status: event.httpStatus });
+    return { stage: safe.stage, reason: safe.reason, httpStatus: safe.httpStatus,
+      attempt: Number.isInteger(event.attempt) ? event.attempt : undefined };
+  });
+}
+
+function newDownloadReport(itemId, packageName) {
+  return { schema: 1, reportId: globalThis.crypto?.randomUUID?.() ?? `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`,
+    time: new Date().toISOString(), client: 'website', build: pageContext.build ?? '',
+    browser: navigator.userAgent ?? '', application: { itemId, packageName }, events: [] };
+}
+
+function renderReport() {
+  $('download-diagnostics').hidden = !downloadReport;
+  $('report-reference').hidden = !downloadReport?.failure;
+  $('report-reference').textContent = downloadReport ? `${t('reportReference')}: ${downloadReport.reportId}` : '';
+  $('diagnostic-report').textContent = downloadReport ? JSON.stringify(downloadReport, null, 2) : '';
+}
+
+async function collectDownloadReport() {
+  const report = downloadReport;
+  if (!report) return null;
+  if (!report.connection && !report.failure) {
+    $('download-status').textContent = t('preparingReport');
+    const query = new URLSearchParams({ itemId: report.application.itemId });
+    if (report.application.packageName) query.set('package', report.application.packageName);
+    try {
+      const result = await api(`/api/download/diagnostics?${query}`, { signal: AbortSignal.timeout(20_000) });
+      const response = result.response ?? {};
+      report.connection = { events: probeEvents(result),
+        httpStatus: Number.isInteger(response.httpStatus) ? response.httpStatus : undefined,
+        contentLength: /^\d+$/.test(response.contentLength ?? '') ? response.contentLength : undefined,
+        contentRange: /^bytes \d+-\d+\/\d+$/.test(response.contentRange ?? '') ? response.contentRange : undefined };
+    } catch (error) { report.connection = { ...reportError(error), events: probeEvents(error.payload) }; }
+    if (downloadReport === report) renderReport();
+  }
+  return report;
+}
+
+function saveDownloadReport(report) {
+  if (!report) return;
+  const objectUrl = URL.createObjectURL(new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' }));
+  const anchor = document.createElement('a');
+  anchor.href = objectUrl;
+  anchor.download = `pico-store-lab-report-${report.reportId}.json`;
+  anchor.click();
+  URL.revokeObjectURL(objectUrl);
+}
 
 const errorKey = payload => ERROR_KEYS[payload?.error] ?? 'errGeneric';
 const errorText = payload => t(errorKey(payload));
@@ -591,6 +670,7 @@ function setAccountStatus(key = null) {
 
 function renderDownload() {
   $('download-card').hidden = !account.authenticated;
+  renderReport();
   const button = $('download-apk');
   const direct = $('download-direct');
   const acquire = $('acquire-apk');
@@ -615,13 +695,16 @@ function renderDownload() {
   button.href = apk.downloadUrl;
   button.setAttribute('download', apk.fileName);
   button.removeAttribute('aria-disabled');
-  direct.href = apk.directUrl ?? '#downloader';
+  // Resolve a fresh PICO link at click time rather than retaining an expiring CDN URL.
+  direct.href = `${apk.downloadUrl}&direct=1`;
   direct.hidden = !apk.directUrl;
   $('download-status').textContent = t('downloadHint');
 }
 
 function invalidateDownload(message) {
   apkRequest += 1;
+  downloadReport = null;
+  $('download-diagnostics').open = false;
   apk = message ? { available: false, message } : null;
   renderDownload();
 }
@@ -655,13 +738,27 @@ async function refreshDownload() {
   if (packageName) query.set('package', packageName);
   $('download-status').textContent = t('checkingEntitlement');
   let next;
-  try {
-    next = await api(`/api/download/info?${query}`);
-  } catch (error) {
-    next = downloadError(error);
+  const report = newDownloadReport(itemId, packageName);
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      next = await api(`/api/download/info?${query}`);
+      report.events.push({ stage: 'download_info', attempt, result: 'ready' });
+      report.metadata = { versionCode: next.versionCode, version: next.version, size: next.size, md5: next.md5 };
+      break;
+    } catch (error) {
+      report.events.push({ stage: 'download_info', attempt, ...reportError(error) });
+      if (attempt === 1 && (error.status === undefined || error.status >= 500)) {
+        if (ticket !== apkRequest || accountTicket !== accountRequest || itemId !== selectedId || !account.authenticated) return;
+        continue;
+      }
+      next = downloadError(error);
+      report.failure = reportError(error);
+      break;
+    }
   }
   if (ticket !== apkRequest || accountTicket !== accountRequest || itemId !== selectedId || !account.authenticated) return;
   apk = next;
+  downloadReport = report;
   renderDownload();
 }
 
@@ -740,15 +837,33 @@ $('acquire-apk').addEventListener('click', async () => {
   invalidateDownload(t('acquiringApk'));
   const ticket = apkRequest;
   let next;
+  const report = newDownloadReport(itemId, packageName);
   try {
     next = await api('/api/download/acquire', { method: 'POST', body: JSON.stringify({ itemId, packageName }) });
+    report.events.push({ stage: 'acquisition', result: 'ready' });
   } catch (error) {
     next = downloadError(error);
+    report.events.push({ stage: 'acquisition', ...reportError(error) });
+    report.failure = reportError(error);
   }
   if (ticket !== apkRequest || accountTicket !== accountRequest || itemId !== selectedId || !account.authenticated) return;
   apk = next;
+  downloadReport = report;
   renderDownload();
 });
+
+$('copy-report').addEventListener('click', async () => {
+  const report = await collectDownloadReport();
+  if (!report) return;
+  try {
+    await navigator.clipboard.writeText(JSON.stringify(report, null, 2));
+    $('download-status').textContent = t('reportCopied');
+  } catch {
+    saveDownloadReport(report);
+    $('download-status').textContent = t('reportSaveHint');
+  }
+});
+$('save-report').addEventListener('click', async () => { saveDownloadReport(await collectDownloadReport()); });
 
 $('copy-md5').addEventListener('click', async () => {
   if (!apk?.available) return;

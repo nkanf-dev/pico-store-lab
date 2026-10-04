@@ -8,6 +8,18 @@ import org.junit.Test
 
 class PicoProtocolTest {
     private val fixture = JSONObject(File("../../contracts/v1/fixtures.json").readText())
+    @Test fun businessRejectionsPreserveTheNumericCodeWithoutPrivateResponseData() {
+        val response = """{"code":-4301,"message":"private-token","data":{"email":"private@example.invalid"}}"""
+        for (parse in listOf<() -> Unit>(
+            { PicoProtocol.parseSearchResults(response) },
+            { PicoProtocol.parsePublicItem(response) },
+            { PicoProtocol.parseDownloadInfo(response) },
+        )) {
+            val error = assertThrows(IllegalArgumentException::class.java) { parse() }
+            org.junit.Assert.assertTrue(error.message!!.endsWith(": -4301"))
+            org.junit.Assert.assertFalse(error.message!!.contains("private"))
+        }
+    }
 
     @Test fun exactItemAndRequest() {
         val request = PicoProtocol.publicItemRequest(1)

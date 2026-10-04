@@ -13,19 +13,12 @@ import {
   makeAccountItemRequest, makeAccountRequest, makeDownloadInfoRequest, makeFreeAcquisitionRequest,
   parseDownloadInfo, parseFreeAcquisition, parseOfficialJson, parsePublicItem,
 } from '@nkanf-dev/pico-store-sdk/pico';
+import { responseLength } from './apk-stream.js';
+import { DeliveryError } from './delivery-error.js';
+export { DeliveryError } from './delivery-error.js';
 
 const MAX_JSON_BYTES = 4 * 1024 * 1024;
 const REQUEST_TIMEOUT_MS = 25_000;
-
-export class DeliveryError extends Error {
-  constructor(code, status, details = {}) {
-    super(code);
-    this.name = 'DeliveryError';
-    this.code = code;
-    this.status = status;
-    this.details = details;
-  }
-}
 
 const wait = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
 
@@ -170,12 +163,6 @@ export async function resolveDownload(target, auth, options = {}) {
   return { item, info, fileName: apkFileName(info) };
 }
 
-function hexToBase64(hex) {
-  let binary = '';
-  for (let index = 0; index < hex.length; index += 2) binary += String.fromCharCode(Number.parseInt(hex.slice(index, index + 2), 16));
-  return btoa(binary);
-}
-
 export function apkMetadata(resolved, downloadUrl) {
   const { item, info, fileName } = resolved;
   const url = new URL(downloadUrl);
@@ -206,30 +193,52 @@ export function directRedirect(info) {
 
 // Streams PICO's APK to the visitor. No timeout is applied to the body: a
 // multi-hundred-megabyte transfer outlives any request-scoped abort.
-export async function apkResponse(info, fileName, request, fetchImpl = fetch) {
+export async function apkResponse(info, fileName, request, fetchImpl = fetch, diagnostic = () => {}) {
   const validator = request.headers.get('if-range');
-  // This service exposes its own MD5 ETag, which need not match the CDN's.
-  // Without a matching strong validator, fetch the whole current version.
-  const range = validator === null || validator === `"${info.md5}"`
+  // Store MD5 metadata is advisory and cannot identify the current CDN bytes.
+  // Forward strong entity tags; dates/weak tags safely fall back to a full fetch.
+  const rangeHeader = validator === null || /^"[\x21\x23-\x7e\x80-\xff]*"$/.test(validator)
     ? request.headers.get('range') : null;
-  let upstream;
-  try {
-    upstream = await fetchImpl(info.url, {
-      headers: range ? { Range: range } : {},
-      redirect: 'follow',
-    });
-  } catch {
-    throw new DeliveryError('apk_unavailable', 502);
-  }
-  if (!upstream.ok || !upstream.body || (upstream.status !== 200 && upstream.status !== 206)) {
-    throw new DeliveryError('apk_unavailable', 502, { upstreamStatus: upstream.status });
+  let selectedRange = /^bytes=(\d*)-(\d*)$/i.test(rangeHeader ?? '') ? rangeHeader : null;
+  let upstream, length;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    upstream = undefined;
+    const abort = new AbortController();
+    const timer = setTimeout(() => abort.abort(), REQUEST_TIMEOUT_MS);
+    try {
+      upstream = await fetchImpl(info.url, {
+        headers: { 'Accept-Encoding': 'identity', ...(selectedRange ? {
+          Range: selectedRange, ...(validator !== null ? { 'If-Range': validator } : {}),
+        } : {}) },
+        redirect: 'follow', signal: abort.signal,
+      });
+      diagnostic({ stage: 'cdn_response', attempt: attempt + 1, httpStatus: upstream.status });
+      if (!upstream.ok || !upstream.body || ![200, 206].includes(upstream.status))
+        throw new DeliveryError('apk_unavailable', 502, { upstreamStatus: upstream.status });
+      length = responseLength(upstream, selectedRange);
+      // A CDN that ignores If-Range must not make us append a different object,
+      // including a replacement with the same size and stale store metadata.
+      if (upstream.status === 206 && validator !== null &&
+          upstream.headers.get('etag') !== validator)
+        throw new DeliveryError('apk_range_changed', 502);
+      break;
+    } catch (error) {
+      diagnostic({ stage: 'cdn_retry', attempt: attempt + 1, reason: error instanceof DeliveryError ? error.code : 'transport_failed' });
+      abort.abort();
+      await upstream?.body?.cancel().catch(() => {});
+      if (attempt === 1) throw new DeliveryError('apk_unavailable', 502, {
+        stage: 'cdn_download', attempts: 2,
+        ...(Number.isInteger(upstream?.status) ? { upstreamStatus: upstream.status } : {}),
+        reason: error instanceof DeliveryError ? error.code : 'transport_failed',
+      });
+      // Retry without Range: an invalid resume must not be appended to old bytes.
+      selectedRange = null;
+    } finally { clearTimeout(timer); }
   }
   const headers = new Headers({
     'Content-Type': 'application/vnd.android.package-archive',
     'Content-Disposition': `attachment; filename="${fileName}"; filename*=UTF-8''${encodeURIComponent(fileName)}`,
     'Accept-Ranges': 'bytes',
-    'ETag': `"${info.md5}"`,
-    'Digest': `md5=${hexToBase64(info.md5)}`,
     'X-Apk-Md5': info.md5,
     'X-Apk-Size': String(info.size),
     'X-Apk-Version-Code': String(info.versionCode),
@@ -238,8 +247,13 @@ export async function apkResponse(info, fileName, request, fetchImpl = fetch) {
     'X-Content-Type-Options': 'nosniff',
     'Referrer-Policy': 'no-referrer',
   });
-  const length = upstream.headers.get('content-length') ?? String(info.size);
-  headers.set('Content-Length', length);
+  for (const name of ['ETag', 'Last-Modified']) {
+    const value = upstream.headers.get(name);
+    if (value !== null) headers.set(name, value);
+  }
+  if (length !== null && /^\d+$/.test(length)) headers.set('Content-Length', length);
+  if (upstream.status === 200 && length !== null && Number(length) !== info.size)
+    headers.set('X-Apk-Metadata-Notice', 'size_changed');
   if (upstream.status === 206) {
     const contentRange = upstream.headers.get('content-range');
     if (contentRange) headers.set('Content-Range', contentRange);

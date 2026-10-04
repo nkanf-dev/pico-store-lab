@@ -48,7 +48,7 @@ object HttpStoreTransport : StoreTransport {
                 if (attempt + 1 < retries) Thread.sleep((attempt + 1).coerceAtMost(5) * 1_000L)
             }
         }
-        error("PICO request failed: ${lastError?.message}")
+        throw IllegalStateException("PICO request failed: ${lastError?.message}", lastError)
     }
 }
 
@@ -127,43 +127,64 @@ class PicoStoreClient(val transport: StoreTransport = HttpStoreTransport,
     }
 }
 
-fun downloadVerifiedApk(info: DownloadInfo, output: File, retries: Int = 8): File {
+private val downloadPublicationLock = Any()
+
+fun downloadVerifiedApk(info: DownloadInfo, output: File, retries: Int = 8): File =
+    downloadVerifiedApk(info, output, retries,
+        { URL(info.url).openConnection() as HttpURLConnection }, { Thread.sleep(it) })
+
+internal fun downloadVerifiedApk(info: DownloadInfo, output: File, retries: Int,
+    connect: () -> HttpURLConnection, pause: (Long) -> Unit): File {
     require(info.url.startsWith("https://") && output.extension.lowercase() == "apk" && retries > 0) {
         "HTTPS APK URL and new .apk output required"
     }
     require(!output.exists()) { "output APK already exists" }
-    val temporary = File(output.absoluteFile.parentFile, "${output.name}.part")
+    val temporary = File.createTempFile("${output.name}.", ".part", output.absoluteFile.parentFile)
     var lastError: Exception? = null
-    repeat(retries) { attempt ->
-        try {
-            val connection = URL(info.url).openConnection() as HttpURLConnection
+    try {
+        repeat(retries) { attempt ->
             try {
-                connection.connectTimeout = 60_000
-                connection.readTimeout = 60_000
-                require(connection.responseCode in 200..299) { "APK HTTP ${connection.responseCode}" }
-                val digest = MessageDigest.getInstance("MD5")
-                connection.inputStream.use { input ->
-                    temporary.outputStream().use { stream ->
-                        val buffer = ByteArray(65_536)
-                        while (true) {
-                            val count = input.read(buffer)
-                            if (count < 0) break
-                            digest.update(buffer, 0, count)
-                            stream.write(buffer, 0, count)
+                val connection = connect()
+                try {
+                    connection.connectTimeout = 60_000
+                    connection.readTimeout = 60_000
+                    require(connection.responseCode in 200..299) { "APK HTTP ${connection.responseCode}" }
+                    connection.inputStream.use { input ->
+                        temporary.outputStream().use { stream ->
+                            val buffer = ByteArray(65_536)
+                            while (true) {
+                                val count = input.read(buffer)
+                                if (count < 0) break
+                                stream.write(buffer, 0, count)
+                            }
                         }
                     }
-                }
-                val actual = digest.digest().joinToString("") { "%02x".format(it.toInt() and 0xff) }
-                require(actual == info.md5) { "APK digest mismatch" }
-                Files.move(temporary.toPath(), output.toPath())
-                return output
-            } finally { connection.disconnect() }
-        } catch (error: Exception) {
-            temporary.delete()
-            lastError = error
-            if (error.message == "APK digest mismatch") throw error
-            if (attempt + 1 < retries) Thread.sleep((attempt + 1).coerceAtMost(5) * 1_000L)
+                    val digest = MessageDigest.getInstance("MD5")
+                    temporary.inputStream().use { stream ->
+                        val buffer = ByteArray(65_536)
+                        while (true) {
+                            val count = stream.read(buffer)
+                            if (count < 0) break
+                            digest.update(buffer, 0, count)
+                        }
+                    }
+                    val actual = digest.digest().joinToString("") { "%02x".format(it.toInt() and 0xff) }
+                    require(actual == info.md5) { "APK digest mismatch" }
+                    synchronized(downloadPublicationLock) {
+                        if (output.exists()) throw java.nio.file.FileAlreadyExistsException(output.path)
+                        Files.move(temporary.toPath(), output.toPath())
+                    }
+                    return output
+                } finally { connection.disconnect() }
+            } catch (error: Exception) {
+                lastError = error
+                if (error is java.nio.file.FileAlreadyExistsException ||
+                    error.message == "APK digest mismatch") throw error
+                if (attempt + 1 < retries) pause((attempt + 1).coerceAtMost(5) * 1_000L)
+            }
         }
+        error("APK download failed: ${lastError?.message}")
+    } finally {
+        runCatching { temporary.delete() }
     }
-    error("APK download failed: ${lastError?.message}")
 }

@@ -2,6 +2,8 @@ import { readFile, stat } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import { extname, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { Readable } from 'node:stream';
+import { pipeline } from 'node:stream/promises';
 import worker from './worker.js';
 
 const root = resolve(fileURLToPath(new URL('../dist/', import.meta.url)));
@@ -41,9 +43,11 @@ export function createDevServer(env) {
       if (req.method !== 'GET' && req.method !== 'HEAD' && chunks.length) init.body = Buffer.concat(chunks);
       const response = await worker.fetch(new Request(requested, init), { ...env, ASSETS: { fetch: assetResponse } });
       res.writeHead(response.status, Object.fromEntries(response.headers));
-      res.end(Buffer.from(await response.arrayBuffer()));
+      if (response.body) await pipeline(Readable.fromWeb(response.body), res);
+      else res.end();
     } catch {
-      res.writeHead(500); res.end('Server unavailable');
+      if (!res.headersSent && !res.destroyed) { res.writeHead(500); res.end('Server unavailable'); }
+      else res.destroy();
     }
   });
 }

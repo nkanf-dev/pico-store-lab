@@ -4,7 +4,9 @@ import android.content.Context
 import java.io.File
 
 internal object InstallationFactory {
-    fun create(context: Context, downloader: StoreInstaller, changed: () -> Unit = {}, report: (String) -> Unit): AppInstallation =
+    fun create(context: Context, downloader: StoreInstaller, changed: () -> Unit = {},
+        diagnostic: (String, Map<String, String>) -> Unit = { _, _ -> }, failed: () -> Unit = {},
+        report: (String) -> Unit): AppInstallation =
         object : AppInstallation {
             override fun inspect(apk: File): InspectedApp {
                 val info = ApkIdentity.read(apk)

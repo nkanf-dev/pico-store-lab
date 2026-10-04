@@ -181,7 +181,7 @@ object PicoProtocol {
     @JvmStatic
     fun parseSearchResults(text: String): List<SearchItem> {
         val root = JSONObject(text)
-        require(root.getInt("code") == 0) { "PICO search failed" }
+        require(root.getInt("code") == 0) { "PICO search failed: ${root.getInt("code")}" }
         val groups = root.getJSONObject("data").getJSONArray("search_list")
         val results = linkedMapOf<String, SearchItem>()
         for (groupIndex in 0 until groups.length()) {
@@ -206,7 +206,7 @@ object PicoProtocol {
     fun parsePublicItem(text: String, target: StoreTarget = DEFAULT_TARGET,
         config: PicoStoreConfig = PicoStoreConfig()): PublicItem {
         val root = JSONObject(text)
-        require(root.getInt("code") == 0) { "PICO item lookup failed" }
+        require(root.getInt("code") == 0) { "PICO item lookup failed: ${root.getInt("code")}" }
         val data = root.getJSONObject("data")
         require(data.get("item_id").toString() == target.itemId && data.getString("package_name") == target.packageName) {
             "PICO returned an unexpected item or package"
@@ -281,7 +281,7 @@ object PicoProtocol {
     @JvmStatic @JvmOverloads
     fun parseDownloadInfo(text: String, target: StoreTarget = DEFAULT_TARGET): DownloadInfo {
         val root = JSONObject(text)
-        require(root.getInt("code") == 0) { "PICO download info failed" }
+        require(root.getInt("code") == 0) { "PICO download info failed: ${root.getInt("code")}" }
         val data = root.getJSONObject("data")
         val pkg = data.getJSONObject("package")
         require(data.get("item_id").toString() == target.itemId && pkg.getString("package_name") == target.packageName) {
