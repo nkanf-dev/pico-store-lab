@@ -21,7 +21,7 @@ function element() {
     setAttribute(name, value) { this.attrs[name] = value; },
     removeAttribute(name) { delete this.attrs[name]; },
     append(...children) { this.children.push(...children); },
-    replaceChildren(...children) { this.children = children; }, focus() {}, scrollIntoView() {},
+    replaceChildren(...children) { this.children = children; }, focus() {}, scrollIntoView() {}, click() {},
   };
 }
 
@@ -39,11 +39,19 @@ async function browser(override = () => undefined, href = 'https://example.test/
   }
   const location = { href };
   const calls = [];
+  const copied = [], saved = [], blobs = new Map();
+  class BrowserURL extends URL {
+    static createObjectURL(blob) { const id = `blob:report-${blobs.size}`; blobs.set(id, blob); return id; }
+    static revokeObjectURL() {}
+  }
   vm.runInNewContext(source, {
-    URL, URLSearchParams, Intl, location, matchMedia: () => ({ matches: true }),
-    navigator: { language: 'en' }, history: { replaceState(_state, _unused, url) { location.href = String(url); } },
+    URL: BrowserURL, URLSearchParams, Blob, AbortSignal, Intl, location, matchMedia: () => ({ matches: true }),
+    navigator: { language: 'en', userAgent: 'Fixture browser', clipboard: { writeText: async text => copied.push(text) } },
+    history: { replaceState(_state, _unused, url) { location.href = String(url); } },
     localStorage: { getItem: () => null, setItem() {} },
-    document: { getElementById: id => elements.get(id), createElement: element,
+    document: { getElementById: id => elements.get(id), createElement: () => {
+      const node = element(); node.click = () => saved.push({ name: node.download, blob: blobs.get(node.href) }); return node;
+    },
       querySelectorAll: selector => selector === '[data-i18n]' ? translated : placeholders, documentElement: {} },
     fetch: async (path, init = {}) => {
       calls.push({ path, init });
@@ -61,11 +69,13 @@ async function browser(override = () => undefined, href = 'https://example.test/
         const item = items.find(item => new URL(path, 'https://example.test').searchParams.get('itemId') === item.itemId);
         return Response.json(metadata(item));
       }
+      if (path.startsWith('/api/download/diagnostics')) return Response.json({ events: [{ stage: 'cdn_response', attempt: 1, httpStatus: 206 }],
+        response: { httpStatus: 206, contentLength: '1', contentRange: 'bytes 0-0/8' } });
       throw new Error(`unexpected browser request: ${path}`);
     },
   });
   await flush();
-  return { get: id => elements.get(id), calls, location,
+  return { get: id => elements.get(id), calls, location, copied, saved,
     select: index => elements.get('catalog-items').children[index].events.click(),
     click: id => elements.get(id).events.click(),
     login: () => elements.get('account-form').events.submit({ preventDefault() {} }),
@@ -165,4 +175,78 @@ test('an unowned free app is acquired only after the explicit button click', asy
   assert.equal(page.calls.filter(call => call.path === '/api/download/acquire').length, 1);
   assert.equal(page.get('download-apk').href, '/api/download?itemId=111');
   assert.equal(page.get('acquire-apk').hidden, true);
+});
+
+
+test('transient metadata failures recover before an error is shown and reports retain both attempts', async () => {
+  let attempts = 0;
+  const page = await browser(path => {
+    if (path.startsWith('/api/download/info') && ++attempts === 1) return Response.json({ error: 'upstream_unreachable', upstreamStatus: 503 }, { status: 502 });
+  });
+  assert.equal(attempts, 2);
+  assert.equal(page.get('download-apk').attrs['aria-disabled'], undefined);
+  assert.equal(page.get('report-reference').hidden, true);
+  const report = JSON.parse(page.get('diagnostic-report').textContent);
+  assert.equal(report.events.length, 2);
+  assert.equal(report.events[0].upstreamStatus, 503);
+  assert.equal(report.events[1].result, 'ready');
+  assert.doesNotMatch(JSON.stringify(report), /player@|cdn.example|directUrl|downloadUrl/);
+  assert.equal(page.get('download-direct').href, '/api/download?itemId=111&direct=1');
+});
+
+test('final errors include safe detailed reports that can be copied and exported without another request', async () => {
+  const page = await browser(path => path.startsWith('/api/download/info') ? Response.json({
+    error: 'upstream_unreachable', upstreamStatus: 503, stage: 'download_info',
+    cookies: { sessionid: 'private-session' }, url: 'https://cdn.invalid?token=secret', email: 'secret@example.test',
+  }, { status: 502 }) : undefined);
+  const text = page.get('diagnostic-report').textContent;
+  const report = JSON.parse(text);
+  assert.equal(report.events.length, 2);
+  assert.equal(report.failure.httpStatus, 502);
+  assert.equal(report.failure.upstreamStatus, 503);
+  assert.equal(report.application.packageName, 'com.example.a');
+  assert.equal(page.get('report-reference').hidden, false);
+  assert.match(page.get('report-reference').textContent, new RegExp(report.reportId));
+  assert.doesNotMatch(text, /private-session|secret|player@|https:|cookies/);
+  const requestCount = page.calls.length;
+  await page.click('copy-report');
+  assert.equal(page.copied[0], text);
+  await page.click('save-report');
+  assert.match(page.saved[0].name, /pico-store-lab-report-.*\.json$/);
+  assert.equal(await page.saved[0].blob.text(), text);
+  assert.equal(page.calls.length, requestCount, 'reports are local; no upload or account request');
+});
+
+test('ownership rejection is not retried and old diagnostics disappear when selecting a different app', async () => {
+  let failures = 0;
+  const page = await browser(path => path.includes('/download/info?itemId=111') ?
+    (failures++, Response.json({ error: 'entitlement_required', canAcquire: true }, { status: 402 })) : undefined);
+  assert.equal(failures, 1);
+  assert.equal(JSON.parse(page.get('diagnostic-report').textContent).failure.httpStatus, 402);
+  page.select(1);
+  assert.equal(page.get('download-diagnostics').hidden, true);
+  await flush();
+  const report = JSON.parse(page.get('diagnostic-report').textContent);
+  assert.equal(report.application.itemId, '222');
+  assert.equal(report.failure, undefined);
+});
+
+
+test('a report for a browser download probes once and exports safe CDN response details', async () => {
+  const page = await browser(path => path.startsWith('/api/download/diagnostics') ? Response.json({
+    events: [{ stage: 'cdn_response', attempt: 1, httpStatus: 403, url: 'https://secret.invalid' },
+      { stage: 'cdn_retry', attempt: 1, reason: 'apk_unavailable' }],
+    error: 'apk_unavailable', stage: 'cdn_download', attempts: 2, upstreamStatus: 403,
+    url: 'https://private.invalid?token=secret',
+  }, { status: 502 }) : undefined);
+  await page.click('copy-report');
+  const report = JSON.parse(page.copied[0]);
+  assert.equal(report.connection.upstreamStatus, 403);
+  assert.equal(report.connection.events[0].httpStatus, 403);
+  assert.equal(report.connection.events[0].attempt, 1);
+  assert.equal(report.connection.events[1].reason, 'apk_unavailable');
+  assert.doesNotMatch(page.copied[0], /secret|private|https:/);
+  await page.click('save-report');
+  assert.equal(page.calls.filter(call => call.path.startsWith('/api/download/diagnostics')).length, 1);
+  assert.equal(await page.saved[0].blob.text(), page.copied[0]);
 });

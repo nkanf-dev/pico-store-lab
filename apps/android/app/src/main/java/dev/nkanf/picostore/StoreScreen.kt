@@ -59,6 +59,7 @@ private val darkScheme = darkColorScheme(
 @Composable
 fun StoreScreen(
     entries: List<StoreEntry>, selected: PublicItem?, busy: Boolean, message: String,
+    diagnosticReport: String?, onCopyReport: () -> Unit, onSaveReport: () -> Unit, onCollectReport: () -> Unit,
     downloadProgress: Pair<Long, Long?>?, themeMode: ThemeMode,
     imageLoader: StoreImageLoader,
     email: String, signedIn: Boolean, favorites: Set<String>,
@@ -203,6 +204,24 @@ fun StoreScreen(
                         }
                     }
                     if (message.isNotBlank() || busy) StatusStrip(message, busy, downloadProgress, gutter)
+                    if (diagnosticReport != null) Column(Modifier.fillMaxWidth().padding(horizontal = gutter)) {
+                        val reportId = remember(diagnosticReport) { org.json.JSONObject(diagnosticReport).optString("reportId") }
+                        Text(stringResource(R.string.report_reference, reportId.take(8)), fontSize = 12.sp)
+                        Row {
+                            TextButton(onClick = onCopyReport) { Text(stringResource(R.string.copy_report)) }
+                            TextButton(onClick = onSaveReport) { Text(stringResource(R.string.save_report)) }
+                        }
+                        var expanded by remember(diagnosticReport) { mutableStateOf(false) }
+                        TextButton(onClick = { expanded = !expanded }) { Text(stringResource(R.string.diagnostic_details)) }
+                        if (expanded) androidx.compose.foundation.text.selection.SelectionContainer(
+                            Modifier.heightIn(max = 180.dp).verticalScroll(rememberScrollState())) {
+                            Text(diagnosticReport, fontSize = 11.sp, lineHeight = 16.sp)
+                        }
+                    } else if (settingsOpen) {
+                        TextButton(onClick = onCollectReport, modifier = Modifier.padding(horizontal = gutter)) {
+                            Text(stringResource(R.string.copy_report))
+                        }
+                    }
                 }
                 if (announcementOpen) AnnouncementDialog(announcement, announcementLoading,
                     onDismiss = onDismissAnnouncement, onRetry = onRetryAnnouncement,
@@ -221,6 +240,7 @@ fun StoreScreen(
                 else if (installPromptName != null) InstallChoiceDialog(installPromptName, busy,
                     onChoice = onInstallChoice, onDismiss = onDismissInstallChoice)
                 else if (originalWarningName != null) OriginalWarningDialog(originalWarningName, busy,
+                    recoveryMessage = if (diagnosticReport != null) message else null,
                     onConfirm = onConfirmOriginal, onDismiss = onDismissOriginalWarning)
             }
         }
@@ -532,11 +552,14 @@ private fun InstallChoiceDialog(name: String, busy: Boolean, onChoice: (InstallV
 }
 
 @Composable
-private fun OriginalWarningDialog(name: String, busy: Boolean, onConfirm: () -> Unit, onDismiss: () -> Unit) {
+private fun OriginalWarningDialog(name: String, busy: Boolean, recoveryMessage: String?, onConfirm: () -> Unit, onDismiss: () -> Unit) {
     AlertDialog(onDismissRequest = { if (!busy) onDismiss() }, shape = Edge,
         containerColor = MaterialTheme.colorScheme.background,
         title = { Text(stringResource(R.string.original_warning_title), fontWeight = FontWeight.Black) },
-        text = { Text(stringResource(R.string.original_warning_body, name), lineHeight = 24.sp) },
+        text = { Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            if (!recoveryMessage.isNullOrBlank()) Text(recoveryMessage, lineHeight = 24.sp)
+            Text(stringResource(R.string.original_warning_body, name), lineHeight = 24.sp)
+        } },
         confirmButton = {
             TextButton(onClick = onConfirm, enabled = !busy) { Text(stringResource(R.string.continue_original_install)) }
         },

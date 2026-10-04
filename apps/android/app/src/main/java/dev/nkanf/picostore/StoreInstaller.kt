@@ -11,11 +11,16 @@ import androidx.core.content.ContextCompat
 import dev.nkanf.picostore.sdk.DownloadInfo
 import java.io.File
 
-internal class StoreInstaller(private val context: Context, private val onInstalled: () -> Unit = {}, private val report: (String) -> Unit) {
+internal class StoreInstaller(private val context: Context, private val onInstalled: () -> Unit = {},
+    private val diagnostic: (String, Map<String, String>) -> Unit = { _, _ -> },
+    private val failed: (Int, Int) -> Unit = { _, _ -> }, private val report: (String) -> Unit) {
     private val action = "${context.packageName}.INSTALL_RESULT"
     private val receiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
-            when (intent.getIntExtra(PackageInstaller.EXTRA_STATUS, PackageInstaller.STATUS_FAILURE)) {
+            val status = intent.getIntExtra(PackageInstaller.EXTRA_STATUS, PackageInstaller.STATUS_FAILURE)
+            val legacy = intent.getIntExtra("android.content.pm.extra.LEGACY_STATUS", 0)
+            diagnostic("system_install_result", mapOf("status" to status.toString(), "legacyStatus" to legacy.toString()))
+            when (status) {
                 PackageInstaller.STATUS_SUCCESS -> {
                     report(context.getString(R.string.installed))
                     onInstalled()
@@ -24,10 +29,24 @@ internal class StoreInstaller(private val context: Context, private val onInstal
                     @Suppress("DEPRECATION")
                     val confirmation = intent.getParcelableExtra<Intent>(Intent.EXTRA_INTENT)
                     confirmation?.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    if (confirmation != null) context.startActivity(confirmation)
+                    if (confirmation == null) {
+                        diagnostic("confirmation_missing", emptyMap())
+                        failed(PackageInstaller.STATUS_FAILURE, legacy)
+                        report(context.getString(R.string.installation_interrupted))
+                    }
+                    else try { context.startActivity(confirmation) }
+                    catch (_: RuntimeException) {
+                        diagnostic("confirmation_blocked", emptyMap())
+                        failed(PackageInstaller.STATUS_FAILURE_BLOCKED, legacy)
+                        report(context.getString(R.string.installation_blocked))
+                    }
                 }
-                else -> report(intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE)
-                    ?: context.getString(R.string.install_failed))
+                else -> {
+                    // Record numeric codes only: the system message can contain private paths.
+                    android.util.Log.w("StoreInstaller", "Install failed: status=$status legacy=${intent.getIntExtra("android.content.pm.extra.LEGACY_STATUS", 0)}")
+                    failed(status, intent.getIntExtra("android.content.pm.extra.LEGACY_STATUS", 0))
+                    report(context.getString(installFailureResource(status)))
+                }
             }
         }
     }
@@ -39,7 +58,7 @@ internal class StoreInstaller(private val context: Context, private val onInstal
     fun close() = context.unregisterReceiver(receiver)
 
     private val downloads = ApkDownload(File(
-        context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS) ?: context.filesDir, "original-apks"))
+        context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS) ?: context.filesDir, "original-apks"), diagnostic = diagnostic)
 
     fun download(info: DownloadInfo, onProgress: (Long, Long?) -> Unit): File =
         try { downloads.download(info, onProgress) }
@@ -50,6 +69,9 @@ internal class StoreInstaller(private val context: Context, private val onInstal
                 "apk_integrity" -> R.string.apk_integrity_failed
                 "apk_invalid" -> R.string.apk_invalid
                 "apk_network" -> R.string.apk_network_failed
+                "apk_space" -> R.string.not_enough_storage
+                "apk_storage" -> R.string.apk_storage_failed
+                "apk_cancelled" -> R.string.apk_cancelled
                 else -> R.string.apk_transfer_failed
             }
             throw IllegalStateException(context.getString(message), error)
@@ -58,6 +80,7 @@ internal class StoreInstaller(private val context: Context, private val onInstal
     fun install(apk: File) {
         val installer = context.packageManager.packageInstaller
         val params = PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL)
+        params.setSize(apk.length())
         val sessionId = installer.createSession(params)
         val session = installer.openSession(sessionId)
         try {

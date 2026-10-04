@@ -11,8 +11,9 @@ use md5::{Digest, Md5};
 use serde_json::Value;
 use std::collections::BTreeMap;
 use std::fs::{self, File, OpenOptions};
-use std::io::Read;
-use std::path::Path;
+use std::io::{Read, Seek, SeekFrom};
+use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::thread;
 use std::time::Duration;
 
@@ -237,7 +238,119 @@ fn account_data(body: &str) -> Result<Value, SdkError> {
     Ok(root["data"].clone())
 }
 
-pub fn download_verified_apk(info: &DownloadInfo, output: &Path) -> Result<(), SdkError> {
+static DOWNLOAD_SEQUENCE: AtomicU64 = AtomicU64::new(0);
+
+struct DownloadFile {
+    path: PathBuf,
+    file: Option<File>,
+}
+
+impl DownloadFile {
+    fn new(output: &Path) -> Result<Self, SdkError> {
+        let name = output.file_name().unwrap_or_default().to_string_lossy();
+        for _ in 0..64 {
+            let sequence = DOWNLOAD_SEQUENCE.fetch_add(1, Ordering::Relaxed);
+            let path =
+                output.with_file_name(format!("{name}.{}.{sequence}.part", std::process::id()));
+            match OpenOptions::new()
+                .create_new(true)
+                .read(true)
+                .write(true)
+                .open(&path)
+            {
+                Ok(file) => {
+                    return Ok(Self {
+                        path,
+                        file: Some(file),
+                    });
+                }
+                Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
+                Err(error) => return Err(SdkError(error.to_string())),
+            }
+        }
+        Err(SdkError(
+            "could not create an isolated APK temporary file".into(),
+        ))
+    }
+
+    fn size(&self) -> Result<u64, SdkError> {
+        self.file
+            .as_ref()
+            .unwrap()
+            .metadata()
+            .map(|meta| meta.len())
+            .map_err(|error| SdkError(error.to_string()))
+    }
+
+    fn reset(&mut self) -> Result<(), SdkError> {
+        let file = self.file.as_mut().unwrap();
+        file.set_len(0)
+            .and_then(|_| file.seek(SeekFrom::Start(0)))
+            .map(|_| ())
+            .map_err(|error| SdkError(error.to_string()))
+    }
+
+    fn receive(
+        &mut self,
+        start: u64,
+        status: u16,
+        range: Option<&str>,
+        mut reader: impl Read,
+    ) -> Result<(), SdkError> {
+        if start > 0 {
+            if status == 200 {
+                self.reset()?;
+            } else if status != 206 || !valid_resume_range(range.unwrap_or(""), start) {
+                self.reset()?;
+                return Err(SdkError("CDN refused a safe resume range".into()));
+            }
+        }
+        let file = self.file.as_mut().unwrap();
+        file.seek(SeekFrom::End(0))
+            .map_err(|error| SdkError(error.to_string()))?;
+        std::io::copy(&mut reader, file).map_err(|error| SdkError(error.to_string()))?;
+        Ok(())
+    }
+
+    fn verify(&mut self, info: &DownloadInfo) -> Result<(), SdkError> {
+        let file = self.file.as_mut().unwrap();
+        file.seek(SeekFrom::Start(0))
+            .map_err(|error| SdkError(error.to_string()))?;
+        let mut digest = Md5::new();
+        let mut buffer = [0u8; 65536];
+        loop {
+            let count = file
+                .read(&mut buffer)
+                .map_err(|error| SdkError(error.to_string()))?;
+            if count == 0 {
+                break;
+            }
+            digest.update(&buffer[..count]);
+        }
+        if format!("{:x}", digest.finalize()) != info.md5 {
+            return Err(SdkError("APK digest mismatch".into()));
+        }
+        Ok(())
+    }
+}
+
+impl Drop for DownloadFile {
+    fn drop(&mut self) {
+        drop(self.file.take());
+        let _ = fs::remove_file(&self.path);
+    }
+}
+
+fn valid_resume_range(value: &str, start: u64) -> bool {
+    value.starts_with(&format!("bytes {start}-"))
+}
+
+fn download_with(
+    info: &DownloadInfo,
+    output: &Path,
+    mut transfer: impl FnMut(&mut DownloadFile) -> Result<(), SdkError>,
+    mut pause: impl FnMut(usize),
+) -> Result<(), SdkError> {
     if !info.url.starts_with("https://")
         || output.extension().and_then(|x| x.to_str()) != Some("apk")
     {
@@ -248,66 +361,361 @@ pub fn download_verified_apk(info: &DownloadInfo, output: &Path) -> Result<(), S
     if output.exists() {
         return Err(SdkError("output APK already exists".into()));
     }
-    let temporary = output.with_extension("part.apk");
+    let mut temporary = DownloadFile::new(output)?;
     let mut last_error = String::new();
     for attempt in 0..8 {
-        let start = fs::metadata(&temporary).map(|meta| meta.len()).unwrap_or(0);
-        let mut builder = ureq::get(&info.url);
-        if start > 0 {
-            builder = builder.header("Range", format!("bytes={start}-"));
-        }
-        match builder.call() {
-            Ok(mut response) => {
-                if start > 0 {
-                    let range = response
-                        .headers()
-                        .get("content-range")
-                        .and_then(|value| value.to_str().ok())
-                        .unwrap_or("");
-                    if response.status().as_u16() != 206
-                        || !range.starts_with(&format!("bytes {start}-"))
-                    {
-                        return Err(SdkError("CDN refused a safe resume range".into()));
-                    }
-                }
-                let mut file = OpenOptions::new()
-                    .create(true)
-                    .append(true)
-                    .open(&temporary)
+        match transfer(&mut temporary) {
+            Ok(()) => {
+                temporary.verify(info)?;
+                fs::hard_link(&temporary.path, output)
                     .map_err(|error| SdkError(error.to_string()))?;
-                let mut reader = response.body_mut().as_reader();
-                let mut buffer = [0u8; 65536];
-                if let Err(error) = std::io::copy(&mut reader, &mut file) {
-                    last_error = error.to_string();
-                } else {
-                    let mut digest = Md5::new();
-                    let mut file =
-                        File::open(&temporary).map_err(|error| SdkError(error.to_string()))?;
-                    loop {
-                        let count = file
-                            .read(&mut buffer)
-                            .map_err(|error| SdkError(error.to_string()))?;
-                        if count == 0 {
-                            break;
-                        }
-                        digest.update(&buffer[..count]);
-                    }
-                    if format!("{:x}", digest.finalize()) == info.md5 {
-                        fs::hard_link(&temporary, output)
-                            .map_err(|error| SdkError(error.to_string()))?;
-                        fs::remove_file(temporary).map_err(|error| SdkError(error.to_string()))?;
-                        return Ok(());
-                    }
-                    return Err(SdkError("APK digest mismatch".into()));
-                }
+                return Ok(());
             }
-            Err(error) => last_error = error.to_string(),
+            Err(error) => last_error = error.0,
         }
         if attempt < 7 {
-            thread::sleep(Duration::from_secs((attempt + 1).min(5)));
+            pause(attempt);
         }
     }
     Err(SdkError(format!("APK download failed: {last_error}")))
+}
+
+pub fn download_verified_apk(info: &DownloadInfo, output: &Path) -> Result<(), SdkError> {
+    download_with(
+        info,
+        output,
+        |temporary| {
+            let start = temporary.size()?;
+            let mut builder = ureq::get(&info.url);
+            if start > 0 {
+                builder = builder.header("Range", format!("bytes={start}-"));
+            }
+            let mut response = match builder.call() {
+                Ok(response) => response,
+                Err(error) => {
+                    if matches!(error, ureq::Error::StatusCode(416)) {
+                        temporary.reset()?;
+                    }
+                    return Err(SdkError(error.to_string()));
+                }
+            };
+            let status = response.status().as_u16();
+            let range = response
+                .headers()
+                .get("content-range")
+                .and_then(|value| value.to_str().ok())
+                .map(str::to_owned);
+            temporary.receive(
+                start,
+                status,
+                range.as_deref(),
+                response.body_mut().as_reader(),
+            )
+        },
+        |attempt| thread::sleep(Duration::from_secs((attempt + 1).min(5) as u64)),
+    )
+}
+
+#[cfg(test)]
+mod download_tests {
+    use super::*;
+    use std::io::{Cursor, Error, ErrorKind};
+    use std::sync::{Arc, Barrier};
+
+    struct TestDirectory(PathBuf);
+
+    impl TestDirectory {
+        fn new() -> Self {
+            let sequence = DOWNLOAD_SEQUENCE.fetch_add(1, Ordering::Relaxed);
+            let path = std::env::temp_dir()
+                .join(format!("sdk-apk-test-{}-{sequence}", std::process::id()));
+            fs::create_dir(&path).unwrap();
+            Self(path)
+        }
+
+        fn output(&self) -> PathBuf {
+            self.0.join("sample.apk")
+        }
+        fn count(&self) -> usize {
+            fs::read_dir(&self.0).unwrap().count()
+        }
+    }
+
+    impl Drop for TestDirectory {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.0);
+        }
+    }
+
+    fn info(body: &[u8]) -> DownloadInfo {
+        DownloadInfo {
+            item_id: "1".into(),
+            package_name: "dev.example.synthetic".into(),
+            version_code: 1,
+            version: "1".into(),
+            size: body.len() as u64,
+            md5: format!("{:x}", Md5::digest(body)),
+            url: "https://cdn.example.invalid/synthetic.apk".into(),
+        }
+    }
+
+    fn full_download(info: &DownloadInfo, output: &Path, body: &[u8]) -> Result<(), SdkError> {
+        download_with(
+            info,
+            output,
+            |temporary| {
+                let start = temporary.size()?;
+                temporary.receive(start, 200, None, Cursor::new(body))
+            },
+            |_| {},
+        )
+    }
+
+    struct InterruptedReader {
+        prefix: Option<Vec<u8>>,
+    }
+
+    impl Read for InterruptedReader {
+        fn read(&mut self, buffer: &mut [u8]) -> std::io::Result<usize> {
+            if let Some(prefix) = self.prefix.take() {
+                let count = prefix.len().min(buffer.len());
+                buffer[..count].copy_from_slice(&prefix[..count]);
+                Ok(count)
+            } else {
+                Err(Error::new(
+                    ErrorKind::ConnectionReset,
+                    "synthetic interruption",
+                ))
+            }
+        }
+    }
+
+    #[test]
+    fn ignores_unowned_bad_partial_and_publishes_verified_bytes() {
+        let directory = TestDirectory::new();
+        let output = directory.output();
+        let legacy = output.with_extension("part.apk");
+        fs::write(&legacy, b"unowned bad partial").unwrap();
+        let body = b"synthetic APK";
+        full_download(&info(body), &output, body).unwrap();
+        assert_eq!(fs::read(&output).unwrap(), body);
+        assert_eq!(fs::read(&legacy).unwrap(), b"unowned bad partial");
+        assert_eq!(directory.count(), 2);
+    }
+
+    #[test]
+    fn metadata_size_differences_do_not_block_verified_content() {
+        let body = b"synthetic APK";
+        for size in [body.len() as u64 - 1, body.len() as u64 + 1] {
+            let directory = TestDirectory::new();
+            let mut metadata = info(body);
+            metadata.size = size;
+            full_download(&metadata, &directory.output(), body).unwrap();
+            assert_eq!(fs::read(directory.output()).unwrap(), body);
+            assert_eq!(directory.count(), 1);
+        }
+    }
+
+    #[test]
+    fn digest_mismatch_preserves_existing_failure_behavior_and_cleans_up() {
+        let body = b"synthetic APK";
+        let directory = TestDirectory::new();
+        assert_eq!(
+            full_download(&info(body), &directory.output(), b"wrong content")
+                .unwrap_err()
+                .0,
+            "APK digest mismatch"
+        );
+        assert_eq!(directory.count(), 0);
+        full_download(&info(body), &directory.output(), body).unwrap();
+        assert_eq!(fs::read(directory.output()).unwrap(), body);
+    }
+
+    #[test]
+    fn safely_resumes_after_an_interrupted_response() {
+        let directory = TestDirectory::new();
+        let body = b"synthetic APK";
+        let metadata = info(body);
+        let mut starts = Vec::new();
+        download_with(
+            &metadata,
+            &directory.output(),
+            |temporary| {
+                let start = temporary.size()?;
+                starts.push(start);
+                if start == 0 {
+                    temporary.receive(
+                        start,
+                        200,
+                        None,
+                        InterruptedReader {
+                            prefix: Some(body[..2].to_vec()),
+                        },
+                    )
+                } else {
+                    temporary.receive(start, 206, Some("bytes 2-12/13"), Cursor::new(&body[2..]))
+                }
+            },
+            |_| {},
+        )
+        .unwrap();
+        assert_eq!(starts, [0, 2]);
+        assert_eq!(fs::read(directory.output()).unwrap(), body);
+        assert_eq!(directory.count(), 1);
+    }
+
+    #[test]
+    fn ignored_range_restarts_from_the_full_response() {
+        let directory = TestDirectory::new();
+        let body = b"synthetic APK";
+        let metadata = info(body);
+        let mut attempts = 0;
+        download_with(
+            &metadata,
+            &directory.output(),
+            |temporary| {
+                let start = temporary.size()?;
+                attempts += 1;
+                if attempts == 1 {
+                    temporary.receive(
+                        start,
+                        200,
+                        None,
+                        InterruptedReader {
+                            prefix: Some(body[..2].to_vec()),
+                        },
+                    )
+                } else {
+                    assert_eq!(start, 2);
+                    temporary.receive(start, 200, None, Cursor::new(body))
+                }
+            },
+            |_| {},
+        )
+        .unwrap();
+        assert_eq!(attempts, 2);
+        assert_eq!(fs::read(directory.output()).unwrap(), body);
+    }
+
+    #[test]
+    fn wrong_range_offset_is_rejected_before_appending_and_retried_cleanly() {
+        let directory = TestDirectory::new();
+        let body = b"synthetic APK";
+        let metadata = info(body);
+        let mut starts = Vec::new();
+        download_with(
+            &metadata,
+            &directory.output(),
+            |temporary| {
+                let start = temporary.size()?;
+                starts.push(start);
+                match starts.len() {
+                    1 => temporary.receive(
+                        start,
+                        200,
+                        None,
+                        InterruptedReader {
+                            prefix: Some(body[..2].to_vec()),
+                        },
+                    ),
+                    2 => temporary.receive(
+                        start,
+                        206,
+                        Some("bytes 3-12/13"),
+                        Cursor::new(&body[2..]),
+                    ),
+                    _ => temporary.receive(start, 200, None, Cursor::new(body)),
+                }
+            },
+            |_| {},
+        )
+        .unwrap();
+        assert_eq!(starts, [0, 2, 0]);
+        assert_eq!(fs::read(directory.output()).unwrap(), body);
+    }
+
+    #[test]
+    fn exhausted_retries_remove_the_partial_and_preserve_existing_outputs() {
+        let directory = TestDirectory::new();
+        let body = b"synthetic APK";
+        let metadata = info(body);
+        let mut attempts = 0;
+        assert!(
+            download_with(
+                &metadata,
+                &directory.output(),
+                |temporary| {
+                    attempts += 1;
+                    if attempts == 1 {
+                        temporary.receive(
+                            0,
+                            200,
+                            None,
+                            InterruptedReader {
+                                prefix: Some(body[..2].to_vec()),
+                            },
+                        )
+                    } else {
+                        Err(SdkError("synthetic interruption".into()))
+                    }
+                },
+                |_| {}
+            )
+            .is_err()
+        );
+        assert_eq!(attempts, 8);
+        assert_eq!(directory.count(), 0);
+        fs::write(directory.output(), b"last known good").unwrap();
+        assert!(
+            download_with(
+                &metadata,
+                &directory.output(),
+                |_| panic!("must not connect"),
+                |_| {}
+            )
+            .is_err()
+        );
+        assert_eq!(fs::read(directory.output()).unwrap(), b"last known good");
+    }
+
+    #[test]
+    fn competing_downloads_publish_only_the_winners_verified_file() {
+        let directory = TestDirectory::new();
+        let output = directory.output();
+        let barrier = Arc::new(Barrier::new(2));
+        let handles: Vec<_> = [b"first APK bytes".to_vec(), b"other APK bytes".to_vec()]
+            .into_iter()
+            .map(|body| {
+                let output = output.clone();
+                let barrier = barrier.clone();
+                thread::spawn(move || {
+                    let metadata = info(&body);
+                    let result = download_with(
+                        &metadata,
+                        &output,
+                        |temporary| {
+                            temporary.receive(0, 200, None, Cursor::new(&body))?;
+                            barrier.wait();
+                            Ok(())
+                        },
+                        |_| {},
+                    );
+                    (body, result)
+                })
+            })
+            .collect();
+        let results: Vec<_> = handles
+            .into_iter()
+            .map(|handle| handle.join().unwrap())
+            .collect();
+        assert_eq!(
+            results.iter().filter(|(_, result)| result.is_ok()).count(),
+            1
+        );
+        let winner = results.iter().find(|(_, result)| result.is_ok()).unwrap();
+        assert_eq!(fs::read(&output).unwrap(), winner.0);
+        assert_eq!(directory.count(), 1);
+    }
 }
 
 #[cfg(test)]

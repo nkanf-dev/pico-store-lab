@@ -105,6 +105,12 @@
             </div>
             <details class="file-details"><summary data-i18n="fileDetails">File details</summary><p>MD5 <code id="apk-md5">—</code></p><button id="copy-md5" type="button" data-i18n="copyMd5">Copy MD5</button></details>
             <p id="download-status" role="status" aria-live="polite" class="muted"></p>
+            <p id="report-reference" class="muted"></p>
+            <details id="download-diagnostics" class="file-details" hidden>
+              <summary data-i18n="diagnosticDetails">Download report</summary>
+              <div class="download-actions"><button id="copy-report" type="button" data-i18n="copyReport">Copy report</button><button id="save-report" type="button" data-i18n="saveReport">Save report</button></div>
+              <pre id="diagnostic-report"></pre>
+            </details>
             <button id="sign-out" type="button" data-i18n="signOut">Sign out</button>
           </div>
         </div>

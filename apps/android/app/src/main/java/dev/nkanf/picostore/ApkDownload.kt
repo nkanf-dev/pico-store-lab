@@ -5,6 +5,7 @@ import dev.nkanf.picostore.sdk.DownloadInfo
 import java.io.File
 import java.io.FileOutputStream
 import java.io.DataInputStream
+import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
 import java.nio.ByteBuffer
@@ -41,14 +42,20 @@ internal object ApkIdentity {
     }
 }
 
-/** One verified original per app, in app-owned storage accessible on Android 10+. */
+/** One completed, readable original per app, in app-owned storage on Android 10+. */
 internal class ApkDownload(
     private val directory: File,
     private val open: (String) -> HttpURLConnection = { URL(it).openConnection() as HttpURLConnection },
     private val verifyIdentity: (File, DownloadInfo) -> Unit = ApkIdentity::requireMatch,
+    private val availableBytes: (File) -> Long = { it.usableSpace },
+    private val diagnostic: (String, Map<String, String>) -> Unit = { _, _ -> },
 ) {
-    @Synchronized
-    fun download(info: DownloadInfo, progress: (Long, Long?) -> Unit): File {
+    fun download(info: DownloadInfo, progress: (Long, Long?) -> Unit): File =
+        synchronized(downloadLock) { downloadLocked(info, progress) }
+
+    // Activity recreation creates a new downloader while the old worker can still
+    // run. An instance monitor cannot protect their shared cache and partial path.
+    private fun downloadLocked(info: DownloadInfo, progress: (Long, Long?) -> Unit): File {
         require(Regex("[A-Za-z0-9_]+(\\.[A-Za-z0-9_]+)+").matches(info.packageName))
         require(info.versionCode > 0 && info.size > 0 && Regex("[a-fA-F0-9]{32}").matches(info.md5))
         require(info.url.startsWith("https://"))
@@ -56,16 +63,18 @@ internal class ApkDownload(
         val output = File(directory, "${info.packageName}-${info.versionCode}-${info.md5.lowercase()}.apk")
         if (output.isFile) {
             if (matches(output, info)) {
-                verifyIdentity(output, info)
+                verifyOriginal(output, info)
                 progress(info.size, info.size)
                 return output
             }
-            if (!output.delete()) throw ApkDownloadException("apk_storage")
+            // Keep this file until a replacement is complete.
         }
         val partial = File(directory, output.name + ".part")
         var failure: Exception? = null
         repeat(3) { attempt ->
             try {
+                diagnostic("download_attempt", mapOf("attempt" to (attempt + 1).toString()))
+                if (Thread.currentThread().isInterrupted) throw ApkDownloadException("apk_cancelled")
                 val digest = MessageDigest.getInstance("MD5")
                 var received = 0L
                 var reported = 0L
@@ -73,45 +82,75 @@ internal class ApkDownload(
                 try {
                     connection.connectTimeout = 60_000
                     connection.readTimeout = 60_000
+                    connection.setRequestProperty("Accept-Encoding", "identity")
+                    diagnostic("cdn_response", mapOf("httpStatus" to connection.responseCode.toString()))
                     if (connection.responseCode != 200) throw ApkDownloadException("apk_network")
-                    if (connection.contentLengthLong >= 0 && connection.contentLengthLong != info.size)
-                        throw ApkDownloadException("apk_integrity")
+                    if (connection.contentLengthLong > 0 && availableBytes(directory) < connection.contentLengthLong)
+                        throw ApkDownloadException("apk_space")
                     progress(0, info.size)
-                    FileOutputStream(partial).use { outputStream ->
+                    val destination = try { FileOutputStream(partial) }
+                        catch (error: IOException) { throw ApkDownloadException("apk_storage", error) }
+                    destination.use { outputStream ->
                         connection.inputStream.use { input ->
                             val buffer = ByteArray(65_536)
                             while (true) {
+                                if (Thread.currentThread().isInterrupted) throw ApkDownloadException("apk_cancelled")
                                 val count = input.read(buffer)
                                 if (count < 0) break
                                 received += count
-                                if (received > info.size) throw ApkDownloadException("apk_integrity")
                                 digest.update(buffer, 0, count)
-                                outputStream.write(buffer, 0, count)
+                                try { outputStream.write(buffer, 0, count) }
+                                catch (error: IOException) { throw ApkDownloadException("apk_storage", error) }
                                 if (received - reported >= 1_048_576 || received == info.size) {
                                     progress(received, info.size)
                                     reported = received
                                 }
                             }
                         }
-                        outputStream.fd.sync()
+                        try { outputStream.fd.sync() }
+                        catch (error: IOException) { throw ApkDownloadException("apk_storage", error) }
                     }
                 } finally { connection.disconnect() }
-                if (received != info.size || !digest.digest().hex().equals(info.md5, ignoreCase = true))
-                    throw ApkDownloadException("apk_integrity")
-                verifyIdentity(partial, info)
-                Files.move(partial.toPath(), output.toPath(), StandardCopyOption.ATOMIC_MOVE)
+                verifyOriginal(partial, info)
+                val actualMd5 = digest.digest().hex()
+                diagnostic(if (received != info.size || !actualMd5.equals(info.md5, ignoreCase = true)) "metadata_difference" else "download_complete",
+                    mapOf("expectedSize" to info.size.toString(), "actualSize" to received.toString(), "expectedMd5" to info.md5, "actualMd5" to actualMd5))
+                try { Files.move(partial.toPath(), output.toPath(), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING) }
+                catch (error: IOException) { throw ApkDownloadException("apk_storage", error) }
                 // Only discard this app's superseded verified downloads after the new one is ready.
                 val older = Regex("${Regex.escape(info.packageName)}-[0-9]+-[a-f0-9]{32}\\.apk")
                 directory.listFiles()?.filter { it != output && older.matches(it.name) }?.forEach { it.delete() }
-                progress(received, info.size)
+                progress(received, received)
                 return output
-            } catch (error: ApkDownloadException) { throw error }
+            } catch (error: ApkDownloadException) {
+                if (error.code !in setOf("apk_network", "apk_transfer", "apk_invalid") || attempt == 2) throw error
+                diagnostic("retrying_download", mapOf("reason" to error.code))
+                failure = error
+            }
+            catch (error: InterruptedException) {
+                Thread.currentThread().interrupt()
+                throw ApkDownloadException("apk_cancelled", error)
+            }
             catch (error: Exception) {
                 failure = error
-                if (attempt < 2) Thread.sleep((attempt + 1) * 1_000L)
+                if (attempt < 2) try { Thread.sleep((attempt + 1) * 1_000L) }
+                catch (interrupted: InterruptedException) {
+                    Thread.currentThread().interrupt()
+                    throw ApkDownloadException("apk_cancelled", interrupted)
+                }
             } finally { partial.delete() }
         }
         throw ApkDownloadException("apk_transfer", failure)
+    }
+
+    private fun verifyOriginal(file: File, info: DownloadInfo) {
+        try { verifyIdentity(file, info) }
+        catch (error: ApkDownloadException) {
+            if (error.code !in setOf("apk_package", "apk_version")) throw error
+            val actual = ApkIdentity.read(file)
+            diagnostic(error.code, mapOf("actualPackage" to actual.packageName, "actualVersion" to actual.versionCode.toString(),
+                "expectedPackage" to info.packageName, "expectedVersion" to info.versionCode.toString()))
+        }
     }
 
     private fun matches(file: File, info: DownloadInfo): Boolean {
@@ -127,6 +166,8 @@ internal class ApkDownload(
         }
         return digest.digest().hex().equals(info.md5, ignoreCase = true)
     }
+
+    private companion object { val downloadLock = Any() }
 }
 
 /** Optional adaptation cannot prevent installation of a verified original. */

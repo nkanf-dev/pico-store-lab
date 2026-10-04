@@ -208,12 +208,44 @@ async function handleDownload(request, env, url) {
   if (!env.DB) throw new DeliveryError('storage_not_configured', 503);
   const target = downloadTarget(url);
   const session = await requireSession(request, env);
-  const resolved = await resolveDownload(target, session.auth);
+  let resolved = await resolveDownload(target, session.auth);
   if (url.pathname === '/api/download/info') {
     return apiResponse(apkMetadata(resolved, relativeUrl(url, '/api/download')));
   }
+  if (url.pathname === '/api/download/diagnostics') {
+    const events = [];
+    // Header/range probe only. Never buffer an APK or include its private URL.
+    const probe = new Request(request.url, { headers: { Range: 'bytes=0-0' } });
+    try {
+      const response = await apkResponse(resolved.info, resolved.fileName, probe, fetch, event => events.push(event));
+      await response.body?.cancel();
+      return apiResponse({ events, response: { httpStatus: response.status,
+        contentLength: response.headers.get('content-length'), contentRange: response.headers.get('content-range'),
+        metadataNotice: response.headers.get('x-apk-metadata-notice') } });
+    } catch (error) {
+      if (!(error instanceof DeliveryError)) throw error;
+      return apiResponse({ events, error: error.code, ...error.details }, error.status);
+    }
+  }
   if (url.searchParams.get('direct') === '1') return directRedirect(resolved.info);
-  return apkResponse(resolved.info, resolved.fileName, request);
+  try {
+    return await apkResponse(resolved.info, resolved.fileName, request);
+  } catch (error) {
+    if (!(error instanceof DeliveryError) || error.code !== 'apk_unavailable') throw error;
+    // A signed CDN link can expire during a rollout. Re-read entitlement and
+    // metadata before trying again; never turn an ownership rejection into a download.
+    try {
+      resolved = await resolveDownload(target, session.auth);
+      return await apkResponse(resolved.info, resolved.fileName, request);
+    } catch (retryError) {
+      if (!(retryError instanceof DeliveryError) || retryError.status < 500) throw retryError;
+      // The visitor's network may reach PICO when the Worker cannot. Preserve
+      // the already-authorized original download as the final alternate route.
+      const response = directRedirect(resolved.info);
+      response.headers.set('X-Apk-Recovery', 'direct_download');
+      return response;
+    }
+  }
 }
 
 export default {
@@ -247,7 +279,7 @@ export default {
         return fail(error);
       }
     }
-    if (['/api/download', '/api/download/info', '/api/download/acquire'].includes(url.pathname)) {
+    if (['/api/download', '/api/download/info', '/api/download/acquire', '/api/download/diagnostics'].includes(url.pathname)) {
       try {
         return await handleDownload(request, env, url);
       } catch (error) {

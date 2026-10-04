@@ -10,7 +10,9 @@ import org.picomatrix.bridge.adapter.ApplicationProfile
 import java.util.concurrent.ConcurrentHashMap
 
 internal object InstallationFactory {
-    fun create(context: Context, downloader: StoreInstaller, changed: () -> Unit = {}, report: (String) -> Unit): AppInstallation =
+    fun create(context: Context, downloader: StoreInstaller, changed: () -> Unit = {},
+        diagnostic: (String, Map<String, String>) -> Unit = { _, _ -> }, failed: () -> Unit = {},
+        report: (String) -> Unit): AppInstallation =
         object : AppInstallation {
             private val host = context.applicationContext
             private val installer = MatrixInstaller(host)
@@ -57,10 +59,21 @@ internal object InstallationFactory {
                 "existing_signature_conflict" -> R.string.existing_signature_conflict
                 "application_downgrade" -> R.string.application_downgrade
                 "not_enough_storage" -> R.string.not_enough_storage
+                "installation_invalid", "invalid_application" -> R.string.installation_invalid
+                "installation_incompatible" -> R.string.installation_incompatible
+                "installation_conflict" -> R.string.installation_conflict
+                "installation_blocked" -> R.string.installation_blocked
                 "installation_interrupted" -> R.string.installation_interrupted
                 else -> R.string.install_failed
             })
             private val observer = installer.observe {
+                diagnostic("matrix_${it.stage}", buildMap {
+                    put("reason", it.code)
+                    put("actualPackage", it.packageName)
+                    it.installerStatus?.let { status -> put("status", status.toString()) }
+                    it.installerLegacyStatus?.let { status -> put("legacyStatus", status.toString()) }
+                })
+                if (it.stage == "failed" || it.stage == "cancelled") failed()
                 val retained = it.stage == "failed" && it.packageName.isNotBlank() &&
                     InstalledApplications.read(host, it.packageName) != null
                 report(if (retained) message(it.code) + "\n" + host.getString(R.string.current_version_retained) else message(it.code))
@@ -90,7 +103,7 @@ internal object InstallationFactory {
                 store(key).activate(apk, sha256, version).version
             override fun inspect(apk: File): InspectedApp {
                 val result = try { AdapterEngine.inspect(apk, bundle, selectedProfiles()) }
-                    catch (_: Exception) { throw IllegalStateException(host.getString(R.string.application_check_failed)) }
+                    catch (error: Exception) { throw IllegalStateException(host.getString(R.string.application_check_failed), error) }
                 val compatibility = when {
                     result.route == AdapterEngine.Route.PROFILE ->
                         if (result.profileExact)
@@ -111,7 +124,7 @@ internal object InstallationFactory {
                     val inputs = if (variant == InstallVariant.ORIGINAL) File(host.filesDir, "matrix-bundles") else bundle
                     installer.prepareAndInstall(apk, inputs, mode,
                         if (variant == InstallVariant.ORIGINAL) emptyList() else selectedProfiles())
-                } catch (error: Exception) { throw IllegalStateException(message(error.message.orEmpty())) }
+                } catch (error: Exception) { throw IllegalStateException(message(error.message.orEmpty()), error) }
             }
             override fun recover() = installer.reconcile()
             override fun close() = observer.close()

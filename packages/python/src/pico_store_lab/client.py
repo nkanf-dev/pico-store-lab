@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import os
 import re
+import tempfile
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -94,32 +95,44 @@ def _account_data(response: StoreResponse) -> dict[str, object]:
 
 
 def download_verified_apk(info: DownloadInfo, output: Path, retries: int = 8) -> Path:
-    """Download official APK bytes and verify the provided MD5 before publishing a file."""
+    """Verify isolated APK bytes before atomically publishing a new file."""
     if retries < 1:
         raise ValueError("at least one download attempt required")
     if output.suffix.lower() != ".apk" or output.exists():
         raise ValueError("new .apk output path required")
-    temporary = output.with_name(f"{output.stem}.part.apk")
-    last_error: Exception | None = None
-    for attempt in range(retries):
-        digest = hashlib.md5()  # noqa: S324 - official APK metadata supplies MD5
-        try:
-            with urlopen(info.url, timeout=60) as response:  # noqa: S310 - validated HTTPS URL
-                with temporary.open("wb") as stream:
-                    while chunk := response.read(65536):
+    descriptor, name = tempfile.mkstemp(prefix=f"{output.name}.", suffix=".part", dir=output.parent)
+    temporary = Path(name)
+    try:
+        with os.fdopen(descriptor, "w+b") as stream:
+            last_error: Exception | None = None
+            for attempt in range(retries):
+                try:
+                    stream.seek(0)
+                    stream.truncate()
+                    with urlopen(info.url, timeout=60) as response:  # noqa: S310
+                        while chunk := response.read(65536):
+                            stream.write(chunk)
+                    stream.flush()
+                    stream.seek(0)
+                    digest = hashlib.md5()  # noqa: S324 - official metadata supplies MD5
+                    while chunk := stream.read(65536):
                         digest.update(chunk)
-                        stream.write(chunk)
-            if digest.hexdigest() != info.md5:
-                temporary.unlink(missing_ok=True)
-                raise ValueError("APK digest mismatch")
-            os.link(temporary, output)
-            temporary.unlink()
-            return output
-        except (OSError, URLError) as error:
-            last_error = error
-            if attempt + 1 < retries:
-                time.sleep(min(attempt + 1, 5))
-    raise RuntimeError(f"APK download failed: {last_error}")
+                    if digest.hexdigest() != info.md5:
+                        raise ValueError("APK digest mismatch")
+                    os.link(temporary, output)
+                    return output
+                except FileExistsError:
+                    raise
+                except (OSError, URLError) as error:
+                    last_error = error
+                    if attempt + 1 < retries:
+                        time.sleep(min(attempt + 1, 5))
+            raise RuntimeError(f"APK download failed: {last_error}")
+    finally:
+        try:
+            temporary.unlink(missing_ok=True)
+        except OSError:
+            pass
 
 
 class PicoStoreClient:
