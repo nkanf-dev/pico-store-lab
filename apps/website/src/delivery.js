@@ -195,9 +195,9 @@ export function directRedirect(info) {
 // multi-hundred-megabyte transfer outlives any request-scoped abort.
 export async function apkResponse(info, fileName, request, fetchImpl = fetch, diagnostic = () => {}) {
   const validator = request.headers.get('if-range');
-  // This service exposes its own MD5 ETag, which need not match the CDN's.
-  // Without a matching strong validator, fetch the whole current version.
-  const rangeHeader = validator === null || validator === `"${info.md5}"`
+  // Store MD5 metadata is advisory and cannot identify the current CDN bytes.
+  // Forward strong entity tags; dates/weak tags safely fall back to a full fetch.
+  const rangeHeader = validator === null || /^"[\x21\x23-\x7e\x80-\xff]*"$/.test(validator)
     ? request.headers.get('range') : null;
   let selectedRange = /^bytes=(\d*)-(\d*)$/i.test(rangeHeader ?? '') ? rangeHeader : null;
   let upstream, length;
@@ -207,17 +207,19 @@ export async function apkResponse(info, fileName, request, fetchImpl = fetch, di
     const timer = setTimeout(() => abort.abort(), REQUEST_TIMEOUT_MS);
     try {
       upstream = await fetchImpl(info.url, {
-        headers: { 'Accept-Encoding': 'identity', ...(selectedRange ? { Range: selectedRange } : {}) },
+        headers: { 'Accept-Encoding': 'identity', ...(selectedRange ? {
+          Range: selectedRange, ...(validator !== null ? { 'If-Range': validator } : {}),
+        } : {}) },
         redirect: 'follow', signal: abort.signal,
       });
       diagnostic({ stage: 'cdn_response', attempt: attempt + 1, httpStatus: upstream.status });
       if (!upstream.ok || !upstream.body || ![200, 206].includes(upstream.status))
         throw new DeliveryError('apk_unavailable', 502, { upstreamStatus: upstream.status });
       length = responseLength(upstream, selectedRange);
-      // An If-Range validator from an earlier full download cannot identify a
-      // differently sized CDN object, even when PICO's metadata still has its old MD5.
+      // A CDN that ignores If-Range must not make us append a different object,
+      // including a replacement with the same size and stale store metadata.
       if (upstream.status === 206 && validator !== null &&
-          Number(upstream.headers.get('content-range')?.split('/')[1]) !== info.size)
+          upstream.headers.get('etag') !== validator)
         throw new DeliveryError('apk_range_changed', 502);
       break;
     } catch (error) {
@@ -237,7 +239,6 @@ export async function apkResponse(info, fileName, request, fetchImpl = fetch, di
     'Content-Type': 'application/vnd.android.package-archive',
     'Content-Disposition': `attachment; filename="${fileName}"; filename*=UTF-8''${encodeURIComponent(fileName)}`,
     'Accept-Ranges': 'bytes',
-    'ETag': `"${info.md5}"`,
     'X-Apk-Md5': info.md5,
     'X-Apk-Size': String(info.size),
     'X-Apk-Version-Code': String(info.versionCode),
@@ -246,6 +247,10 @@ export async function apkResponse(info, fileName, request, fetchImpl = fetch, di
     'X-Content-Type-Options': 'nosniff',
     'Referrer-Policy': 'no-referrer',
   });
+  for (const name of ['ETag', 'Last-Modified']) {
+    const value = upstream.headers.get(name);
+    if (value !== null) headers.set(name, value);
+  }
   if (length !== null && /^\d+$/.test(length)) headers.set('Content-Length', length);
   if (upstream.status === 200 && length !== null && Number(length) !== info.size)
     headers.set('X-Apk-Metadata-Notice', 'size_changed');

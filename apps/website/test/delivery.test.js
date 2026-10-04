@@ -9,6 +9,7 @@ test('stale size and digest metadata does not block completed original bytes', a
   const response = await apkResponse(info, 'app.apk', request(), async () => new Response(bytes, { headers: { 'Content-Length': '8' } }));
   assert.equal(response.status, 200);
   assert.equal(response.headers.get('content-length'), '8');
+  assert.equal(response.headers.get('etag'), null);
   assert.equal(response.headers.get('x-apk-metadata-notice'), 'size_changed');
   assert.deepEqual(new Uint8Array(await response.arrayBuffer()), bytes);
 });
@@ -54,16 +55,54 @@ test('final CDN error has stage, attempts and status without private link', asyn
 });
 
 
-test('a resumed object with stale If-Range metadata restarts instead of mixing versions', async () => {
+test('a same-size replacement with stale metadata restarts instead of mixing versions', async () => {
   let attempts = 0;
-  const response = await apkResponse(info, 'app.apk', request({ Range: 'bytes=4-', 'If-Range': `"${info.md5}"` }), async (_url, init) => {
-    if (++attempts === 1) return new Response(bytes.subarray(4), { status: 206, headers: { 'Content-Range': 'bytes 4-7/8' } });
-    assert.equal(new Headers(init.headers).get('range'), null);
-    return new Response(bytes);
+  const calls = [];
+  const response = await apkResponse({ ...info, size: 8 }, 'app.apk', request({ Range: 'bytes=4-', 'If-Range': `"${info.md5}"` }), async (_url, init) => {
+    calls.push(new Headers(init.headers));
+    if (++attempts === 1) {
+      return new Response(bytes.subarray(4), { status: 206,
+        headers: { 'Content-Range': 'bytes 4-7/8', ETag: '"new-object"' } });
+    }
+    return new Response(bytes, { headers: { ETag: '"new-object"' } });
   });
   assert.equal(attempts, 2);
+  assert.equal(calls[0].get('if-range'), `"${info.md5}"`);
+  assert.equal(calls[1].get('range'), null);
+  assert.equal(calls[1].get('if-range'), null);
   assert.equal(response.status, 200);
+  assert.equal(response.headers.get('etag'), '"new-object"');
   assert.deepEqual(new Uint8Array(await response.arrayBuffer()), bytes);
+});
+
+test('a matching CDN entity tag permits resume despite stale store size and MD5', async () => {
+  let attempts = 0;
+  const response = await apkResponse(info, 'app.apk', request({ Range: 'bytes=4-', 'If-Range': '"cdn-object"' }), async (_url, init) => {
+    attempts++;
+    assert.equal(new Headers(init.headers).get('range'), 'bytes=4-');
+    assert.equal(new Headers(init.headers).get('if-range'), '"cdn-object"');
+    return new Response(bytes.subarray(4), { status: 206,
+      headers: { 'Content-Range': 'bytes 4-7/8', ETag: '"cdn-object"' } });
+  });
+  assert.equal(attempts, 1);
+  assert.equal(response.status, 206);
+  assert.equal(response.headers.get('etag'), '"cdn-object"');
+  assert.deepEqual(new Uint8Array(await response.arrayBuffer()), bytes.subarray(4));
+});
+
+test('an unvalidated partial CDN response recovers with a full fetch', async () => {
+  for (const etag of [undefined, 'W/"cdn-object"']) {
+    let attempts = 0;
+    const response = await apkResponse({ ...info, size: 8 }, 'app.apk', request({ Range: 'bytes=4-', 'If-Range': '"cdn-object"' }), async (_url, init) => {
+      if (++attempts === 1) return new Response(bytes.subarray(4), { status: 206,
+        headers: { 'Content-Range': 'bytes 4-7/8', ...(etag ? { ETag: etag } : {}) } });
+      assert.equal(new Headers(init.headers).get('range'), null);
+      return new Response(bytes);
+    });
+    assert.equal(attempts, 2);
+    assert.equal(response.status, 200);
+    assert.deepEqual(new Uint8Array(await response.arrayBuffer()), bytes);
+  }
 });
 
 test('contradictory CDN range length recovers rather than publishing the wrong response framing', async () => {

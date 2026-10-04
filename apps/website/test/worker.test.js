@@ -69,6 +69,7 @@ function upstreamStub(overrides = {}) {
         status: state.apkStatus,
         headers: {
           'content-length': String(partial ? 4 : APK_BYTES.length),
+          etag: `"${APK_MD5}"`,
           ...(partial ? { 'content-range': `bytes 0-3/${APK_BYTES.length}` } : {}),
         },
       });
@@ -577,25 +578,28 @@ test('range requests resume a partial download', async () => {
   } finally { env.DB.close(); }
 });
 
-test('If-Range is evaluated against the MD5 ETag before requesting partial bytes', async () => {
+test('If-Range uses the CDN entity tag and recovers when a CDN ignores the condition', async () => {
   const info = { url: 'https://cdn.example.test/current.apk', md5: APK_MD5, size: APK_BYTES.length, versionCode: 2, version: '2' };
-  const etag = `"${APK_MD5}"`;
+  const etag = '"cdn-current-object"';
   for (const [validator, partial] of [
     [etag, true], [null, true], ['"00000000000000000000000000000000"', false],
     [`W/${etag}`, false], ['Thu, 17 Sep 2026 00:00:00 GMT', false],
   ]) {
+    let attempts = 0;
     const response = await apkResponse(info, 'app.apk', request('/api/download', {
       headers: { Range: 'bytes=4-', ...(validator ? { 'If-Range': validator } : {}) },
     }), async (_url, init) => {
       const range = new Headers(init.headers).get('range');
-      assert.equal(Boolean(range), partial, String(validator));
+      attempts++;
+      assert.equal(new Headers(init.headers).get('if-range'), range ? validator : null);
       return new Response(range ? APK_BYTES.subarray(4) : APK_BYTES, {
         status: range ? 206 : 200,
-        headers: { 'Content-Length': String(range ? 4 : APK_BYTES.length),
+        headers: { ETag: etag, 'Content-Length': String(range ? 4 : APK_BYTES.length),
           ...(range ? { 'Content-Range': 'bytes 4-7/8' } : {}) },
       });
     });
     assert.equal(response.status, partial ? 206 : 200);
+    assert.equal(attempts, validator === '"00000000000000000000000000000000"' ? 2 : 1);
     assert.equal(response.headers.get('etag'), etag);
     assert.equal((await response.arrayBuffer()).byteLength, partial ? 4 : 8);
   }
