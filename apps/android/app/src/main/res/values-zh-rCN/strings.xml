@@ -50,6 +50,7 @@
     <string name="diagnostic_details">查看错误详情</string>
     <string name="report_copied">诊断报告已复制，发给我们即可继续排查。</string>
     <string name="report_save_failed">无法保存报告，可以先复制后发给我们。</string>
+    <string name="report_copy_failed">无法复制报告，可以保存文件或展开查看详情。</string>
     <string name="adaptation_original_available">账号适配没有完成，下载的文件已准备好，可以先安装原版。</string>
     <string name="installation_invalid">系统无法安装这个安装包。请重新下载；如果仍然失败，请反馈应用名称和头显型号。</string>
     <string name="installation_incompatible">这个版本不支持当前头显或系统，请检查是否有系统更新。</string>

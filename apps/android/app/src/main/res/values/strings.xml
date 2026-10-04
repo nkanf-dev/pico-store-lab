@@ -50,6 +50,7 @@
     <string name="diagnostic_details">Error details</string>
     <string name="report_copied">Diagnostic report copied. Send it to us so we can investigate.</string>
     <string name="report_save_failed">Could not save the report. You can copy it instead.</string>
+    <string name="report_copy_failed">Could not copy the report. You can save it or open the details.</string>
     <string name="adaptation_original_available">Account adaptation could not finish. Your download is ready; you can install the original app.</string>
     <string name="installation_invalid">The system could not install this package. Download it again; if it still fails, send us the app name and headset model.</string>
     <string name="installation_incompatible">This version is not compatible with your headset or system. Check for a system update.</string>

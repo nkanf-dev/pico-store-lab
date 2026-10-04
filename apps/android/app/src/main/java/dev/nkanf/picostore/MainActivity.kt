@@ -118,11 +118,11 @@ class MainActivity : ComponentActivity() {
                 imageLoader = imageLoader,
                 message = message.value,
                 diagnosticReport = diagnosticReport.value,
-                onCopyReport = {
-                    (getSystemService(CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("PICO Store Lab diagnostics", diagnosticReport.value.orEmpty()))
-                    message.value = getString(R.string.report_copied)
+                onCopyReport = ::copyDiagnosticReport,
+                onSaveReport = {
+                    runCatching { saveReport.launch("pico-store-lab-diagnostics.json") }
+                        .onFailure { copyDiagnosticReport() }
                 },
-                onSaveReport = { saveReport.launch("pico-store-lab-diagnostics.json") },
                 email = email.value,
                 signedIn = auth.value != null,
                 favorites = favorites.value,
@@ -179,6 +179,14 @@ class MainActivity : ComponentActivity() {
             auth.value = session.auth
             email.value = session.email
         }.onFailure { message.value = getString(R.string.session_unavailable) }
+    }
+
+    private fun copyDiagnosticReport() {
+        runCatching {
+            (getSystemService(CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(
+                ClipData.newPlainText("PICO Store Lab diagnostics", diagnosticReport.value.orEmpty()))
+            message.value = getString(R.string.report_copied)
+        }.onFailure { message.value = getString(R.string.report_copy_failed) }
     }
 
     private fun work(block: () -> Unit) {
