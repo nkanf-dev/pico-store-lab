@@ -88,6 +88,8 @@ pico-store-py logout
 
 On Windows, activate the environment with `.venv\Scripts\Activate.ps1` instead. Choose a new output filename. After downloading, install the APK on your headset using its installer or `adb install -r ./selected-app.apk`. Run `pico-store-py --help` for more options.
 
+To localize the interface, add `--locale zh-CN`; it translates help (including each subcommand's `--help`), the hidden verification-code prompts, validation errors and result messages into Simplified Chinese, for example `pico-store-py --locale zh-CN --region cn search AeriPane`. The locale changes interface language only and never switches the store region.
+
 To narrow search results, add `--price free` or `--price paid`, for example `pico-store-py --region cn search 视频 --price free`. The filter applies to the current search page.
 
 The Python CLI also supports the mainland China store. Use `--region cn` with your China account's phone number:

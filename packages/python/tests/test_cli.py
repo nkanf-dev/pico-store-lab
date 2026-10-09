@@ -140,6 +140,89 @@ class CliTests(unittest.TestCase):
         self.assertEqual(capture.call_args.kwargs["browser_path"], browser)
         save.assert_called_once_with(auth)
 
+    def test_help_is_english_by_default(self) -> None:
+        """Without --locale the built-in and descriptive help stays English."""
+        with (
+            redirect_stdout(io.StringIO()) as out,
+            self.assertRaises(SystemExit) as caught,
+        ):
+            main(["--help"])
+        self.assertEqual(caught.exception.code, 0)
+        rendered = out.getvalue()
+        self.assertIn("PICO Store Lab Python CLI", rendered)
+        self.assertIn("positional arguments", rendered)
+        self.assertIn("options", rendered)
+        self.assertIn("Search official PICO apps", rendered)
+
+    def test_zh_cn_localizes_top_and_subcommand_help(self) -> None:
+        """--locale zh-CN translates descriptions, headings and option help."""
+        with (
+            redirect_stdout(io.StringIO()) as out,
+            self.assertRaises(SystemExit) as caught,
+        ):
+            main(["--locale", "zh-CN", "--help"])
+        self.assertEqual(caught.exception.code, 0)
+        top = out.getvalue()
+        self.assertIn("PICO 商店实验室 Python 命令行工具", top)
+        self.assertIn("位置参数", top)
+        self.assertIn("选项", top)
+        self.assertIn("搜索 PICO 官方商店应用", top)
+        self.assertNotIn("positional arguments", top)
+
+        with (
+            redirect_stdout(io.StringIO()) as out,
+            self.assertRaises(SystemExit) as caught,
+        ):
+            main(["--locale", "zh-CN", "search", "--help"])
+        self.assertEqual(caught.exception.code, 0)
+        self.assertIn("搜索关键词", out.getvalue())
+        self.assertIn("免费", out.getvalue())
+
+    def test_zh_cn_localizes_sms_prompt(self) -> None:
+        """The hidden verification-code prompt is shown in the selected language."""
+        auth = PicoAuth("123", "secret", region="cn")
+        with (
+            patch("pico_store_lab.cli.PicoStoreClient") as factory,
+            patch("pico_store_lab.cli.getpass.getpass", return_value="123456") as prompt,
+            patch("pico_store_lab.cli.credentials.save"),
+            redirect_stdout(io.StringIO()),
+        ):
+            factory.return_value.login_mobile.return_value = auth
+            self.assertEqual(
+                main(["--locale", "zh-CN", "--region", "cn", "login", "--mobile", "19900000000"]),
+                0,
+            )
+        prompt.assert_called_once_with("PICO 短信验证码：")
+
+    def test_zh_cn_localizes_validation_error(self) -> None:
+        """Region/channel mistakes are reported in the selected language."""
+        with (
+            redirect_stderr(io.StringIO()) as err,
+            self.assertRaises(SystemExit) as caught,
+        ):
+            main(["--locale", "zh-CN", "--region", "cn", "login", "--email", "t@example.com"])
+        self.assertEqual(caught.exception.code, 2)
+        self.assertIn("国区", err.getvalue())
+        self.assertIn("--mobile", err.getvalue())
+
+    def test_locale_switches_result_messages(self) -> None:
+        """Result lines follow --locale for both Chinese and English."""
+        with (
+            patch("pico_store_lab.cli.PicoStoreClient"),
+            patch("pico_store_lab.cli.credentials.clear"),
+            redirect_stdout(io.StringIO()) as out,
+        ):
+            self.assertEqual(main(["--locale", "zh-CN", "--region", "cn", "logout"]), 0)
+            self.assertIn("已退出登录。", out.getvalue())
+
+        with (
+            patch("pico_store_lab.cli.PicoStoreClient"),
+            patch("pico_store_lab.cli.credentials.clear"),
+            redirect_stdout(io.StringIO()) as out,
+        ):
+            self.assertEqual(main(["logout"]), 0)
+            self.assertIn("Signed out.", out.getvalue())
+
 
 if __name__ == "__main__":
     unittest.main()
