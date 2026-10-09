@@ -24,8 +24,12 @@ jobs:
       - run: npm pack --dry-run -w @nkanf-dev/pico-store-sdk
 
   python:
-    name: Python SDK and CLI
-    runs-on: ubuntu-latest
+    name: Python SDK and CLI (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -33,10 +37,11 @@ jobs:
           python-version: '3.11'
       - run: python -m pip install ruff==0.15.22 build hatchling
       - run: python -m pip install -e packages/python
-      - run: ruff check packages/python tools
-      - run: ruff format --check packages/python tools
-      - run: PYTHONPATH=packages/python/src python -m unittest discover -s packages/python/tests -v
+      - run: python -m ruff check packages/python tools
+      - run: python -m ruff format --check packages/python tools
+      - run: python -m unittest discover -s packages/python/tests -v
       - run: python -m build packages/python
+        if: matrix.os == 'ubuntu-latest'
 
   rust:
     name: Rust SDK and Desktop
