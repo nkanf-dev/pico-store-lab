@@ -8,13 +8,19 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 - Python CLI `login-window` (alias `login-gui`) opens the official PICO login page in a dedicated browser window, captures the signed-in session via the Chrome DevTools Protocol, verifies it with the account service, closes the window automatically, and saves the region session. Microsoft Edge or Google Chrome is required; the window uses an isolated temporary browser profile.
 
-- Python CLI `search --price free` and `search --price paid` filter the current search page to free or paid apps; the SDK exposes `PicoStoreClient.search(price=...)`, `filter_search_items`, `is_free_price`, and `is_paid_price.
+- Python CLI `search --price free` and `search --price paid` filter the current search page to free or paid apps; the SDK exposes `PicoStoreClient.search(price=...)`, `filter_search_items`, `is_free_price`, and `is_paid_price`.
+
+### Changed
+
+- CI runs the Python SDK lint and test suite on Ubuntu, Windows, and macOS instead of Ubuntu only, so cross-platform regressions are caught before merge.
 
 ### Fixed
 
 - Python CLI `search` and `status` print non-ASCII app names directly (UTF-8) instead of `\uXXXX` Unicode escapes.
 
-- Python CLI `search --price free` and `search --price paid` filter the current search page to free or paid apps; the SDK exposes `PicoStoreClient.search(price=...)`, `filter_search_items`, `is_free_price`, and `is_paid_price`.
+- Embedded browser login (`login-window`) keeps discovered browser paths in the form reported by the operating system instead of rewriting POSIX separators to the host format, so browser discovery and the Python test suite pass on Windows and macOS as well as Linux.
+
+- Embedded browser login raises English error messages consistent with the rest of the SDK, so the default English CLI no longer displays untranslated Chinese errors.
 
 ## [0.2.0] - 2026-09-23
 
