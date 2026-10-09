@@ -10,6 +10,8 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 - Python CLI `search --price free` and `search --price paid` filter the current search page to free or paid apps; the SDK exposes `PicoStoreClient.search(price=...)`, `filter_search_items`, `is_free_price`, and `is_paid_price.
 
+- Python CLI `--locale zh-CN` now localizes the full interface instead of only a few result messages: top-level and each subcommand's `--help` (descriptions, section headings and the `-h/--help` line), hidden verification-code prompts, region validation errors and result messages. English remains the default; command and option names are never translated, and the locale never changes the selected store region.
+
 ### Fixed
 
 - Python CLI `search` and `status` print non-ASCII app names directly (UTF-8) instead of `\uXXXX` Unicode escapes.
