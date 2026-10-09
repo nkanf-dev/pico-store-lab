@@ -72,25 +72,42 @@ Use **Check for updates** in the desktop window or Android account menu to find 
 
 ### 4. Python command line
 
-With Python 3.11 or later, install the CLI in a virtual environment. As above, replace the email and app details with your own choices.
+Requires Python 3.11 or later. First create and activate a virtual environment, then install the CLI:
 
 ```sh
 python3 -m venv .venv
-. .venv/bin/activate
+. .venv/bin/activate                       # Windows PowerShell: .venv\Scripts\Activate.ps1
 python -m pip install pico-store-lab
-pico-store-py search 'YouTube VR'
-pico-store-py status --item-id 7270207384512020485 --package com.google.android.apps.youtube.vr.pico
+```
+
+Run the commands below inside this activated environment.
+
+**Sign in with your international account.** Send a one-time code to your email, then exchange the code you receive for a session:
+
+```sh
 pico-store-py send-code --email you@example.com
 pico-store-py login --email you@example.com
+```
+
+**Search and inspect apps.** Find apps and view one app's details. Add `--price free` or `--price paid` to narrow the current search page (works in either region):
+
+```sh
+pico-store-py search 'YouTube VR'
+pico-store-py search VRChat --price free
+pico-store-py status --item-id 7270207384512020485 --package com.google.android.apps.youtube.vr.pico
+```
+
+**Download and install.** Pick an output filename that does not exist yet, then install the APK on your headset with its installer or ADB. Use `logout` to clear the saved session when you are done:
+
+```sh
 pico-store-py download --item-id 7270207384512020485 --package com.google.android.apps.youtube.vr.pico --output ./selected-app.apk
+adb install -r ./selected-app.apk
 pico-store-py logout
 ```
 
-On Windows, activate the environment with `.venv\Scripts\Activate.ps1` instead. Choose a new output filename. After downloading, install the APK on your headset using its installer or `adb install -r ./selected-app.apk`. Run `pico-store-py --help` for more options.
+Run `pico-store-py --help` for every option, or read the [Python guide](packages/python/README.md).
 
-To narrow search results, add `--price free` or `--price paid`, for example `pico-store-py --region cn search 视频 --price free`. The filter applies to the current search page.
-
-The Python CLI also supports the mainland China store. Use `--region cn` with your China account's phone number:
+**Use the mainland China store.** Add `--region cn` and sign in with your China phone number; the CLI prompts you for the SMS code. International and China sessions are stored separately, so omitting `--region` keeps using the international store. Need a China account? [Register with PICO](https://sso.picoxr.com/passport) first.
 
 ```sh
 pico-store-py --region cn search AeriPane
@@ -99,15 +116,13 @@ pico-store-py --region cn login --mobile YOUR_PHONE_NUMBER
 pico-store-py --region cn download --item-id 7680447105202274345 --package com.aeripane.pico --output ./AeriPane.apk
 ```
 
-Enter your SMS code when prompted. Need a China account? [Register with PICO](https://sso.picoxr.com/passport), then return to sign in. International and China sign-ins stay separate; omit `--region` to continue using the international store. See the [Python guide](packages/python/README.md) for more options.
-
-If you prefer to sign in through PICO's official browser page, use `login-window` (alias `login-gui`). It opens the official PICO login page in a dedicated browser window, closes the window automatically after you sign in, verifies the session with the account service, and saves that region's sign-in:
+**Sign in through the official browser page.** `login-window` (alias `login-gui`) opens PICO's official login page in a dedicated window, closes the window automatically once you finish signing in, verifies the session with the account service, and saves that region's sign-in:
 
 ```sh
 pico-store-py --region cn login-window
 ```
 
-Microsoft Edge or Google Chrome must be installed. The window uses an isolated temporary browser profile, so your normal browser profile and cookies are never touched. Closing the window before signing in cancels the command.
+Microsoft Edge or Google Chrome must be installed. The window uses an isolated temporary browser profile, so your normal browser profile and cookies are never touched. Closing the window before you finish signing in cancels the command.
 
 ## For developers
 

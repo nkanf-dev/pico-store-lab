@@ -72,25 +72,42 @@
 
 ### 4. Python 命令行
 
-需要 Python 3.11 或更高版本。创建虚拟环境并安装 CLI，将示例中的邮箱和应用信息替换为你自己的选择。
+需要 Python 3.11 或更高版本。先创建并激活虚拟环境，再安装 CLI：
 
 ```sh
 python3 -m venv .venv
-. .venv/bin/activate
+. .venv/bin/activate                       # Windows PowerShell 改用：.venv\Scripts\Activate.ps1
 python -m pip install pico-store-lab
-pico-store-py search 'YouTube VR'
-pico-store-py status --item-id 7270207384512020485 --package com.google.android.apps.youtube.vr.pico
+```
+
+以下命令都在已激活的虚拟环境中运行。
+
+**用国际区账号登录。** 先向邮箱发送一次性验证码，再用收到的验证码换取登录会话：
+
+```sh
 pico-store-py send-code --email you@example.com
 pico-store-py login --email you@example.com
+```
+
+**搜索与查看应用。** 搜索应用并查看某个应用的详情；可加 `--price free` 或 `--price paid` 缩小当前搜索页的范围（国际区、国区均适用）：
+
+```sh
+pico-store-py search 'YouTube VR'
+pico-store-py search VRChat --price free
+pico-store-py status --item-id 7270207384512020485 --package com.google.android.apps.youtube.vr.pico
+```
+
+**下载并安装。** 输出文件名必须尚不存在；下载后用头显安装器或 ADB 安装。需要清除已保存的会话时使用 `logout`：
+
+```sh
 pico-store-py download --item-id 7270207384512020485 --package com.google.android.apps.youtube.vr.pico --output ./selected-app.apk
+adb install -r ./selected-app.apk
 pico-store-py logout
 ```
 
-Windows 用户请改用 `.venv\Scripts\Activate.ps1` 激活虚拟环境。请选择尚未存在的输出文件名。下载后，用头显安装器或 `adb install -r ./selected-app.apk` 安装。更多选项见 `pico-store-py --help`。
+完整选项见 `pico-store-py --help`，SDK 用法见 [Python 指南](packages/python/README.md)。
 
-如需缩小搜索范围，可加 `--price free` 或 `--price paid`，例如 `pico-store-py --region cn search 视频 --price free`。筛选作用于当前搜索页。
-
-Python 命令行也支持国区商店。添加 `--region cn`，使用国区账号的手机号登录：
+**使用国区商店。** 加上 `--region cn`，用国区账号手机号登录，命令行会提示输入短信验证码。国际区与国区会话分别保存，不加 `--region` 时仍使用国际区商店。还没有国区账号？先到 [PICO 官网注册](https://sso.picoxr.com/passport)。
 
 ```sh
 pico-store-py --region cn search AeriPane
@@ -99,15 +116,13 @@ pico-store-py --region cn login --mobile 你的手机号
 pico-store-py --region cn download --item-id 7680447105202274345 --package com.aeripane.pico --output ./AeriPane.apk
 ```
 
-按提示输入短信验证码即可。还没有国区账号？先到 [PICO 官网注册](https://sso.picoxr.com/passport)，再回来登录。国区和国际区分别登录；不加 `--region` 时仍使用国际区商店。更多用法见 [Python 指南](packages/python/README.md)。
-
-如果你更喜欢通过 PICO 官方网页登录，可以使用弹窗登录命令 `login-window`（别名 `login-gui`）。它会打开 PICO 官方登录窗口，登录成功后自动关闭窗口，校验会话并保存：
+**通过官方网页登录。** `login-window`（别名 `login-gui`）会在独立窗口打开 PICO 官方登录页，登录完成后自动关闭窗口，向账号服务校验会话并保存该区登录态：
 
 ```sh
 pico-store-py --region cn login-window
 ```
 
-需要本机安装 Microsoft Edge 或 Google Chrome。窗口使用独立的临时浏览器配置，不会读取或改动你日常浏览器的资料；在登录前关闭窗口即取消本次登录。
+需要本机已安装 Microsoft Edge 或 Google Chrome。窗口使用独立的临时浏览器配置，不会读取或改动你日常浏览器的资料与 Cookie；在完成登录前关闭窗口即取消本次命令。
 
 ## 开发者文档
 
