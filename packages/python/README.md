@@ -41,7 +41,7 @@ pico-store-py --region cn download --item-id 7680447105202274345 --package com.a
 pico-store-py --region cn logout
 ```
 
-Enter the SMS code at the hidden prompt. Use `--country-code` on `send-code` and `login` for a different dialing code. Omit `--region` to use your international account as before. `--locale zh-CN` changes CLI messages; it does not change the store. To select a headset model, use `--device`, for example `pico-store-py --region cn --device B3110 search AeriPane`.
+Enter the SMS code at the hidden prompt. Use `--country-code` on `send-code` and `login` for a different dialing code. Omit `--region` to use your international account as before. Add `--locale zh-CN` to localize the whole CLI interface — top-level and subcommand `--help`, the hidden verification-code prompts, validation errors and result messages — into Simplified Chinese; it changes interface language only, not the store region. To select a headset model, use `--device`, for example `pico-store-py --region cn --device B3110 search AeriPane`.
 
 If you prefer to sign in through PICO's official browser page, use `login-window` (alias `login-gui`). It opens the official PICO login page in a dedicated browser window, closes the window automatically after you sign in, verifies the session with the account service, and saves that region's sign-in:
 

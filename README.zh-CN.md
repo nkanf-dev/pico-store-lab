@@ -107,6 +107,10 @@ pico-store-py logout
 
 完整选项见 `pico-store-py --help`，SDK 用法见 [Python 指南](packages/python/README.md)。
 
+如需中文界面，可加 `--locale zh-CN`，它会把帮助（含各子命令的 `--help`）、隐藏的验证码提示、参数校验报错和结果消息翻译为简体中文，例如 `pico-store-py --locale zh-CN --region cn search AeriPane`。该选项只改变界面语言，不会切换商店区域。
+
+如需缩小搜索范围，可加 `--price free` 或 `--price paid`，例如 `pico-store-py --region cn search 视频 --price free`。筛选作用于当前搜索页。
+
 **使用国区商店。** 加上 `--region cn`，用国区账号手机号登录，命令行会提示输入短信验证码。国际区与国区会话分别保存，不加 `--region` 时仍使用国际区商店。还没有国区账号？先到 [PICO 官网注册](https://sso.picoxr.com/passport)。
 
 ```sh
