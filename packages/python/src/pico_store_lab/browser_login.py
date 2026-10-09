@@ -112,7 +112,10 @@ def _path_candidates(names: tuple[str, ...]) -> tuple[tuple[str, ...], ...]:
     found: list[tuple[str, ...]] = []
     for name in names:
         executable = shutil.which(name)
-        if executable and (command := (str(Path(executable)),)) not in found:
+        # Keep the resolved command exactly as the host reported it; do not
+        # round-trip it through pathlib, which rewrites separators to the host
+        # convention and corrupts POSIX paths discovered on another platform.
+        if executable and (command := (executable,)) not in found:
             found.append(command)
     return tuple(found)
 
@@ -260,7 +263,9 @@ def _desktop_command(path: Path) -> tuple[tuple[str, ...], str] | None:
     )
     if family is None:
         return None
-    return (str(Path(resolved)), *argv[1:]), family
+    # ``resolved`` already names a runnable executable; return it verbatim so
+    # POSIX paths keep their separators regardless of the host operating system.
+    return (resolved, *argv[1:]), family
 
 
 def _linux_browser_candidates(family: str) -> tuple[tuple[str, ...], ...]:
@@ -308,7 +313,10 @@ def find_browser() -> tuple[str, ...]:
     chromium_registered = _registered_browser_candidates("chromium")
     if chromium_registered:
         return chromium_registered[0]
-    raise BrowserLoginError("未找到 Edge、Chrome 或其他 Chromium 系浏览器，请先安装。")
+    raise BrowserLoginError(
+        "No Microsoft Edge, Google Chrome, or other Chromium-based browser was found. "
+        "Please install one and try again."
+    )
 
 
 def _browser_command(browser_path: str | Path | None) -> tuple[str, ...]:
@@ -320,7 +328,7 @@ def _browser_command(browser_path: str | Path | None) -> tuple[str, ...]:
         return (str(candidate),)
     if not candidate.is_absolute() and (resolved := shutil.which(str(browser_path))):
         return (resolved,)
-    raise BrowserLoginError(f"指定的浏览器不可执行：{browser_path}")
+    raise BrowserLoginError(f"The specified browser is not executable: {browser_path}")
 
 
 def _free_port() -> int:
@@ -347,12 +355,12 @@ def _wait_cdp(port: int, process: subprocess.Popen[bytes], deadline_s: float = 2
     deadline = time.monotonic() + deadline_s
     while (remaining := deadline - time.monotonic()) > 0:
         if process.poll() is not None:
-            raise LoginCancelled("登录窗口已关闭，未完成登录。")
+            raise LoginCancelled("The login window was closed before sign-in completed.")
         try:
             return _http_json(f"http://127.0.0.1:{port}/json/version", timeout=min(2.0, remaining))
         except (URLError, OSError, ValueError):
             time.sleep(0.2)
-    raise BrowserLoginError("无法连接浏览器调试端口。")
+    raise BrowserLoginError("Could not connect to the browser's remote debugging port.")
 
 
 def _page_ws_url(port: int, deadline_s: float = 20.0) -> str:
@@ -373,7 +381,7 @@ def _page_ws_url(port: int, deadline_s: float = 20.0) -> str:
                 ):
                     return str(target["webSocketDebuggerUrl"])
         time.sleep(0.2)
-    raise LoginTimeout("未找到登录页面目标。")
+    raise LoginTimeout("No login page target was found in the browser.")
 
 
 class _Cdp:
@@ -396,7 +404,7 @@ class _Cdp:
     ) -> dict[str, object]:
         """Send one CDP command and wait for its matching response."""
         if timeout_s <= 0:
-            raise LoginTimeout(f"等待浏览器响应 {method} 超时。")
+            raise LoginTimeout(f"Timed out waiting for the browser response to {method}.")
         self._next_id += 1
         message_id = self._next_id
         deadline = time.monotonic() + timeout_s
@@ -405,7 +413,7 @@ class _Cdp:
         while True:
             remaining = deadline - time.monotonic()
             if remaining <= 0:
-                raise LoginTimeout(f"等待浏览器响应 {method} 超时。")
+                raise LoginTimeout(f"Timed out waiting for the browser response to {method}.")
             self.ws.settimeout(min(2.0, remaining))
             try:
                 data = json.loads(self.ws.recv())
@@ -413,7 +421,7 @@ class _Cdp:
                 continue
             if isinstance(data, dict) and data.get("id") == message_id:
                 if "error" in data:
-                    raise BrowserLoginError(f"CDP {method} 失败：{data['error']}")
+                    raise BrowserLoginError(f"CDP {method} failed: {data['error']}")
                 result = data.get("result")
                 return result if isinstance(result, dict) else {}
 
@@ -442,11 +450,11 @@ class LoginController:
         if self.cdp is None:
             deadline = time.monotonic() + timeout_s
             if timeout_s <= 0:
-                raise LoginTimeout("连接浏览器登录页面超时。")
+                raise LoginTimeout("Timed out connecting to the browser login page.")
             ws_url = _page_ws_url(self.port, deadline_s=timeout_s)
             remaining = deadline - time.monotonic()
             if remaining <= 0:
-                raise LoginTimeout("连接浏览器登录页面超时。")
+                raise LoginTimeout("Timed out connecting to the browser login page.")
             ws = websocket.create_connection(
                 ws_url,
                 timeout=min(2.0, remaining),
@@ -459,7 +467,7 @@ class LoginController:
         """Read cookies, reconnecting once if the target WebSocket was lost."""
         deadline = time.monotonic() + timeout_s
         if timeout_s <= 0:
-            raise LoginTimeout("读取浏览器登录状态超时。")
+            raise LoginTimeout("Timed out reading the browser login state.")
         try:
             cdp = self._ensure_cdp(timeout_s=deadline - time.monotonic())
             return cdp.cookies(timeout_s=deadline - time.monotonic())
@@ -589,19 +597,19 @@ def fetch_account_info(auth: PicoAuth, config: StoreConfig) -> tuple[str, dict[s
         with urlopen(request, timeout=25) as response:
             payload = json.loads(response.read().decode())
     except (HTTPError, URLError, ValueError) as error:
-        raise BrowserLoginError(f"无法连接账号服务：{error}") from None
+        raise BrowserLoginError(f"Could not reach the account service: {error}") from None
 
     if not isinstance(payload, dict) or payload.get("message") != "success":
         data = payload.get("data") if isinstance(payload, dict) else None
         code = data.get("error_code") if isinstance(data, dict) else "?"
         desc = data.get("description") if isinstance(data, dict) else ""
-        raise BrowserLoginError(f"登录态无效（error_code {code}：{desc}）")
+        raise BrowserLoginError(f"The sign-in session is invalid (error_code {code}: {desc})")
     data = payload.get("data")
     if not isinstance(data, dict):
-        raise BrowserLoginError("账号服务返回内容异常。")
+        raise BrowserLoginError("The account service returned an unexpected response.")
     uid = data.get("user_id_str") or data.get("user_id")
     if re.fullmatch(r"[1-9][0-9]{0,19}", str(uid)) is None:
-        raise BrowserLoginError("账号服务未返回有效用户信息。")
+        raise BrowserLoginError("The account service did not return a valid account identity.")
     return str(uid), data
 
 
@@ -617,7 +625,7 @@ def capture_login(
         deadline = time.monotonic() + timeout_s
         while time.monotonic() < deadline:
             if controller.process.poll() is not None:
-                raise LoginCancelled("登录窗口已关闭，未完成登录。")
+                raise LoginCancelled("The login window was closed before sign-in completed.")
             try:
                 cookies = controller.cookies(timeout_s=deadline - time.monotonic())
             except Exception:  # noqa: BLE001 - transient CDP errors, keep polling
@@ -629,4 +637,4 @@ def capture_login(
                 uid, _ = fetch_account_info(probe, config)
                 return PicoAuth(uid, "", chosen, config.region)
             time.sleep(poll_s)
-        raise LoginTimeout("登录超时，请重新运行登录命令。")
+        raise LoginTimeout("Sign-in timed out. Run the login command again.")
