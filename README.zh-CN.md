@@ -89,7 +89,7 @@ pico-store-py send-code --email you@example.com
 pico-store-py login --email you@example.com
 ```
 
-**搜索与查看应用。** 搜索应用并查看某个应用的详情；可加 `--price free` 或 `--price paid` 缩小当前搜索页的范围（国际区、国区均适用）：
+**搜索与查看应用。** 搜索应用并查看某个应用的详情；若想单独只查免费应用、或只查需要付费的应用，可分别加 `--price free`（仅显示免费）或 `--price paid`（仅显示付费），国际区、国区均适用：
 
 ```sh
 pico-store-py search 'YouTube VR'
@@ -122,7 +122,7 @@ pico-store-py --region cn download --item-id 7680447105202274345 --package com.a
 pico-store-py --region cn login-window
 ```
 
-需要本机已安装 Microsoft Edge 或 Google Chrome。窗口使用独立的临时浏览器配置，不会读取或改动你日常浏览器的资料与 Cookie；在完成登录前关闭窗口即取消本次命令。
+登录窗口通过 Chrome DevTools 协议驱动浏览器，因此需要本机安装一款基于 Chromium 内核的浏览器：优先使用 Microsoft Edge 或 Google Chrome，Chromium、Brave、Vivaldi、Opera、Thorium、Arc 同样可用；不支持 Firefox 和 Safari。窗口使用独立的临时浏览器配置，不会读取或改动你日常浏览器的资料与 Cookie；在完成登录前关闭窗口即取消本次命令。
 
 ## 开发者文档
 

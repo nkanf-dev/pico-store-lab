@@ -89,7 +89,7 @@ pico-store-py send-code --email you@example.com
 pico-store-py login --email you@example.com
 ```
 
-**Search and inspect apps.** Find apps and view one app's details. Add `--price free` or `--price paid` to narrow the current search page (works in either region):
+**Search and inspect apps.** Find apps and view one app's details. To look up only free apps or only paid apps separately, add `--price free` or `--price paid` respectively (works in either region):
 
 ```sh
 pico-store-py search 'YouTube VR'
@@ -122,7 +122,7 @@ pico-store-py --region cn download --item-id 7680447105202274345 --package com.a
 pico-store-py --region cn login-window
 ```
 
-Microsoft Edge or Google Chrome must be installed. The window uses an isolated temporary browser profile, so your normal browser profile and cookies are never touched. Closing the window before you finish signing in cancels the command.
+A Chromium-based browser is required because the login window is automated through the Chrome DevTools Protocol. Microsoft Edge and Google Chrome are preferred, but Chromium, Brave, Vivaldi, Opera, Thorium, and Arc also work; Firefox and Safari are not supported. The window uses an isolated temporary browser profile, so your normal browser profile and cookies are never touched. Closing the window before you finish signing in cancels the command.
 
 ## For developers
 
