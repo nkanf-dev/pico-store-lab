@@ -119,7 +119,32 @@ const translations = {
     "viewApp": "View app →",
     "detailUnavailable": "Details could not be loaded. View this app in PICO Store for more information.",
     "screenshot": "App screenshot",
-    "fileDetails": "File details"
+    "fileDetails": "File details",
+    "regionLabel": "Store region",
+    "regionGlobal": "International",
+    "regionCn": "China (mainland)",
+    "cnDownloadIntro": "Use a China-region PICO account (mobile number) to download the selected app from the China store. Buy paid apps in the China store first.",
+    "cnRegisterIntro": "Need a China-region PICO account?",
+    "cnRegisterLink": "Register on PICO’s China website ↗",
+    "cnRegisterHint": "New numbers must finish registration on the official website before signing in here.",
+    "mobileLabel": "China mobile number",
+    "mobilePlaceholder": "13800138000",
+    "smsCodePlaceholder": "SMS code",
+    "smsSending": "Sending the SMS code…",
+    "smsSent": "SMS code sent. Enter the 6-digit code from your phone.",
+    "errInvalidMobile": "Enter a valid mobile number, without the country code.",
+    "errInvalidCountryCode": "Enter a valid country code.",
+    "errAccountRegistrationRequired": "This number is not registered. Finish sign-up on PICO’s website, then sign in here.",
+    "errSmsRateLimited": "PICO risk control blocked this SMS request (error 7). Official sign-in completes a browser human-verification step this page cannot perform, so requesting codes repeatedly will not help; use the official-window sign-in above instead.",
+    "cnBrowserLogin": "Sign in through the official PICO window (recommended)",
+    "orSmsLogin": "Or sign in with an SMS code",
+    "cnBrowserStarting": "Opening the official PICO sign-in window…",
+    "cnBrowserWaiting": "Complete phone + SMS sign-in (and any slider) in the pop-up PICO window. It closes automatically when done.",
+    "cnBrowserSuccess": "Signed in to the China store.",
+    "cnBrowserCancelled": "The sign-in window was closed before signing in.",
+    "cnBrowserTimeout": "Sign-in timed out. Start again and finish within 5 minutes.",
+    "cnBrowserLocalOnly": "Official-window sign-in only works when running this site locally (npm run dev). On the hosted site, use the Python CLI: pico-store-py --region cn login-window.",
+    "cnBrowserError": "Could not complete official-window sign-in. Make sure Edge or Chrome (or another Chromium browser) is installed and try again."
   },
   "zh-CN": {
     "indexLabel": "PICO 应用目录",
@@ -240,7 +265,32 @@ const translations = {
     "viewApp": "查看应用 →",
     "detailUnavailable": "暂时无法加载完整介绍，可以前往 PICO 商店查看。",
     "screenshot": "应用截图",
-    "fileDetails": "文件信息"
+    "fileDetails": "文件信息",
+    "regionLabel": "商店区域",
+    "regionGlobal": "国际区",
+    "regionCn": "中国区",
+    "cnDownloadIntro": "使用国区 PICO 账号（手机号）从中国商店下载所选应用。付费应用请先在中国商店购买。",
+    "cnRegisterIntro": "还没有国区 PICO 账号？",
+    "cnRegisterLink": "前往 PICO 中国官网注册 ↗",
+    "cnRegisterHint": "新手机号需要先在官网完成注册，再回到这里登录。",
+    "mobileLabel": "中国区手机号",
+    "mobilePlaceholder": "13800138000",
+    "smsCodePlaceholder": "短信验证码",
+    "smsSending": "正在发送短信验证码…",
+    "smsSent": "短信验证码已发送，请输入手机收到的 6 位验证码。",
+    "errInvalidMobile": "请输入有效的手机号（不含国家码）。",
+    "errInvalidCountryCode": "请输入有效的国家码。",
+    "errAccountRegistrationRequired": "该手机号尚未注册，请先在 PICO 官网完成注册，再回到这里登录。",
+    "errSmsRateLimited": "PICO 风控拦截了本次短信请求（错误 7）。官方登录需要在浏览器中完成人机验证，本页面无法代为完成，重复请求也不会成功；请改用上方的官网窗口登录。",
+    "cnBrowserLogin": "使用官网窗口登录（推荐）",
+    "orSmsLogin": "或使用短信验证码登录",
+    "cnBrowserStarting": "正在打开 PICO 官方登录窗口…",
+    "cnBrowserWaiting": "请在弹出的 PICO 窗口中完成手机号 + 短信验证码登录（含滑块验证），完成后窗口会自动关闭。",
+    "cnBrowserSuccess": "已登录国区商店。",
+    "cnBrowserCancelled": "登录窗口在完成登录前被关闭。",
+    "cnBrowserTimeout": "登录超时，请重新发起并在 5 分钟内完成。",
+    "cnBrowserLocalOnly": "官网窗口登录仅在本地运行本网站（npm run dev）时可用；在线部署请改用命令行：pico-store-py --region cn login-window。",
+    "cnBrowserError": "官网窗口登录未能完成，请确认已安装 Edge 或 Chrome（或其他 Chromium 浏览器）后重试。"
   }
 };
 
@@ -263,6 +313,8 @@ let detailRequest = 0;
 let favorites = [];
 try { favorites = JSON.parse(localStorage.getItem('pico-store-favorites') || '[]'); } catch { favorites = []; }
 if (!Array.isArray(favorites)) favorites = [];
+let region = localStorage.getItem('pico-store-region') === 'cn' ? 'cn' : 'global';
+let sessions = { global: { authenticated: false, label: '' }, cn: { authenticated: false, label: '' } };
 
 function t(key) { return translations[locale][key]; }
 
@@ -335,7 +387,7 @@ async function selectItem(itemId, scroll = false) {
   }
   refreshDownload();
   try {
-    const url = `/api/item?itemId=${encodeURIComponent(item.itemId)}&package=${encodeURIComponent(item.packageName)}`;
+    const url = `/api/item?region=${region}&itemId=${encodeURIComponent(item.itemId)}&package=${encodeURIComponent(item.packageName)}`;
     const response = await fetch(url);
     if (!response.ok) throw new Error('item unavailable');
     const detail = await response.json();
@@ -426,8 +478,13 @@ function render(state, snapshot = false) {
     ? `${t('lastCheck')}${formatTime(state.lastSuccessfulCheckAt)}` : t('catalogLookup');
   $('status-pill').textContent = !state.lastSuccessfulCheckAt && state.latestVersionCode
     ? t('publicDetail') : snapshot || state.stale ? t('stale') : t('fresh');
-  $('official-link').href = state.officialUrl?.startsWith('https://store-global.picoxr.com/')
-    ? state.officialUrl : `https://store-global.picoxr.com/global/detail/1/${state.itemId}`;
+  if (region === 'cn') {
+    $('official-link').href = state.officialUrl?.startsWith('https://store.picoxr.com/')
+      ? state.officialUrl : `https://store.picoxr.com/cn/detail/1/${state.itemId}`;
+  } else {
+    $('official-link').href = state.officialUrl?.startsWith('https://store-global.picoxr.com/')
+      ? state.officialUrl : `https://store-global.picoxr.com/global/detail/1/${state.itemId}`;
+  }
   const list = $('releases');
   list.replaceChildren();
   const releases = [...(state.releases ?? [])].reverse();
@@ -459,7 +516,7 @@ async function search() {
   if (!word) return;
   $('search-status').textContent = t('searching');
   try {
-    const response = await fetch(`/api/search?q=${encodeURIComponent(word)}`);
+    const response = await fetch(`/api/search?region=${region}&q=${encodeURIComponent(word)}`);
     if (!response.ok) throw new Error('search unavailable');
     const result = await response.json();
     searchItems = result.items ?? [];
@@ -553,15 +610,24 @@ $('language').addEventListener('click', event => {
 const ERROR_KEYS = {
   not_authenticated: 'errNotAuthenticated', rate_limited: 'errRateLimited', invalid_email: 'errInvalidEmail',
   invalid_code: 'errInvalidCode', account_rejected: 'errAccountRejected', account_unavailable: 'errAccountUnavailable',
+  invalid_mobile: 'errInvalidMobile', invalid_country_code: 'errInvalidCountryCode',
+  account_registration_required: 'errAccountRegistrationRequired',
   invalid_item_id: 'errInvalidItemId', invalid_package: 'errInvalidPackage',
   entitlement_required: 'errEntitlementRequired',
   apk_unavailable: 'errUnavailable', apk_metadata_unavailable: 'errUnavailable', entitlement_unconfirmed: 'errUnavailable',
   upstream_unreachable: 'errUnavailable', upstream_response_too_large: 'errUnavailable',
   upstream_invalid_response: 'errUnavailable',
   storage_not_configured: 'errMisconfigured', session_secret_missing: 'errMisconfigured',
+  browser_login_local_only: 'cnBrowserLocalOnly',
 };
 
 let account = { authenticated: false, email: null };
+let cnAccountStatusKey = null;
+
+function syncActiveAccount() {
+  const active = sessions[region] ?? { authenticated: false, label: '' };
+  account = { authenticated: Boolean(active.authenticated), email: active.label ?? '' };
+}
 let apk = null;
 let apkRequest = 0;
 let accountRequest = 0;
@@ -608,7 +674,7 @@ async function collectDownloadReport() {
   if (!report) return null;
   if (!report.connection && !report.failure) {
     $('download-status').textContent = t('preparingReport');
-    const query = new URLSearchParams({ itemId: report.application.itemId });
+    const query = new URLSearchParams({ itemId: report.application.itemId, region });
     if (report.application.packageName) query.set('package', report.application.packageName);
     try {
       const result = await api(`/api/download/diagnostics?${query}`, { signal: AbortSignal.timeout(20_000) });
@@ -634,7 +700,7 @@ function saveDownloadReport(report) {
 }
 
 const errorKey = payload => ERROR_KEYS[payload?.error] ?? 'errGeneric';
-const errorText = payload => t(errorKey(payload));
+const errorText = payload => (payload?.upstreamCode === 7 ? t('errSmsRateLimited') : t(errorKey(payload)));
 
 function formatBytes(bytes) {
   if (!Number.isFinite(bytes) || bytes <= 0) return '—';
@@ -711,7 +777,46 @@ function invalidateDownload(message) {
 
 function setAccountBusy(busy) {
   accountBusy = busy;
-  for (const id of ['send-code', 'sign-in', 'sign-out']) $(id).disabled = busy;
+  for (const id of ['send-code', 'sign-in', 'cn-send-code', 'cn-sign-in', 'cn-browser-login', 'sign-out']) $(id).disabled = busy;
+}
+
+function setCnAccountStatus(key = null) {
+  cnAccountStatusKey = key;
+  $('cn-account-status').textContent = key ? t(key) : '';
+}
+
+function setCnBrowserStatus(key = null) {
+  $('cn-browser-status').textContent = key ? t(key) : '';
+}
+
+// Toggle the international email form vs the China SMS form, and reflect the
+// active region's sign-in state in the shared download card.
+function applyRegion({ reloadDetail = true } = {}) {
+  localStorage.setItem('pico-store-region', region);
+  $('global-login').hidden = region !== 'global';
+  $('cn-login').hidden = region !== 'cn';
+  $('region-global').setAttribute('aria-selected', String(region === 'global'));
+  $('region-cn').setAttribute('aria-selected', String(region === 'cn'));
+  $('region-global').classList.toggle('active', region === 'global');
+  $('region-cn').classList.toggle('active', region === 'cn');
+  const intro = $('download-intro-text');
+  if (intro) intro.textContent = region === 'cn' ? t('cnDownloadIntro') : t('downloadIntro');
+  const regionTag = $('download-region-tag');
+  if (regionTag) regionTag.textContent = `${t('regionLabel')}: ${region === 'cn' ? t('regionCn') : t('regionGlobal')}`;
+  syncActiveAccount();
+  setAccountStatus();
+  setCnAccountStatus();
+  invalidateDownload();
+  if (reloadDetail && selectedId) selectItem(selectedId);
+  else renderDownload();
+}
+
+for (const [id, value] of [['region-global', 'global'], ['region-cn', 'cn']]) {
+  $(id).addEventListener('click', () => {
+    if (region === value || accountBusy) return;
+    region = value;
+    applyRegion();
+  });
 }
 
 function downloadError(error) {
@@ -733,7 +838,7 @@ async function refreshDownload() {
   const itemId = selectedId;
   const ticket = apkRequest;
   const accountTicket = accountRequest;
-  const query = new URLSearchParams({ itemId });
+  const query = new URLSearchParams({ itemId, region });
   const packageName = selectedPackage();
   if (packageName) query.set('package', packageName);
   $('download-status').textContent = t('checkingEntitlement');
@@ -767,14 +872,28 @@ async function refreshAccount() {
   let next;
   try {
     const session = await api('/api/account/session');
-    next = { authenticated: Boolean(session.authenticated), email: session.email ?? null };
+    next = {
+      global: {
+        authenticated: Boolean(session.regions?.global?.authenticated),
+        label: session.regions?.global?.label ?? '',
+      },
+      cn: {
+        authenticated: Boolean(session.regions?.cn?.authenticated),
+        label: session.regions?.cn?.label ?? '',
+      },
+    };
   } catch {
-    next = { authenticated: false, email: null };
+    next = {
+      global: { authenticated: false, label: '' },
+      cn: { authenticated: false, label: '' },
+    };
   }
   if (ticket !== accountRequest) return;
-  account = next;
+  sessions = next;
+  syncActiveAccount();
   invalidateDownload();
   setAccountStatus();
+  setCnAccountStatus();
   if (account.authenticated) await refreshDownload();
 }
 
@@ -799,7 +918,8 @@ $('account-form').addEventListener('submit', async event => {
   setAccountStatus('signingIn');
   try {
     await api('/api/account/login', { method: 'POST', body: JSON.stringify({ email, code: $('account-code').value.trim() }) });
-    account = { authenticated: true, email };
+    sessions.global = { authenticated: true, label: email };
+    syncActiveAccount();
     if (pageContext.seo) window.picoTrack?.('login_success');
     $('account-code').value = '';
     setAccountStatus();
@@ -818,11 +938,93 @@ $('sign-out').addEventListener('click', async () => {
   invalidateDownload();
   setAccountStatus('signingOut');
   try {
-    await api('/api/account/logout', { method: 'POST', body: '{}' });
-    account = { authenticated: false, email: null };
+    // Clear only the active region; the other region's session is kept.
+    await api('/api/account/logout', { method: 'POST', body: JSON.stringify({ region }) });
+    sessions[region] = { authenticated: false, label: '' };
+    syncActiveAccount();
     setAccountStatus();
   } catch {
     setAccountStatus('errSignOutFailed');
+  } finally {
+    setAccountBusy(false);
+    await refreshDownload();
+  }
+});
+
+$('cn-browser-login').addEventListener('click', async () => {
+  if (accountBusy) return;
+  accountRequest += 1;
+  setAccountBusy(true);
+  invalidateDownload();
+  setCnBrowserStatus('cnBrowserStarting');
+  let authenticated = null;
+  let timer = null;
+  try {
+    const started = await api('/api/local/browser-login/start', { method: 'POST', body: '{}' });
+    setCnBrowserStatus('cnBrowserWaiting');
+    authenticated = await new Promise((resolvePromise) => {
+      const tick = async () => {
+        try {
+          const status = await api(`/api/local/browser-login/status?jobId=${encodeURIComponent(started.jobId)}`);
+          if (status.state === 'authenticated') return resolvePromise(status);
+          if (status.state === 'cancelled') { setCnBrowserStatus('cnBrowserCancelled'); return resolvePromise(null); }
+          if (status.state === 'timeout') { setCnBrowserStatus('cnBrowserTimeout'); return resolvePromise(null); }
+          if (status.state === 'error') { setCnBrowserStatus('cnBrowserError'); return resolvePromise(null); }
+          timer = setTimeout(tick, 1200);
+        } catch (error) {
+          setCnBrowserStatus(errorKey(error.payload) === 'cnBrowserLocalOnly' ? 'cnBrowserLocalOnly' : 'cnBrowserError');
+          resolvePromise(null);
+        }
+      };
+      timer = setTimeout(tick, 800);
+    });
+    if (authenticated) {
+      sessions.cn = { authenticated: true, label: authenticated.label ?? '' };
+      syncActiveAccount();
+      if (pageContext.seo) window.picoTrack?.('login_success');
+      setCnBrowserStatus('cnBrowserSuccess');
+    }
+  } catch (error) {
+    setCnBrowserStatus(errorKey(error.payload) === 'cnBrowserLocalOnly' ? 'cnBrowserLocalOnly' : 'cnBrowserError');
+  } finally {
+    clearTimeout(timer);
+    setAccountBusy(false);
+    await refreshDownload();
+  }
+});
+
+$('cn-send-code').addEventListener('click', async () => {
+  const mobile = $('cn-mobile').value.trim();
+  const countryCode = $('cn-country').value.trim() || '86';
+  setCnAccountStatus('smsSending');
+  try {
+    await api('/api/account/cn/send-code', { method: 'POST', body: JSON.stringify({ mobile, countryCode }) });
+    setCnAccountStatus('smsSent');
+    $('cn-code').focus();
+  } catch (error) {
+    setCnAccountStatus(error.payload?.upstreamCode === 7 ? 'errSmsRateLimited' : errorKey(error.payload));
+  }
+});
+
+$('cn-account-form').addEventListener('submit', async event => {
+  event.preventDefault();
+  if (accountBusy) return;
+  accountRequest += 1;
+  setAccountBusy(true);
+  invalidateDownload();
+  const mobile = $('cn-mobile').value.trim();
+  const countryCode = $('cn-country').value.trim() || '86';
+  const code = $('cn-code').value.trim();
+  setCnAccountStatus('signingIn');
+  try {
+    await api('/api/account/cn/login', { method: 'POST', body: JSON.stringify({ mobile, countryCode, code }) });
+    sessions.cn = { authenticated: true, label: `+${countryCode} ${mobile}` };
+    syncActiveAccount();
+    if (pageContext.seo) window.picoTrack?.('login_success');
+    $('cn-code').value = '';
+    setCnAccountStatus();
+  } catch (error) {
+    setCnAccountStatus(error.payload?.upstreamCode === 7 ? 'errSmsRateLimited' : errorKey(error.payload));
   } finally {
     setAccountBusy(false);
     await refreshDownload();
@@ -839,7 +1041,7 @@ $('acquire-apk').addEventListener('click', async () => {
   let next;
   const report = newDownloadReport(itemId, packageName);
   try {
-    next = await api('/api/download/acquire', { method: 'POST', body: JSON.stringify({ itemId, packageName }) });
+    next = await api('/api/download/acquire', { method: 'POST', body: JSON.stringify({ itemId, packageName, region }) });
     report.events.push({ stage: 'acquisition', result: 'ready' });
   } catch (error) {
     next = downloadError(error);
@@ -877,5 +1079,6 @@ $('copy-md5').addEventListener('click', async () => {
 
 // Account and download state must exist before the first render, so boot last.
 applyLocale();
+applyRegion({ reloadDetail: false });
 loadState();
 refreshAccount();

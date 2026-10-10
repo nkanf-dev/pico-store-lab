@@ -2,7 +2,39 @@ export const PICO_ITEM_ID = '7288745304105664518';
 export const PICO_PACKAGE = 'com.vrchat.android';
 export const STORE_HOST = 'https://appstore-us.picoxr.com';
 export const ACCOUNT_HOST = 'https://matrix-us.picovr.com';
+export const CN_STORE_HOST = 'https://appstore-cn.picoxr.com';
+export const CN_ACCOUNT_HOST = 'https://matrix-cn.picovr.com';
+export const CN_WEB_STORE_HOST = 'https://store.picoxr.com';
 export const OFFICIAL_STORE_URL = `https://store-global.picoxr.com/jp/detail/1/${PICO_ITEM_ID}`;
+
+export type StoreRegion = 'global' | 'cn';
+
+// Validated mainland-China client identity, ported from the Python SDK's
+// `StoreConfig.for_region("cn")` (B3110 / app 8562 / passport aid 305817).
+// The app API keeps client_type 1; client_type 3 identifies the web store only.
+export const CN_STORE_OPTIONS: StoreOptions = {
+  storeHost: CN_STORE_HOST,
+  accountHost: CN_ACCOUNT_HOST,
+  webStoreHost: CN_WEB_STORE_HOST,
+  webRegion: 'cn',
+  manifestVersionCode: '401000505',
+  deviceName: 'B3110',
+  appId: '8562',
+  language: 'zh',
+  passportAid: '305817',
+};
+
+export function validateRegion(region: string): StoreRegion {
+  if (region !== 'global' && region !== 'cn') throw new Error('region must be global or cn');
+  return region;
+}
+
+// Per-region request presets. Global is the built-in default; China swaps the
+// store/account/web hosts together with the device, app, language and aid.
+export function storeOptionsForRegion(region: StoreRegion): StoreOptions {
+  validateRegion(region);
+  return region === 'cn' ? { ...CN_STORE_OPTIONS } : {};
+}
 export interface StoreTarget { itemId: string; packageName: string; name?: string }
 export const DEFAULT_TARGET: StoreTarget = { itemId: PICO_ITEM_ID, packageName: PICO_PACKAGE, name: 'VRChat' };
 
@@ -264,6 +296,9 @@ export function encodeAccountField(value: string): string {
 }
 
 export function makeAccountRequest(kind: 'send-code' | 'login', email: string, code?: string, options: StoreOptions = {}): RequestSpec {
+  if ((options.accountHost ?? ACCOUNT_HOST) === CN_ACCOUNT_HOST) {
+    throw new Error('use mobile verification for the China region');
+  }
   if (!/^\S+@\S+\.\S+$/.test(email)) throw new Error('valid email required');
   if (kind === 'login' && !code) throw new Error('verification code required');
   const path = kind === 'send-code' ? '/passport/email/send_code/' : '/passport/app/email/code_login/';
@@ -276,6 +311,60 @@ export function makeAccountRequest(kind: 'send-code' | 'login', email: string, c
     ? { email: encodeAccountField(email), type: encodeAccountField('13'), email_logic_type: '0', mix_mode: '1' }
     : { email: encodeAccountField(email), ect_type: '13', code: encodeAccountField(code ?? ''), mix_mode: '1', email_logic_type: '0' };
   return { url: url.toString(), method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams(fields).toString() };
+}
+
+export function makeMobileAccountRequest(
+  kind: 'send-code' | 'login',
+  mobile: string,
+  code?: string,
+  options: { countryCode?: string; storeOptions?: StoreOptions } = {},
+): RequestSpec {
+  const settings: StoreOptions = { ...CN_STORE_OPTIONS, ...options.storeOptions };
+  const countryCode = options.countryCode ?? '86';
+  if ((settings.accountHost ?? ACCOUNT_HOST) !== CN_ACCOUNT_HOST) {
+    throw new Error('mobile verification requires the China region');
+  }
+  if (!/^[1-9][0-9]{0,2}$/.test(countryCode)) {
+    throw new Error('country code must contain digits without +');
+  }
+  if (!/^[0-9]{5,14}$/.test(mobile) || (countryCode + mobile).length > 15) {
+    throw new Error('valid mobile number required; pass the country code separately');
+  }
+  if (countryCode === '86' && !/^1[3-9][0-9]{9}$/.test(mobile)) {
+    throw new Error('valid mainland China mobile number required');
+  }
+  if (kind !== 'send-code' && kind !== 'login') throw new Error('invalid account action');
+  if (kind === 'login' && (code === undefined || !/^[0-9]{6}$/.test(code))) {
+    throw new Error('six-digit SMS verification code required');
+  }
+  const fields: Record<string, string> = {
+    mobile: encodeAccountField(`+${countryCode} ${mobile}`),
+    mix_mode: '1',
+  };
+  let path: string;
+  if (kind === 'send-code') {
+    fields.type = encodeAccountField('24');
+    fields.unbind_exist = encodeAccountField('0');
+    fields.auto_read = '0';
+    path = '/passport/mobile/send_code/v1/';
+  } else {
+    fields.code = encodeAccountField(code ?? '');
+    path = '/passport/mobile/sms_login_only/';
+  }
+  const url = new URL(path, settings.accountHost ?? CN_ACCOUNT_HOST);
+  for (const [key, value] of Object.entries({
+    multi_login: '1',
+    account_sdk_source: 'app',
+    'passport-sdk-version': '30490',
+    aid: settings.passportAid ?? '305817',
+    device_platform: settings.devicePlatform ?? 'android',
+  })) url.searchParams.set(key, value);
+  return {
+    url: url.toString(),
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams(fields).toString(),
+  };
 }
 
 export function makeDownloadInfoRequest(auth: PicoAuth, options: StoreOptions = {}, target: StoreTarget = DEFAULT_TARGET): RequestSpec {

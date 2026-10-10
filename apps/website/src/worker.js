@@ -1,11 +1,16 @@
-import { makePublicItemRequest, makeSearchRequest, parseOfficialJson, parsePublicItem, parseSearchResults } from '@nkanf-dev/pico-store-sdk/pico';
+import {
+  makePublicItemRequest, makeSearchRequest, parseOfficialJson, parsePublicItem, parseSearchResults,
+  storeOptionsForRegion,
+} from '@nkanf-dev/pico-store-sdk/pico';
 import catalog from '../../../contracts/v1/catalog.json' with { type: 'json' };
 import {
-  DeliveryError, apkMetadata, apkResponse, directRedirect, loginWithCode, resolveDownload, sendVerificationCode,
+  DeliveryError, apkMetadata, apkResponse, directRedirect, loginWithCode, loginWithMobile,
+  resolveDownload, sendMobileVerificationCode, sendVerificationCode,
 } from './delivery.js';
 import {
-  SESSION_COOKIE, consumeRateLimit, createSession, deleteSession, deriveSessionKey, parseCookies,
-  pruneSessions, readSession, scopeHash, sessionCookie, clearedSessionCookie,
+  SESSION_COOKIE, clearRegionSession, consumeRateLimit, createSession, deleteSession, deriveSessionKey,
+  parseCookies, pruneSessions, readSession, regionEntry, saveRegionSession, scopeHash,
+  sessionCookie, clearedSessionCookie,
 } from './session.js';
 import { readReleaseState, recordReleaseFailure, recordReleaseSuccess } from './store.js';
 import { recordMetric } from './metrics.js';
@@ -15,6 +20,16 @@ const LIMITS = {
   sendCodePerEmail: 5, sendCodePerIp: 20,
   loginPerEmail: 10, loginPerIp: 30,
 };
+
+// The store region is chosen per request ("global" international store or "cn"
+// mainland China store). Each region keeps its own PICO session.
+function regionFrom(value) {
+  return value === 'cn' ? 'cn' : 'global';
+}
+
+function storeOptions(region) {
+  return storeOptionsForRegion(regionFrom(region));
+}
 const MAX_REQUEST_BODY_BYTES = 4 * 1024;
 
 export async function checkForRelease(env, fetchImpl = fetch, now = () => new Date(), target = catalog[0]) {
@@ -89,6 +104,13 @@ async function requireSession(request, env) {
   return session;
 }
 
+async function requireRegionAuth(request, env, region) {
+  const session = await requireSession(request, env);
+  const entry = regionEntry(session, region);
+  if (!entry) throw new DeliveryError('not_authenticated', 401);
+  return entry;
+}
+
 // Any exact PICO item can be requested, not just the catalogued ones: the
 // package name identifies the app, and PICO itself rejects a mismatched pair.
 function downloadTarget(url) {
@@ -113,65 +135,137 @@ function relativeUrl(url, pathname) {
   return copy;
 }
 
+function validateMobile(body) {
+  const countryCode = typeof body.countryCode === 'string' ? body.countryCode.trim() : '86';
+  const mobile = typeof body.mobile === 'string' ? body.mobile.trim() : '';
+  if (!/^[1-9][0-9]{0,2}$/.test(countryCode)) throw new DeliveryError('invalid_country_code', 400);
+  if (!/^[0-9]{5,14}$/.test(mobile) || (countryCode + mobile).length > 15) {
+    throw new DeliveryError('invalid_mobile', 400);
+  }
+  if (countryCode === '86' && !/^1[3-9][0-9]{9}$/.test(mobile)) {
+    throw new DeliveryError('invalid_mobile', 400);
+  }
+  return { countryCode, mobile };
+}
+
+async function rateLimit(db, pairs) {
+  for (const [scope, limit] of pairs) {
+    if (!(await consumeRateLimit(db, scope, limit, ACCOUNT_WINDOW_SECONDS)).allowed) {
+      throw new DeliveryError('rate_limited', 429);
+    }
+  }
+}
+
+// Store a fresh sign-in under the visitor's existing cookie when present, so a
+// browser can hold both the international and the China session at once.
+async function persistLogin(db, key, request, url, region, label, auth) {
+  const existingToken = parseCookies(request.headers.get('cookie'))[SESSION_COOKIE];
+  if (existingToken) {
+    const saved = await saveRegionSession(db, key, { token: existingToken, region, label, auth });
+    if (saved) return { expiresAt: saved.expiresAt, setCookie: null };
+  }
+  const { token, expiresAt } = await createSession(db, key, { region, label, auth });
+  return { expiresAt, setCookie: sessionCookie(url, token) };
+}
+
+async function sessionKey(env) {
+  try {
+    return await deriveSessionKey(env.SESSION_SECRET);
+  } catch {
+    throw new DeliveryError('session_secret_missing', 503);
+  }
+}
+
 async function handleAccount(request, env, url) {
   if (request.method !== 'POST') throw new DeliveryError('method_not_allowed', 405);
   if (originRejected(request, url)) throw new DeliveryError('origin_rejected', 403);
   const db = requireStorage(env);
+  const body = await readBody(request);
 
   if (url.pathname === '/api/account/logout') {
     const token = parseCookies(request.headers.get('cookie'))[SESSION_COOKIE];
-    if (token) await deleteSession(db, token);
-    return apiResponse({ authenticated: false }, 200, { 'Set-Cookie': clearedSessionCookie(url) });
+    const region = body.region ? regionFrom(body.region) : null;
+    if (token) {
+      if (region) {
+        const key = await sessionKey(env);
+        await clearRegionSession(db, key, token, region);
+      } else {
+        await deleteSession(db, token);
+      }
+    }
+    const headers = region ? {} : { 'Set-Cookie': clearedSessionCookie(url) };
+    return apiResponse({ authenticated: false, region: region ?? undefined }, 200, headers);
   }
 
-  const body = await readBody(request);
+  const ipScope = await clientScope(request);
+
+  // ---- China region: mobile + SMS -------------------------------------
+  if (url.pathname === '/api/account/cn/send-code' || url.pathname === '/api/account/cn/login') {
+    const { countryCode, mobile } = validateMobile(body);
+    const mobileScope = await scopeHash('mobile', `${countryCode}${mobile}`);
+    const options = { countryCode, storeOptions: storeOptions('cn') };
+    await pruneSessions(db);
+    if (url.pathname === '/api/account/cn/send-code') {
+      await rateLimit(db, [[mobileScope, LIMITS.sendCodePerEmail], [ipScope, LIMITS.sendCodePerIp]]);
+      try {
+        await sendMobileVerificationCode(mobile, options);
+      } catch (error) {
+        if (error instanceof DeliveryError) throw error;
+        throw new DeliveryError('account_unavailable', 502);
+      }
+      return apiResponse({ sent: true, region: 'cn' });
+    }
+    const code = typeof body.code === 'string' ? body.code.trim() : '';
+    if (!/^[0-9]{6}$/.test(code)) throw new DeliveryError('invalid_code', 400);
+    const key = await sessionKey(env);
+    await rateLimit(db, [[mobileScope, LIMITS.loginPerEmail], [ipScope, LIMITS.loginPerIp]]);
+    let auth;
+    try {
+      auth = await loginWithMobile(mobile, code, options);
+    } catch (error) {
+      if (error instanceof DeliveryError) throw error;
+      throw new DeliveryError('account_rejected', 401);
+    }
+    const label = `+${countryCode} ${mobile}`;
+    const { expiresAt, setCookie } = await persistLogin(db, key, request, url, 'cn', label, auth);
+    await pruneSessions(db);
+    const headers = setCookie ? { 'Set-Cookie': setCookie } : {};
+    return apiResponse({ authenticated: true, region: 'cn', mobile: label, expiresAt }, 200, headers);
+  }
+
+  // ---- Global region: email code --------------------------------------
   const email = typeof body.email === 'string' ? body.email.trim() : '';
   if (!/^\S+@\S+\.\S+$/.test(email) || email.length > 254) throw new DeliveryError('invalid_email', 400);
   const emailScope = await scopeHash('email', email.toLowerCase());
-  const ipScope = await clientScope(request);
 
   if (url.pathname === '/api/account/send-code') {
-    for (const [scope, limit] of [[emailScope, LIMITS.sendCodePerEmail], [ipScope, LIMITS.sendCodePerIp]]) {
-      if (!(await consumeRateLimit(db, scope, limit, ACCOUNT_WINDOW_SECONDS)).allowed) {
-        throw new DeliveryError('rate_limited', 429);
-      }
-    }
+    await rateLimit(db, [[emailScope, LIMITS.sendCodePerEmail], [ipScope, LIMITS.sendCodePerIp]]);
     await pruneSessions(db);
     try {
-      await sendVerificationCode(email);
+      await sendVerificationCode(email, storeOptions('global'));
     } catch (error) {
       if (error instanceof DeliveryError) throw error;
       throw new DeliveryError('account_unavailable', 502);
     }
-    return apiResponse({ sent: true });
+    return apiResponse({ sent: true, region: 'global' });
   }
 
   if (url.pathname === '/api/account/login') {
     const code = typeof body.code === 'string' ? body.code.trim() : '';
     if (!/^[A-Za-z0-9]{4,8}$/.test(code)) throw new DeliveryError('invalid_code', 400);
-    let key;
-    try {
-      key = await deriveSessionKey(env.SESSION_SECRET);
-    } catch {
-      throw new DeliveryError('session_secret_missing', 503);
-    }
-    for (const [scope, limit] of [[emailScope, LIMITS.loginPerEmail], [ipScope, LIMITS.loginPerIp]]) {
-      if (!(await consumeRateLimit(db, scope, limit, ACCOUNT_WINDOW_SECONDS)).allowed) {
-        throw new DeliveryError('rate_limited', 429);
-      }
-    }
+    const key = await sessionKey(env);
+    await rateLimit(db, [[emailScope, LIMITS.loginPerEmail], [ipScope, LIMITS.loginPerIp]]);
     let auth;
     try {
-      auth = await loginWithCode(email, code);
+      auth = await loginWithCode(email, code, storeOptions('global'));
     } catch (error) {
       if (error instanceof DeliveryError && error.code !== 'account_rejected') throw error;
       throw new DeliveryError('account_rejected', 401);
     }
-    const { token, expiresAt } = await createSession(db, key, { email, auth });
+    const { expiresAt, setCookie } = await persistLogin(db, key, request, url, 'global', email, auth);
     await pruneSessions(db);
-    return apiResponse({ authenticated: true, email, expiresAt }, 200, {
-      'Set-Cookie': sessionCookie(url, token),
-    });
+    const headers = setCookie ? { 'Set-Cookie': setCookie } : {};
+    return apiResponse({ authenticated: true, region: 'global', email, expiresAt }, 200, headers);
   }
 
   throw new DeliveryError('not_found', 404);
@@ -181,10 +275,19 @@ async function handleSession(request, env) {
   if (request.method !== 'GET') throw new DeliveryError('method_not_allowed', 405);
   try {
     const session = await requireSession(request, env);
-    return apiResponse({ authenticated: true, email: session.email, expiresAt: session.expiresAt });
+    const regions = {};
+    for (const region of ['global', 'cn']) {
+      const entry = regionEntry(session, region);
+      regions[region] = entry ? { authenticated: true, label: entry.label ?? '' } : { authenticated: false };
+    }
+    const authenticated = Boolean(regions.global.authenticated || regions.cn.authenticated);
+    return apiResponse({ authenticated, email: session.email, regions, expiresAt: session.expiresAt });
   } catch (error) {
     if (error instanceof DeliveryError && error.code === 'not_authenticated') {
-      return apiResponse({ authenticated: false });
+      return apiResponse({
+        authenticated: false,
+        regions: { global: { authenticated: false }, cn: { authenticated: false } },
+      });
     }
     throw error;
   }
@@ -195,20 +298,23 @@ async function handleDownload(request, env, url) {
     if (request.method !== 'POST') throw new DeliveryError('method_not_allowed', 405);
     // Unlike the read-only GET routes, this creates an order on the PICO account.
     if (request.headers.get('origin') !== url.origin) throw new DeliveryError('origin_rejected', 403);
-    const session = await requireSession(request, env);
     const body = await readBody(request);
+    const region = regionFrom(body.region);
+    const entry = await requireRegionAuth(request, env, region);
     const targetUrl = new URL('/api/download', url);
     if (typeof body.itemId === 'string') targetUrl.searchParams.set('itemId', body.itemId);
     if (typeof body.packageName === 'string') targetUrl.searchParams.set('package', body.packageName);
+    targetUrl.searchParams.set('region', region);
     const target = downloadTarget(targetUrl);
-    const resolved = await resolveDownload(target, session.auth, { acquire: true });
+    const resolved = await resolveDownload(target, entry.auth, { acquire: true, storeOptions: storeOptions(region) });
     return apiResponse(apkMetadata(resolved, targetUrl));
   }
   if (request.method !== 'GET') throw new DeliveryError('method_not_allowed', 405);
   if (!env.DB) throw new DeliveryError('storage_not_configured', 503);
+  const region = regionFrom(url.searchParams.get('region'));
   const target = downloadTarget(url);
-  const session = await requireSession(request, env);
-  let resolved = await resolveDownload(target, session.auth);
+  const entry = await requireRegionAuth(request, env, region);
+  let resolved = await resolveDownload(target, entry.auth, { storeOptions: storeOptions(region) });
   if (url.pathname === '/api/download/info') {
     return apiResponse(apkMetadata(resolved, relativeUrl(url, '/api/download')));
   }
@@ -235,7 +341,7 @@ async function handleDownload(request, env, url) {
     // A signed CDN link can expire during a rollout. Re-read entitlement and
     // metadata before trying again; never turn an ownership rejection into a download.
     try {
-      resolved = await resolveDownload(target, session.auth);
+      resolved = await resolveDownload(target, entry.auth, { storeOptions: storeOptions(region) });
       return await apkResponse(resolved.info, resolved.fileName, request);
     } catch (retryError) {
       if (!(retryError instanceof DeliveryError) || retryError.status < 500) throw retryError;
@@ -272,6 +378,11 @@ export default {
         return fail(error);
       }
     }
+    // Official-window China sign-in launches a local browser and is therefore
+    // available only on the Node dev server; the hosted site cannot do it.
+    if (['/api/local/browser-login/start', '/api/local/browser-login/status'].includes(url.pathname)) {
+      return apiResponse({ error: 'browser_login_local_only' }, 501);
+    }
     if (url.pathname.startsWith('/api/account/')) {
       try {
         return await handleAccount(request, env, url);
@@ -290,8 +401,9 @@ export default {
       if (request.method !== 'GET') return new Response('Method Not Allowed', { status: 405 });
       const word = url.searchParams.get('q')?.trim() ?? '';
       if (!word || word.length > 100) return Response.json({ error: 'invalid_search_query' }, { status: 400 });
+      const region = regionFrom(url.searchParams.get('region'));
       try {
-        const spec = makeSearchRequest(word);
+        const spec = makeSearchRequest(word, storeOptions(region));
         const upstream = await fetch(spec.url, { ...spec, signal: AbortSignal.timeout(15000) });
         if (!upstream.ok) throw new Error('upstream search unavailable');
         return Response.json(parseSearchResults(parseOfficialJson(await upstream.text())), {
@@ -303,12 +415,13 @@ export default {
     }
     if (url.pathname === '/api/item') {
       if (request.method !== 'GET') return new Response('Method Not Allowed', { status: 405 });
+      const region = regionFrom(url.searchParams.get('region'));
       const target = { itemId: url.searchParams.get('itemId') ?? '', packageName: url.searchParams.get('package') ?? '' };
       try {
-        const spec = makePublicItemRequest({}, target);
+        const spec = makePublicItemRequest(storeOptions(region), target);
         const upstream = await fetch(spec.url, { ...spec, signal: AbortSignal.timeout(15000) });
         if (!upstream.ok) throw new Error('upstream item unavailable');
-        return Response.json(parsePublicItem(parseOfficialJson(await upstream.text()), target), {
+        return Response.json(parsePublicItem(parseOfficialJson(await upstream.text()), target, storeOptions(region)), {
           headers: { 'Cache-Control': 'public, max-age=60' },
         });
       } catch {

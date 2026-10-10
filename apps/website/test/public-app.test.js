@@ -16,7 +16,14 @@ const flush = async () => { for (let i = 0; i < 3; i++) await new Promise(resolv
 const deferred = () => { let resolve; const promise = new Promise(done => { resolve = done; }); return { promise, resolve }; };
 
 function element() {
+  const classes = new Set();
   return { children: [], events: {}, attrs: {}, dataset: {}, value: '', files: [], textContent: '', hidden: false, disabled: false,
+    classList: {
+      add: name => classes.add(name),
+      remove: name => classes.delete(name),
+      toggle: (name, force) => { const on = force === undefined ? !classes.has(name) : force; on ? classes.add(name) : classes.delete(name); return on; },
+      contains: name => classes.has(name),
+    },
     addEventListener(name, handler) { this.events[name] = handler; },
     setAttribute(name, value) { this.attrs[name] = value; },
     removeAttribute(name) { delete this.attrs[name]; },
@@ -62,7 +69,8 @@ async function browser(override = () => undefined, href = 'https://example.test/
         const item = items.find(item => new URL(path, 'https://example.test').searchParams.get('itemId') === item.itemId);
         return Response.json({ ...item, versionCode: 1 });
       }
-      if (path === '/api/account/session') return Response.json({ authenticated: true, email: 'player@example.test' });
+      if (path === '/api/account/session') return Response.json({ authenticated: true, email: 'player@example.test',
+        regions: { global: { authenticated: true, label: 'player@example.test' }, cn: { authenticated: false, label: '' } } });
       if (path === '/api/account/logout') return Response.json({ authenticated: false });
       if (path === '/api/account/login') return Response.json({ authenticated: true });
       if (path.startsWith('/api/download/info')) {
@@ -165,7 +173,7 @@ test('an unowned free app is acquired only after the explicit button click', asy
     if (path.startsWith('/api/download/info')) return Response.json({ error: 'entitlement_required', canAcquire: true }, { status: 402 });
     if (path === '/api/download/acquire') {
       assert.equal(init.method, 'POST');
-      assert.deepEqual(JSON.parse(init.body), { itemId: '111', packageName: 'com.example.a' });
+      assert.deepEqual(JSON.parse(init.body), { itemId: '111', packageName: 'com.example.a', region: 'global' });
       return Response.json(metadata(items[0]));
     }
   });
@@ -249,4 +257,40 @@ test('a report for a browser download probes once and exports safe CDN response 
   await page.click('save-report');
   assert.equal(page.calls.filter(call => call.path.startsWith('/api/download/diagnostics')).length, 1);
   assert.equal(await page.saved[0].blob.text(), page.copied[0]);
+});
+
+test('China region swaps the login form and threads the region through item and acquire', async () => {
+  const page = await browser((path, init) => {
+    if (path === '/api/account/session') {
+      return Response.json({ authenticated: true, email: 'player@example.test',
+        regions: { global: { authenticated: true, label: 'player@example.test' },
+          cn: { authenticated: true, label: '+86 13800138000' } } });
+    }
+    if (path.startsWith('/api/download/info')) {
+      return Response.json({ error: 'entitlement_required', canAcquire: true }, { status: 402 });
+    }
+    if (path === '/api/download/acquire') {
+      assert.equal(JSON.parse(init.body).region, 'cn');
+      return Response.json(metadata(items[0]));
+    }
+  });
+  assert.equal(page.get('global-login').hidden, false);
+  assert.equal(page.get('cn-login').hidden, true);
+
+  await page.click('region-cn');
+  assert.equal(page.get('global-login').hidden, true);
+  assert.equal(page.get('cn-login').hidden, false);
+  assert.equal(page.get('region-cn').classList.contains('active'), true);
+
+  // Switching region reloads the already-selected app against the China store.
+  for (let i = 0; i < 6; i++) await new Promise(resolve => setImmediate(resolve));
+  const regionOf = call => new URL(call.path, 'https://example.test').searchParams.get('region');
+  assert.ok(page.calls.some(call => call.path.startsWith('/api/item') && regionOf(call) === 'cn'));
+  assert.ok(page.calls.some(call => call.path.startsWith('/api/download/info') && regionOf(call) === 'cn'));
+  assert.equal(page.get('acquire-apk').hidden, false);
+
+  await page.click('acquire-apk');
+  const acquires = page.calls.filter(call => call.path === '/api/download/acquire');
+  assert.equal(acquires.length, 1);
+  assert.equal(JSON.parse(acquires[0].init.body).region, 'cn');
 });
