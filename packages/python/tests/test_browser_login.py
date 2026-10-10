@@ -238,16 +238,21 @@ class LoginUrlTests(unittest.TestCase):
     """Check the official SSO start URL."""
 
     def test_cn_url_targets_sso_and_store_service(self) -> None:
-        """The China start URL points at SSO with the CN store as the service."""
+        """The China start URL uses the passport path and web SSO parameters."""
         url = login_start_url(CN)
-        self.assertTrue(url.startswith("https://sso.picoxr.com/passport?"))
+        self.assertTrue(url.startswith("https://sso.picoxr.com/passport/?"))
         self.assertIn("service=https%3A%2F%2Fstore.picoxr.com%2Fcn%2F", url)
+        self.assertIn("aid=264297", url)
+        self.assertIn("account_sdk_source=sso", url)
+        self.assertIn("sdk_version=2.2.2", url)
+        self.assertIn("language=zh", url)
 
     def test_global_url_targets_global_sso_and_store_service(self) -> None:
-        """The default international region uses its matching SSO host."""
+        """The default international region uses its matching SSO host and no aid."""
         url = login_start_url(GLOBAL)
         self.assertTrue(url.startswith("https://sso-global.picoxr.com/passport?"))
         self.assertIn("service=https%3A%2F%2Fstore-global.picoxr.com%2Fglobal%2F", url)
+        self.assertNotIn("aid=", url)
 
 
 class CookieSelectionTests(unittest.TestCase):
