@@ -90,24 +90,24 @@ On Windows, activate the environment with `.venv\Scripts\Activate.ps1` instead. 
 
 To narrow search results, add `--price free` or `--price paid`, for example `pico-store-py --region cn search 视频 --price free`. The filter applies to the current search page.
 
-The Python CLI also supports the mainland China store. Use `--region cn` with your China account's phone number:
+The Python CLI also supports the mainland China store. Searching and app details work anonymously with `--region cn`:
 
 ```sh
 pico-store-py --region cn search AeriPane
-pico-store-py --region cn send-code --mobile YOUR_PHONE_NUMBER
-pico-store-py --region cn login --mobile YOUR_PHONE_NUMBER
 pico-store-py --region cn download --item-id 7680447105202274345 --package com.aeripane.pico --output ./AeriPane.apk
 ```
 
-Enter your SMS code when prompted. Need a China account? [Register with PICO](https://sso.picoxr.com/passport), then return to sign in. International and China sign-ins stay separate; omit `--region` to continue using the international store. See the [Python guide](packages/python/README.md) for more options.
-
-If you prefer to sign in through PICO's official browser page, use `login-window` (alias `login-gui`). It opens the official PICO login page in a dedicated browser window, closes the window automatically after you sign in, verifies the session with the account service, and saves that region's sign-in:
+The reliable way to sign in to a China account is `login-window` (alias `login-gui`). It opens PICO's official sign-in page in a dedicated browser window, lets that page run its own device-fingerprint and verification checks (including any slider), closes the window automatically after you sign in, verifies the session against the account service, and saves that region's sign-in:
 
 ```sh
 pico-store-py --region cn login-window
 ```
 
-Microsoft Edge or Google Chrome must be installed. The window uses an isolated temporary browser profile, so your normal browser profile and cookies are never touched. Closing the window before signing in cancels the command.
+Sign in with your phone number and SMS code inside the official window. Need a China account? [Register with PICO](https://sso.picoxr.com/passport/) first. A Chromium-based browser must be installed; Microsoft Edge and Google Chrome are detected first, and other Chromium-family browsers (Brave, Vivaldi, Opera, Arc, Thorium, and similar) are used as fallbacks. The window uses an isolated temporary profile, so your normal browser profile and cookies are never touched. Closing the window before signing in cancels the command.
+
+> The command-line SMS flow (`pico-store-py --region cn send-code --mobile ...` followed by `login --mobile ...`) calls the account API directly and may be rejected by PICO's device risk control (for example error 7), because a command-line client cannot run the official device-registration and risk SDKs that the app and the official web page use. It is retained for compatibility, but `login-window` is the recommended path.
+
+International and China sign-ins stay separate; omit `--region` to continue using the international store. See the [Python guide](packages/python/README.md) for more options.
 
 ## For developers
 

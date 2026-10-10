@@ -77,6 +77,9 @@ class StoreConfig:
     device_platform: str = "android"
     region: StoreRegion = "global"
     sso_host: str = GLOBAL_SSO_HOST
+    sso_passport_path: str = "/passport"
+    sso_aid: str = ""
+    sso_sdk_version: str = "2.2.2"
 
     def __post_init__(self) -> None:
         """Reject contradictory official endpoint and account regions."""
@@ -98,6 +101,8 @@ class StoreConfig:
         return cls(
             region="cn",
             sso_host=CN_SSO_HOST,
+            sso_passport_path="/passport/",
+            sso_aid="264297",
             store_host="https://appstore-cn.picoxr.com",
             account_host="https://matrix-cn.picovr.com",
             web_store_host="https://store.picoxr.com",

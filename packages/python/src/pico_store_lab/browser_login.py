@@ -331,9 +331,26 @@ def _free_port() -> int:
 
 
 def login_start_url(config: StoreConfig) -> str:
-    """Build the official SSO URL that returns to the region store after login."""
+    """Build the official SSO URL that returns to the region store after login.
+
+    The China web SSO is officially opened with explicit web aid, SDK source,
+    SDK version, and language parameters; include them to pin the official web
+    client identity and language instead of relying on the SPA's undocumented
+    defaults. The international SSO derives its context from the service
+    callback alone, so no extra parameters are added there.
+    """
     service = f"{config.web_store_host.rstrip('/')}/{config.web_region}/"
-    return f"{config.sso_host.rstrip('/')}/passport?" + urlencode({"service": service})
+    query: dict[str, str] = {"service": service}
+    if config.sso_aid:
+        query.update(
+            {
+                "aid": config.sso_aid,
+                "account_sdk_source": "sso",
+                "sdk_version": config.sso_sdk_version,
+                "language": config.language,
+            }
+        )
+    return f"{config.sso_host.rstrip('/')}{config.sso_passport_path}?" + urlencode(query)
 
 
 def _http_json(url: str, timeout: float = 2.0) -> object:

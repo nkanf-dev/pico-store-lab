@@ -16,6 +16,8 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 - Python CLI `search --price free` and `search --price paid` filter the current search page to free or paid apps; the SDK exposes `PicoStoreClient.search(price=...)`, `filter_search_items`, `is_free_price`, and `is_paid_price`.
 
+- Python CLI `login-window --region cn` opens the China web SSO at its official entry (`sso.picoxr.com/passport/`) and pins the official web client parameters (`aid=264297`, `account_sdk_source=sso`, `sdk_version=2.2.2`, `language=zh`) instead of relying on the page's undocumented defaults; the international URL is unchanged. Documentation now recommends `login-window` for China because the direct command-line SMS flow can be rejected by PICO device risk control (error 7) without the official device-registration and risk SDKs.
+
 ## [0.2.0] - 2026-09-23
 
 ### Added

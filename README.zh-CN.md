@@ -90,24 +90,24 @@ Windows 用户请改用 `.venv\Scripts\Activate.ps1` 激活虚拟环境。请选
 
 如需缩小搜索范围，可加 `--price free` 或 `--price paid`，例如 `pico-store-py --region cn search 视频 --price free`。筛选作用于当前搜索页。
 
-Python 命令行也支持国区商店。添加 `--region cn`，使用国区账号的手机号登录：
+Python 命令行也支持国区商店。搜索和查看详情在 `--region cn` 下无需登录即可使用：
 
 ```sh
 pico-store-py --region cn search AeriPane
-pico-store-py --region cn send-code --mobile 你的手机号
-pico-store-py --region cn login --mobile 你的手机号
 pico-store-py --region cn download --item-id 7680447105202274345 --package com.aeripane.pico --output ./AeriPane.apk
 ```
 
-按提示输入短信验证码即可。还没有国区账号？先到 [PICO 官网注册](https://sso.picoxr.com/passport)，再回来登录。国区和国际区分别登录；不加 `--region` 时仍使用国际区商店。更多用法见 [Python 指南](packages/python/README.md)。
-
-如果你更喜欢通过 PICO 官方网页登录，可以使用弹窗登录命令 `login-window`（别名 `login-gui`）。它会打开 PICO 官方登录窗口，登录成功后自动关闭窗口，校验会话并保存：
+国区账号推荐使用弹窗登录命令 `login-window`（别名 `login-gui`）。它会打开 PICO 官方登录窗口，让官方页面自行完成设备指纹与验证（必要时包括滑块），登录成功后自动关闭窗口，校验会话并按区域保存：
 
 ```sh
 pico-store-py --region cn login-window
 ```
 
-需要本机安装 Microsoft Edge 或 Google Chrome。窗口使用独立的临时浏览器配置，不会读取或改动你日常浏览器的资料；在登录前关闭窗口即取消本次登录。
+在官方窗口里用手机号和短信验证码完成登录即可。还没有国区账号？先到 [PICO 官网注册](https://sso.picoxr.com/passport/)。本机需要安装基于 Chromium 的浏览器：优先识别 Microsoft Edge 和 Google Chrome，也支持 Brave、Vivaldi、Opera、Arc、Thorium 等其他 Chromium 内核浏览器作为后备。窗口使用独立的临时浏览器配置，不会读取或改动你日常浏览器的资料；在登录前关闭窗口即取消本次登录。
+
+> 命令行直连短信流程（`pico-store-py --region cn send-code --mobile ...` 后再 `login --mobile ...`）直接请求账号接口，可能被 PICO 设备风控拒绝（例如 error 7），因为命令行客户端无法运行官方的设备注册与风控 SDK（官方 App 和官方网页会运行）。该流程保留以兼容旧用法，但推荐改用 `login-window`。
+
+国区和国际区分别登录；不加 `--region` 时仍使用国际区商店。更多用法见 [Python 指南](packages/python/README.md)。
 
 ## 开发者文档
 
