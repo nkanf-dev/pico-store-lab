@@ -135,7 +135,16 @@ const translations = {
     "errInvalidMobile": "Enter a valid mobile number, without the country code.",
     "errInvalidCountryCode": "Enter a valid country code.",
     "errAccountRegistrationRequired": "This number is not registered. Finish sign-up on PICO’s website, then sign in here.",
-    "errSmsRateLimited": "PICO risk control blocked this SMS request (error 7). Official sign-in completes a browser human-verification step this page cannot perform, so requesting codes repeatedly will not help; sign in on the official PICO website instead."
+    "errSmsRateLimited": "PICO risk control blocked this SMS request (error 7). Official sign-in completes a browser human-verification step this page cannot perform, so requesting codes repeatedly will not help; use the official-window sign-in above instead.",
+    "cnBrowserLogin": "Sign in through the official PICO window (recommended)",
+    "orSmsLogin": "Or sign in with an SMS code",
+    "cnBrowserStarting": "Opening the official PICO sign-in window…",
+    "cnBrowserWaiting": "Complete phone + SMS sign-in (and any slider) in the pop-up PICO window. It closes automatically when done.",
+    "cnBrowserSuccess": "Signed in to the China store.",
+    "cnBrowserCancelled": "The sign-in window was closed before signing in.",
+    "cnBrowserTimeout": "Sign-in timed out. Start again and finish within 5 minutes.",
+    "cnBrowserLocalOnly": "Official-window sign-in only works when running this site locally (npm run dev). On the hosted site, use the Python CLI: pico-store-py --region cn login-window.",
+    "cnBrowserError": "Could not complete official-window sign-in. Make sure Edge or Chrome (or another Chromium browser) is installed and try again."
   },
   "zh-CN": {
     "indexLabel": "PICO 应用目录",
@@ -272,7 +281,16 @@ const translations = {
     "errInvalidMobile": "请输入有效的手机号（不含国家码）。",
     "errInvalidCountryCode": "请输入有效的国家码。",
     "errAccountRegistrationRequired": "该手机号尚未注册，请先在 PICO 官网完成注册，再回到这里登录。",
-    "errSmsRateLimited": "PICO 风控拦截了本次短信请求（错误 7）。官方登录需要在浏览器中完成人机验证，本页面无法代为完成，重复请求也不会成功；请改用 PICO 官网登录。"
+    "errSmsRateLimited": "PICO 风控拦截了本次短信请求（错误 7）。官方登录需要在浏览器中完成人机验证，本页面无法代为完成，重复请求也不会成功；请改用上方的官网窗口登录。",
+    "cnBrowserLogin": "使用官网窗口登录（推荐）",
+    "orSmsLogin": "或使用短信验证码登录",
+    "cnBrowserStarting": "正在打开 PICO 官方登录窗口…",
+    "cnBrowserWaiting": "请在弹出的 PICO 窗口中完成手机号 + 短信验证码登录（含滑块验证），完成后窗口会自动关闭。",
+    "cnBrowserSuccess": "已登录国区商店。",
+    "cnBrowserCancelled": "登录窗口在完成登录前被关闭。",
+    "cnBrowserTimeout": "登录超时，请重新发起并在 5 分钟内完成。",
+    "cnBrowserLocalOnly": "官网窗口登录仅在本地运行本网站（npm run dev）时可用；在线部署请改用命令行：pico-store-py --region cn login-window。",
+    "cnBrowserError": "官网窗口登录未能完成，请确认已安装 Edge 或 Chrome（或其他 Chromium 浏览器）后重试。"
   }
 };
 
@@ -600,6 +618,7 @@ const ERROR_KEYS = {
   upstream_unreachable: 'errUnavailable', upstream_response_too_large: 'errUnavailable',
   upstream_invalid_response: 'errUnavailable',
   storage_not_configured: 'errMisconfigured', session_secret_missing: 'errMisconfigured',
+  browser_login_local_only: 'cnBrowserLocalOnly',
 };
 
 let account = { authenticated: false, email: null };
@@ -758,12 +777,16 @@ function invalidateDownload(message) {
 
 function setAccountBusy(busy) {
   accountBusy = busy;
-  for (const id of ['send-code', 'sign-in', 'cn-send-code', 'cn-sign-in', 'sign-out']) $(id).disabled = busy;
+  for (const id of ['send-code', 'sign-in', 'cn-send-code', 'cn-sign-in', 'cn-browser-login', 'sign-out']) $(id).disabled = busy;
 }
 
 function setCnAccountStatus(key = null) {
   cnAccountStatusKey = key;
   $('cn-account-status').textContent = key ? t(key) : '';
+}
+
+function setCnBrowserStatus(key = null) {
+  $('cn-browser-status').textContent = key ? t(key) : '';
 }
 
 // Toggle the international email form vs the China SMS form, and reflect the
@@ -923,6 +946,48 @@ $('sign-out').addEventListener('click', async () => {
   } catch {
     setAccountStatus('errSignOutFailed');
   } finally {
+    setAccountBusy(false);
+    await refreshDownload();
+  }
+});
+
+$('cn-browser-login').addEventListener('click', async () => {
+  if (accountBusy) return;
+  accountRequest += 1;
+  setAccountBusy(true);
+  invalidateDownload();
+  setCnBrowserStatus('cnBrowserStarting');
+  let authenticated = null;
+  let timer = null;
+  try {
+    const started = await api('/api/local/browser-login/start', { method: 'POST', body: '{}' });
+    setCnBrowserStatus('cnBrowserWaiting');
+    authenticated = await new Promise((resolvePromise) => {
+      const tick = async () => {
+        try {
+          const status = await api(`/api/local/browser-login/status?jobId=${encodeURIComponent(started.jobId)}`);
+          if (status.state === 'authenticated') return resolvePromise(status);
+          if (status.state === 'cancelled') { setCnBrowserStatus('cnBrowserCancelled'); return resolvePromise(null); }
+          if (status.state === 'timeout') { setCnBrowserStatus('cnBrowserTimeout'); return resolvePromise(null); }
+          if (status.state === 'error') { setCnBrowserStatus('cnBrowserError'); return resolvePromise(null); }
+          timer = setTimeout(tick, 1200);
+        } catch (error) {
+          setCnBrowserStatus(errorKey(error.payload) === 'cnBrowserLocalOnly' ? 'cnBrowserLocalOnly' : 'cnBrowserError');
+          resolvePromise(null);
+        }
+      };
+      timer = setTimeout(tick, 800);
+    });
+    if (authenticated) {
+      sessions.cn = { authenticated: true, label: authenticated.label ?? '' };
+      syncActiveAccount();
+      if (pageContext.seo) window.picoTrack?.('login_success');
+      setCnBrowserStatus('cnBrowserSuccess');
+    }
+  } catch (error) {
+    setCnBrowserStatus(errorKey(error.payload) === 'cnBrowserLocalOnly' ? 'cnBrowserLocalOnly' : 'cnBrowserError');
+  } finally {
+    clearTimeout(timer);
     setAccountBusy(false);
     await refreshDownload();
   }

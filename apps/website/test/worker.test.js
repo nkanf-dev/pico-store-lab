@@ -731,6 +731,21 @@ test('support probes request one byte, cancel even an ignored range, and exclude
   } finally { env.DB.close(); }
 });
 
+test('official-window login routes are local-only on the hosted worker', async () => {
+  const env = testEnv();
+  try {
+    for (const [path, init] of [
+      ['/api/local/browser-login/start', { method: 'POST' }],
+      ['/api/local/browser-login/status?jobId=x', { method: 'GET' }],
+    ]) {
+      const response = await worker.fetch(request(path, init), env);
+      assert.equal(response.status, 501);
+      const payload = await response.json();
+      assert.equal(payload.error, 'browser_login_local_only');
+    }
+  } finally { env.DB.close(); }
+});
+
 test('support probes cannot claim apps or inspect an unauthorized account download', async () => {
   const env = testEnv();
   const { stub, calls } = upstreamStub({ entitlement: 0 });

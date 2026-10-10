@@ -378,6 +378,11 @@ export default {
         return fail(error);
       }
     }
+    // Official-window China sign-in launches a local browser and is therefore
+    // available only on the Node dev server; the hosted site cannot do it.
+    if (['/api/local/browser-login/start', '/api/local/browser-login/status'].includes(url.pathname)) {
+      return apiResponse({ error: 'browser_login_local_only' }, 501);
+    }
     if (url.pathname.startsWith('/api/account/')) {
       try {
         return await handleAccount(request, env, url);

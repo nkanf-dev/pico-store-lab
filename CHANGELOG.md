@@ -10,13 +10,13 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 - Python CLI `login-window` (alias `login-gui`) opens the official PICO login page in a dedicated browser window, captures the signed-in session via the Chrome DevTools Protocol, verifies it with the account service, closes the window automatically, and saves the region session. Microsoft Edge or Google Chrome is required; the window uses an isolated temporary browser profile.
 
-- Python CLI `search --price free` and `search --price paid` filter the current search page to free or paid apps; the SDK exposes `PicoStoreClient.search(price=...)`, `filter_search_items`, `is_free_price`, and `is_paid_price.
+- Python CLI `search --price free` and `search --price paid` filter the current search page to free or paid apps; the SDK exposes `PicoStoreClient.search(price=...)`, `filter_search_items`, `is_free_price`, and `is_paid_price`.
+
+- On the local dev server, the website's China panel adds **official-window sign-in**: the Node dev server launches a local Chromium browser (Edge/Chrome first, `PICO_BROWSER_PATH` to override) at the official China SSO page, the user completes mobile + SMS (and any slider) themselves, and the session is captured over the Chrome DevTools Protocol, verified against `matrix-cn.picovr.com`, and saved to the China session slot. The direct server-side China SMS flow is blocked by PICO risk control (upstream error 7); the hosted worker cannot launch a local browser and returns HTTP 501 `browser_login_local_only`, directing users to `pico-store-py --region cn login-window`.
 
 ### Fixed
 
 - Python CLI `search` and `status` print non-ASCII app names directly (UTF-8) instead of `\uXXXX` Unicode escapes.
-
-- Python CLI `search --price free` and `search --price paid` filter the current search page to free or paid apps; the SDK exposes `PicoStoreClient.search(price=...)`, `filter_search_items`, `is_free_price`, and `is_paid_price`.
 
 ## [0.2.0] - 2026-09-23
 
