@@ -252,8 +252,10 @@ test('login stores an opaque session and rejects cross-site posts', async () => 
       assert.equal((await crossed.json()).error, 'origin_rejected');
       const badCode = await worker.fetch(request('/api/account/login', json({ email: 'a@b.c', code: 'abc' })), env);
       assert.equal(badCode.status, 400);
+      const anonymousSession = { authenticated: false,
+        regions: { global: { authenticated: false }, cn: { authenticated: false } } };
       const anonymous = await worker.fetch(request('/api/account/session'), env);
-      assert.deepEqual(await anonymous.json(), { authenticated: false });
+      assert.deepEqual(await anonymous.json(), anonymousSession);
       const cookie = await signIn(env);
       const session = await worker.fetch(request('/api/account/session', { headers: { cookie } }), env);
       assert.equal((await session.json()).email, 'player@example.com');
@@ -264,8 +266,35 @@ test('login stores an opaque session and rejects cross-site posts', async () => 
       assert.ok(!row.token_hash.includes(cookie.split('=')[1]), 'only the cookie hash is stored');
       const loggedOut = await worker.fetch(request('/api/account/logout', json({}, { headers: { cookie } })), env);
       assert.match(loggedOut.headers.get('set-cookie'), /psl_session=;/);
-      assert.deepEqual(await (await worker.fetch(request('/api/account/session', { headers: { cookie } }), env)).json(), { authenticated: false });
+      assert.deepEqual(await (await worker.fetch(request('/api/account/session', { headers: { cookie } }), env)).json(), anonymousSession);
     });
+  } finally { env.DB.close(); }
+});
+
+test('China SMS rejects malformed mobile numbers before contacting PICO', async () => {
+  const env = testEnv();
+  try {
+    const badMobile = await worker.fetch(
+      request('/api/account/cn/send-code', json({ mobile: '123', countryCode: '86' })), env);
+    assert.equal(badMobile.status, 400);
+    assert.equal((await badMobile.json()).error, 'invalid_mobile');
+    const badMainland = await worker.fetch(
+      request('/api/account/cn/login', json({ mobile: '1280013800', code: '123456', countryCode: '86' })), env);
+    assert.equal(badMainland.status, 400);
+    assert.equal((await badMainland.json()).error, 'invalid_mobile');
+    const shortCode = await worker.fetch(
+      request('/api/account/cn/login', json({ mobile: '13800138000', code: '12', countryCode: '86' })), env);
+    assert.equal(shortCode.status, 400);
+  } finally { env.DB.close(); }
+});
+
+test('China downloads require a China-region session independent of the global one', async () => {
+  const env = testEnv();
+  try {
+    const guarded = await worker.fetch(
+      request(`/api/download/info?region=cn&itemId=${PICO_ITEM_ID}&package=com.vrchat.android`), env);
+    assert.equal(guarded.status, 401);
+    assert.equal((await guarded.json()).error, 'not_authenticated');
   } finally { env.DB.close(); }
 });
 

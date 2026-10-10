@@ -34,6 +34,8 @@ App availability depends on your account’s region. For paid apps, purchase the
 
 If the email hasn’t arrived, check your spam folder and confirm you entered the email used for your PICO international account.
 
+**China mainland store.** The web download panel has an **International / China (mainland)** switch. Choose **China (mainland)** to search the China store (`appstore-cn.picoxr.com`) and sign in with a China mobile number: enter the number (the country code defaults to 86), choose **Send code**, then enter the SMS code and choose **Sign in**. Searching and viewing app details works without signing in; downloading requires a China-region sign-in. International (email) and China (mobile) sessions are stored separately, so you can remain signed in to both and each download is authorized against its own region. SMS codes are sent through PICO's Matrix service and may be rate-limited; if sending fails, wait and retry instead of requesting codes repeatedly. Don't have a China account yet? Register first on the [official PICO passport site](https://sso.picoxr.com/passport).
+
 ![Web download panel with app version, file size and download buttons](assets/screenshots/web-download-en.webp)
 
 ### 2. Download and install on your headset

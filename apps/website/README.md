@@ -12,6 +12,10 @@ Public app copy and installation guidance live in `content/pages.mjs`. `scripts/
 
 The website uses ordinary links for app selection and language switching. Account and download requests use the existing same-origin API. Public pages remain readable when PICO is unavailable.
 
+### Store regions and accounts
+
+The download interface supports two store regions selected by the client and passed to search, item and download routes as `region=global` (default) or `region=cn`. The global region talks to the international store and authenticates with an email code (`/api/account/send-code`, `/api/account/login`); the China region talks to `appstore-cn.picoxr.com` / `matrix-cn.picovr.com` and authenticates with a mobile SMS code (`/api/account/cn/send-code`, `/api/account/cn/login`). Credentials for the two regions are sealed into separate slots of one server-side session vault (`session.js`), so a single browser cookie can hold both logins while each download is authorized against its own region; signing out of one region keeps the other. Search and item detail are anonymous and region-scoped; downloads require the matching region's session. China SMS requests are rate-limited per mobile number and per IP, and PICO's Matrix endpoint may itself return a rate-limit error.
+
 ## Deploy
 
 ```sh

@@ -6,8 +6,8 @@ import { pipeline } from 'node:stream/promises';
 import {
   type DownloadInfo, type PicoAuth, type PublicItem, type RequestSpec,
   type SearchResults, type StoreTarget, type StoreOptions, makeAccountRequest,
-  makeDownloadInfoRequest, makePublicItemRequest, makeSearchRequest, makeAccountItemRequest,
-  makeFreeAcquisitionRequest, parseFreeAcquisition,
+  makeDownloadInfoRequest, makeMobileAccountRequest, makePublicItemRequest, makeSearchRequest,
+  makeAccountItemRequest, makeFreeAcquisitionRequest, parseFreeAcquisition,
   parseDownloadInfo, parseOfficialJson, parsePublicItem, parseSearchResults,
 } from './pico.js';
 
@@ -89,8 +89,36 @@ export class PicoStoreClient {
   }
 
   async login(email: string, code: string): Promise<PicoAuth> {
-    const response = await this.transport(makeAccountRequest('login', email, code, this.options), 1);
+    return this.authFromResponse(
+      await this.transport(makeAccountRequest('login', email, code, this.options), 1),
+    );
+  }
+
+  async sendMobileCode(mobile: string, countryCode = '86'): Promise<void> {
+    accountData(
+      await this.transport(makeMobileAccountRequest('send-code', mobile, undefined,
+        { countryCode, storeOptions: this.options }), 1),
+    );
+  }
+
+  async loginMobile(mobile: string, code: string, countryCode = '86'): Promise<PicoAuth> {
+    const response = await this.transport(
+      makeMobileAccountRequest('login', mobile, code, { countryCode, storeOptions: this.options }), 1,
+    );
+    const auth = this.authFromResponse(response);
+    // A registration continuation ticket is not a usable existing-account session.
+    if (accountData(response).sms_code_key) {
+      throw new Error("Register your account on PICO's website, then sign in again.");
+    }
+    return auth;
+  }
+
+  private authFromResponse(response: StoreResponse): PicoAuth {
     const data = accountData(response);
+    const userId = data.user_id_str ?? data.user_id;
+    if (typeof userId === 'boolean' || !/^[1-9][0-9]{0,19}$/.test(String(userId))) {
+      throw new Error('PICO login returned no valid account identity');
+    }
     const cookies: Record<string, string> = {};
     for (const line of response.headers.getSetCookie()) {
       const [pair] = line.split(';', 1);
@@ -98,10 +126,12 @@ export class PicoStoreClient {
       if (separator > 0) cookies[pair!.slice(0, separator)] = pair!.slice(separator + 1);
     }
     const auth: PicoAuth = {
-      uid: String(data.user_id_str ?? data.user_id ?? '0'),
+      uid: String(userId),
       x_tt_token: response.headers.get('x-tt-token') ?? '', cookies,
     };
-    if (!auth.x_tt_token && !Object.keys(cookies).length) throw new Error('PICO login returned no usable session');
+    if (!auth.x_tt_token && !cookies.sessionid && !cookies.sessionid_ss && !cookies.sid_tt) {
+      throw new Error('PICO login returned no usable session');
+    }
     return auth;
   }
 

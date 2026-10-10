@@ -6,6 +6,8 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ### Added
 
+- Website and TypeScript SDK support the China mainland store. The web download panel gains an **International / China (mainland)** switch; search and app details are anonymous and region-scoped against `appstore-cn.picoxr.com`, China sign-in uses a mobile SMS code against `matrix-cn.picovr.com`, and sessions are isolated per region so an international (email) and a China (mobile) login can coexist while each download is authorized against its own region. The SDK adds `StoreRegion`, `storeOptionsForRegion`, `makeMobileAccountRequest`, and client `sendMobileCode`/`loginMobile`, with the China client identity pinned to the B3110 device profile.
+
 - Python CLI `login-window` (alias `login-gui`) opens the official PICO login page in a dedicated browser window, captures the signed-in session via the Chrome DevTools Protocol, verifies it with the account service, closes the window automatically, and saves the region session. Microsoft Edge or Google Chrome is required; the window uses an isolated temporary browser profile.
 
 - Python CLI `search --price free` and `search --price paid` filter the current search page to free or paid apps; the SDK exposes `PicoStoreClient.search(price=...)`, `filter_search_items`, `is_free_price`, and `is_paid_price.

@@ -80,15 +80,62 @@ export function clearedSessionCookie(url) {
   return sessionCookie(url, '', 0);
 }
 
-export async function createSession(db, key, { email, auth, now = new Date() }) {
+export const REGIONS = ['global', 'cn'];
+
+function emptyVault() {
+  return { global: null, cn: null };
+}
+
+// Rows sealed before region support held a bare global PicoAuth; keep them valid.
+function normalizeVault(value) {
+  const vault = emptyVault();
+  if (value && typeof value === 'object' && ('global' in value || 'cn' in value)) {
+    for (const region of REGIONS) {
+      const entry = value[region];
+      if (entry && typeof entry === 'object' && entry.auth) vault[region] = { label: String(entry.label ?? ''), auth: entry.auth };
+    }
+  } else if (value && typeof value === 'object' && (value.cookies || value.x_tt_token || value.uid)) {
+    vault.global = { label: '', auth: value };
+  }
+  return vault;
+}
+
+function primaryLabel(vault, fallback = '') {
+  return vault.global?.label || vault.cn?.label || fallback;
+}
+
+export async function createSession(db, key, { region = 'global', label = '', auth, now = new Date() }) {
+  if (!REGIONS.includes(region)) throw new Error('unsupported region');
   const token = bytesToBase64Url(crypto.getRandomValues(new Uint8Array(32)));
   const time = now.toISOString();
   const expiresAt = new Date(now.getTime() + SESSION_TTL_SECONDS * 1000).toISOString();
+  const vault = emptyVault();
+  vault[region] = { label, auth };
   await db.prepare(`
     INSERT INTO sessions (token_hash, email, credentials, created_at, last_used_at, expires_at)
     VALUES (?, ?, ?, ?, ?, ?)
-  `).bind(await hashToken(token), email, await sealCredentials(key, auth), time, time, expiresAt).run();
+  `).bind(await hashToken(token), label, await sealCredentials(key, vault), time, time, expiresAt).run();
   return { token, expiresAt };
+}
+
+// Store one region's sign-in under an existing visitor cookie, so the
+// international and China sessions coexist like the native keychain slots.
+export async function saveRegionSession(db, key, { token, region, label = '', auth, now = new Date() }) {
+  if (!token || !REGIONS.includes(region)) return null;
+  const row = await db.prepare('SELECT * FROM sessions WHERE token_hash = ?').bind(await hashToken(token)).first();
+  if (!row || row.expires_at <= now.toISOString()) return null;
+  let vault;
+  try {
+    vault = normalizeVault(await openCredentials(key, row.credentials));
+  } catch {
+    await deleteSession(db, token);
+    return null;
+  }
+  vault[region] = { label, auth };
+  const expiresAt = new Date(now.getTime() + SESSION_TTL_SECONDS * 1000).toISOString();
+  await db.prepare('UPDATE sessions SET email = ?, credentials = ?, last_used_at = ?, expires_at = ? WHERE token_hash = ?')
+    .bind(label || primaryLabel(vault), await sealCredentials(key, vault), now.toISOString(), expiresAt, row.token_hash).run();
+  return { expiresAt };
 }
 
 export async function readSession(db, key, cookieHeader, now = new Date()) {
@@ -96,9 +143,9 @@ export async function readSession(db, key, cookieHeader, now = new Date()) {
   if (!token) return null;
   const row = await db.prepare('SELECT * FROM sessions WHERE token_hash = ?').bind(await hashToken(token)).first();
   if (!row || row.expires_at <= now.toISOString()) return null;
-  let auth;
+  let vault;
   try {
-    auth = await openCredentials(key, row.credentials);
+    vault = normalizeVault(await openCredentials(key, row.credentials));
   } catch {
     // Secret rotated or row tampered with: drop the session instead of failing open.
     await deleteSession(db, token);
@@ -106,13 +153,40 @@ export async function readSession(db, key, cookieHeader, now = new Date()) {
   }
   await db.prepare('UPDATE sessions SET last_used_at = MAX(last_used_at, ?) WHERE token_hash = ?')
     .bind(now.toISOString(), row.token_hash).run();
-  return { email: row.email, auth, expiresAt: row.expires_at };
+  return { token, regions: vault, email: primaryLabel(vault, row.email), expiresAt: row.expires_at };
+}
+
+export function regionEntry(session, region) {
+  if (!session || !REGIONS.includes(region)) return null;
+  return session.regions?.[region] ?? null;
 }
 
 export async function deleteSession(db, token, now = new Date()) {
   if (!token) return;
   await db.prepare('DELETE FROM sessions WHERE token_hash = ?').bind(await hashToken(token)).run();
   await pruneSessions(db, now);
+}
+
+// Clear just one region while preserving the other region's sign-in.
+export async function clearRegionSession(db, key, token, region, now = new Date()) {
+  if (!token || !REGIONS.includes(region)) return;
+  const hash = await hashToken(token);
+  const row = await db.prepare('SELECT * FROM sessions WHERE token_hash = ?').bind(hash).first();
+  if (!row) return;
+  let vault;
+  try {
+    vault = normalizeVault(await openCredentials(key, row.credentials));
+  } catch {
+    await db.prepare('DELETE FROM sessions WHERE token_hash = ?').bind(hash).run();
+    return;
+  }
+  vault[region] = null;
+  if (!vault.global && !vault.cn) {
+    await db.prepare('DELETE FROM sessions WHERE token_hash = ?').bind(hash).run();
+    return;
+  }
+  await db.prepare('UPDATE sessions SET email = ?, credentials = ? WHERE token_hash = ?')
+    .bind(primaryLabel(vault), await sealCredentials(key, vault), hash).run();
 }
 
 export async function pruneSessions(db, now = new Date()) {
