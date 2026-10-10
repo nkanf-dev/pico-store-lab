@@ -120,6 +120,7 @@ const translations = {
     "detailUnavailable": "Details could not be loaded. View this app in PICO Store for more information.",
     "screenshot": "App screenshot",
     "fileDetails": "File details",
+    "regionLabel": "Store region",
     "regionGlobal": "International",
     "regionCn": "China (mainland)",
     "cnDownloadIntro": "Use a China-region PICO account (mobile number) to download the selected app from the China store. Buy paid apps in the China store first.",
@@ -134,7 +135,7 @@ const translations = {
     "errInvalidMobile": "Enter a valid mobile number, without the country code.",
     "errInvalidCountryCode": "Enter a valid country code.",
     "errAccountRegistrationRequired": "This number is not registered. Finish sign-up on PICO’s website, then sign in here.",
-    "errSmsRateLimited": "PICO rate-limited SMS requests (error 7). Wait a while before requesting another code."
+    "errSmsRateLimited": "PICO risk control blocked this SMS request (error 7). Official sign-in completes a browser human-verification step this page cannot perform, so requesting codes repeatedly will not help; sign in on the official PICO website instead."
   },
   "zh-CN": {
     "indexLabel": "PICO 应用目录",
@@ -256,6 +257,7 @@ const translations = {
     "detailUnavailable": "暂时无法加载完整介绍，可以前往 PICO 商店查看。",
     "screenshot": "应用截图",
     "fileDetails": "文件信息",
+    "regionLabel": "商店区域",
     "regionGlobal": "国际区",
     "regionCn": "中国区",
     "cnDownloadIntro": "使用国区 PICO 账号（手机号）从中国商店下载所选应用。付费应用请先在中国商店购买。",
@@ -270,7 +272,7 @@ const translations = {
     "errInvalidMobile": "请输入有效的手机号（不含国家码）。",
     "errInvalidCountryCode": "请输入有效的国家码。",
     "errAccountRegistrationRequired": "该手机号尚未注册，请先在 PICO 官网完成注册，再回到这里登录。",
-    "errSmsRateLimited": "PICO 限制了短信发送频率（错误 7），请等待一段时间后再获取验证码。"
+    "errSmsRateLimited": "PICO 风控拦截了本次短信请求（错误 7）。官方登录需要在浏览器中完成人机验证，本页面无法代为完成，重复请求也不会成功；请改用 PICO 官网登录。"
   }
 };
 
@@ -776,6 +778,8 @@ function applyRegion({ reloadDetail = true } = {}) {
   $('region-cn').classList.toggle('active', region === 'cn');
   const intro = $('download-intro-text');
   if (intro) intro.textContent = region === 'cn' ? t('cnDownloadIntro') : t('downloadIntro');
+  const regionTag = $('download-region-tag');
+  if (regionTag) regionTag.textContent = `${t('regionLabel')}: ${region === 'cn' ? t('regionCn') : t('regionGlobal')}`;
   syncActiveAccount();
   setAccountStatus();
   setCnAccountStatus();

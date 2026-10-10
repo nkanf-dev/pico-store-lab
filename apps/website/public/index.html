@@ -35,6 +35,13 @@
       </section>
 
       <section id="discovery" class="discovery" aria-label="Find apps">
+        <div class="region-bar">
+          <span class="region-bar-label" data-i18n="regionLabel">Store region</span>
+          <div class="region-switch" role="tablist" aria-label="Store region">
+            <button type="button" id="region-global" class="region-option" role="tab" aria-selected="true" data-i18n="regionGlobal">International</button>
+            <button type="button" id="region-cn" class="region-option" role="tab" aria-selected="false" data-i18n="regionCn">China (mainland)</button>
+          </div>
+        </div>
         <form id="search-form" class="search-form"><label for="search-word" data-i18n="searchLabel">Search PICO apps</label><div><input id="search-word" type="search" required maxlength="100" placeholder="App name" data-i18n-placeholder="searchPlaceholder"><button type="submit" data-i18n="searchButton">Search</button></div></form>
         <p id="search-status" role="status" aria-live="polite"></p>
         <div id="search-results" class="search-results"></div>
@@ -67,15 +74,12 @@
       <section id="downloader" class="downloader" aria-labelledby="downloader-heading">
         <div class="downloader-copy">
           <p class="eyebrow"><span class="indicator"></span> <span data-i18n="downloadLabel">03 / WEB DOWNLOAD</span></p>
+          <p id="download-region-tag" class="region-tag"></p>
           <p id="download-selected-name" class="download-selected-name"></p>
           <h2 id="downloader-heading"><span data-i18n="downloadOne">Sign in to PICO.</span><br><em data-i18n="downloadTwo">Download this app.</em></h2>
           <p id="download-intro-text" class="intro" data-i18n="downloadIntro">Use your PICO international account to download the selected app. For paid apps, purchase them in PICO Store first.</p>
         </div>
         <div class="downloader-panel">
-          <div class="region-switch" role="tablist" aria-label="Store region">
-            <button type="button" id="region-global" class="region-option" role="tab" aria-selected="true" data-i18n="regionGlobal">International</button>
-            <button type="button" id="region-cn" class="region-option" role="tab" aria-selected="false" data-i18n="regionCn">China (mainland)</button>
-          </div>
           <div id="global-login">
             <p id="account-register" class="account-register">
               <span data-i18n="registerIntro">Need a PICO international account?</span>
