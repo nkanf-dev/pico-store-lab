@@ -11,7 +11,7 @@
 
 import {
   makeAccountItemRequest, makeAccountRequest, makeDownloadInfoRequest, makeFreeAcquisitionRequest,
-  parseDownloadInfo, parseFreeAcquisition, parseOfficialJson, parsePublicItem,
+  makeMobileAccountRequest, parseDownloadInfo, parseFreeAcquisition, parseOfficialJson, parsePublicItem,
 } from '@nkanf-dev/pico-store-sdk/pico';
 import { responseLength } from './apk-stream.js';
 import { DeliveryError } from './delivery-error.js';
@@ -33,8 +33,16 @@ function setCookieLines(headers) {
 
 export function parseLoginAuth(response) {
   const root = response.data;
-  if (!root || root.message !== 'success') throw new DeliveryError('account_rejected', 401);
+  if (!root || root.message !== 'success') {
+    const upstreamCode = root?.data?.error_code;
+    // Surface PICO's numeric code (e.g. 7 = SMS rate limited), never the body.
+    throw new DeliveryError('account_rejected', 401,
+      Number.isInteger(upstreamCode) ? { upstreamCode } : {});
+  }
   const data = root.data && typeof root.data === 'object' ? root.data : {};
+  // China SMS login returns a registration continuation ticket for accounts
+  // that do not exist yet; that is not a session and must be finished on the web.
+  if (data.sms_code_key) throw new DeliveryError('account_registration_required', 401);
   const cookies = {};
   for (const line of setCookieLines(response.headers)) {
     const [pair] = line.split(';', 1);
@@ -46,7 +54,9 @@ export function parseLoginAuth(response) {
     x_tt_token: response.headers.get('x-tt-token') ?? '',
     cookies,
   };
-  if (!auth.x_tt_token && !Object.keys(cookies).length) throw new DeliveryError('account_session_missing', 502);
+  if (!auth.x_tt_token && !cookies.sessionid && !cookies.sessionid_ss && !cookies.sid_tt) {
+    throw new DeliveryError('account_session_missing', 502);
+  }
   return auth;
 }
 
@@ -88,6 +98,26 @@ export async function sendVerificationCode(email, storeOptions = {}, fetchImpl =
 
 export async function loginWithCode(email, code, storeOptions = {}, fetchImpl = fetch) {
   const request = makeAccountRequest('login', email, code, storeOptions);
+  return parseLoginAuth(await sendJson(request, fetchImpl));
+}
+
+// China-region SMS. The direct Matrix endpoint is known to answer with PICO
+// error 7 (rate limited) for some networks; the numeric code is surfaced so the
+// UI can report it honestly instead of resending automatically.
+export async function sendMobileVerificationCode(mobile, options = {}, fetchImpl = fetch) {
+  const { countryCode = '86', storeOptions = {} } = options;
+  const request = makeMobileAccountRequest('send-code', mobile, undefined, { countryCode, storeOptions });
+  const response = await sendJson(request, fetchImpl);
+  if (response.data?.message !== 'success') {
+    const code = response.data?.data?.error_code;
+    throw new DeliveryError('account_unavailable', 502,
+      Number.isInteger(code) ? { upstreamCode: code } : {});
+  }
+}
+
+export async function loginWithMobile(mobile, code, options = {}, fetchImpl = fetch) {
+  const { countryCode = '86', storeOptions = {} } = options;
+  const request = makeMobileAccountRequest('login', mobile, code, { countryCode, storeOptions });
   return parseLoginAuth(await sendJson(request, fetchImpl));
 }
 
