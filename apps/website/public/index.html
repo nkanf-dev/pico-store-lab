@@ -17,7 +17,7 @@
   <div class="shell">
     <header class="masthead">
       <a class="brand" href="/" aria-label="PICO Store Lab home"><span class="brand-mark">P/</span><span>PICO<br>STORE LAB</span></a>
-      <div class="masthead-meta"><span data-i18n="indexLabel">PICO APP CATALOG</span><a class="repository-link" href="__STORE_REPOSITORY_URL__" target="_blank" rel="noopener noreferrer" data-i18n="repositoryLink">GitHub ↗</a><button id="language" class="language" aria-label="Switch to Chinese">中文</button></div>
+      <div class="masthead-meta"><span class="masthead-index-label" data-i18n="indexLabel">PICO APP CATALOG</span><a class="repository-link" href="__STORE_REPOSITORY_URL__" target="_blank" rel="noopener noreferrer" data-i18n="repositoryLink">GitHub ↗</a><div class="masthead-region" role="tablist" aria-label="Store region"><button type="button" id="region-global" class="masthead-region-option" role="tab" aria-selected="true" data-i18n="regionGlobalShort">Global</button><button type="button" id="region-cn" class="masthead-region-option" role="tab" aria-selected="false" data-i18n="regionCnShort">China</button></div><button id="language" class="language" aria-label="Switch to Chinese">中文</button></div>
     </header>
 
     <main>
@@ -35,14 +35,12 @@
       </section>
 
       <section id="discovery" class="discovery" aria-label="Find apps">
-        <div class="region-bar">
-          <span class="region-bar-label" data-i18n="regionLabel">Store region</span>
-          <div class="region-switch" role="tablist" aria-label="Store region">
-            <button type="button" id="region-global" class="region-option" role="tab" aria-selected="true" data-i18n="regionGlobal">International</button>
-            <button type="button" id="region-cn" class="region-option" role="tab" aria-selected="false" data-i18n="regionCn">China (mainland)</button>
-          </div>
-        </div>
         <form id="search-form" class="search-form"><label for="search-word" data-i18n="searchLabel">Search PICO apps</label><div><input id="search-word" type="search" required maxlength="100" placeholder="App name" data-i18n-placeholder="searchPlaceholder"><button type="submit" data-i18n="searchButton">Search</button></div></form>
+        <div class="price-filter" role="group" aria-label="Price filter">
+          <button type="button" class="price-option" data-price="all" aria-pressed="true" data-i18n="priceAll">All</button>
+          <button type="button" class="price-option" data-price="free" aria-pressed="false" data-i18n="priceFree">Free</button>
+          <button type="button" class="price-option" data-price="paid" aria-pressed="false" data-i18n="pricePaid">Paid</button>
+        </div>
         <p id="search-status" role="status" aria-live="polite"></p>
         <div id="search-results" class="search-results"></div>
       </section>

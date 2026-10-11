@@ -11,6 +11,9 @@ const translations = {
     "searching": "Searching…",
     "searchEmpty": "No apps found. Try another name.",
     "searchFailed": "Search is unavailable. Please try again later.",
+    "priceAll": "All",
+    "priceFree": "Free",
+    "pricePaid": "Paid",
     "favoritesLabel": "FAVORITES",
     "favoritesHint": "SAVED ON THIS DEVICE",
     "favoriteAdd": "Add to favorites ☆",
@@ -123,6 +126,8 @@ const translations = {
     "regionLabel": "Store region",
     "regionGlobal": "International",
     "regionCn": "China (mainland)",
+    "regionGlobalShort": "Global",
+    "regionCnShort": "China",
     "cnDownloadIntro": "Use a China-region PICO account (mobile number) to download the selected app from the China store. Buy paid apps in the China store first.",
     "cnRegisterIntro": "Need a China-region PICO account?",
     "cnRegisterLink": "Register on PICO’s China website ↗",
@@ -157,6 +162,9 @@ const translations = {
     "searching": "正在搜索…",
     "searchEmpty": "没有找到应用，试试其他名称。",
     "searchFailed": "暂时无法搜索，请稍后重试。",
+    "priceAll": "全部",
+    "priceFree": "免费",
+    "pricePaid": "付费",
     "favoritesLabel": "收藏",
     "favoritesHint": "保存在此设备",
     "favoriteAdd": "加入收藏 ☆",
@@ -269,6 +277,8 @@ const translations = {
     "regionLabel": "商店区域",
     "regionGlobal": "国际区",
     "regionCn": "中国区",
+    "regionGlobalShort": "国际",
+    "regionCnShort": "中国",
     "cnDownloadIntro": "使用国区 PICO 账号（手机号）从中国商店下载所选应用。付费应用请先在中国商店购买。",
     "cnRegisterIntro": "还没有国区 PICO 账号？",
     "cnRegisterLink": "前往 PICO 中国官网注册 ↗",
@@ -314,6 +324,8 @@ let favorites = [];
 try { favorites = JSON.parse(localStorage.getItem('pico-store-favorites') || '[]'); } catch { favorites = []; }
 if (!Array.isArray(favorites)) favorites = [];
 let region = localStorage.getItem('pico-store-region') === 'cn' ? 'cn' : 'global';
+const storedPrice = localStorage.getItem('pico-store-price-filter');
+let priceFilter = storedPrice === 'free' || storedPrice === 'paid' ? storedPrice : 'all';
 let sessions = { global: { authenticated: false, label: '' }, cn: { authenticated: false, label: '' } };
 
 function t(key) { return translations[locale][key]; }
@@ -356,6 +368,12 @@ function renderCards(container, items) {
     const subtitle = document.createElement('span');
     subtitle.textContent = t('viewApp');
     button.append(name, subtitle);
+    if (typeof item.price === 'string' && item.price.trim() !== '') {
+      const price = document.createElement('em');
+      price.className = 'card-price';
+      price.textContent = /^\s*0+(?:\.0+)?\s*$/.test(item.price) ? t('free') : item.price;
+      button.append(price);
+    }
     button.addEventListener('click', event => {
       if (pageContext.seo && event) return; // Real links preserve shareable URLs and normal browser navigation.
       event?.preventDefault();
@@ -516,7 +534,8 @@ async function search() {
   if (!word) return;
   $('search-status').textContent = t('searching');
   try {
-    const response = await fetch(`/api/search?region=${region}&q=${encodeURIComponent(word)}`);
+    const priceQuery = priceFilter === 'all' ? '' : `&price=${priceFilter}`;
+    const response = await fetch(`/api/search?region=${region}&q=${encodeURIComponent(word)}${priceQuery}`);
     if (!response.ok) throw new Error('search unavailable');
     const result = await response.json();
     searchItems = result.items ?? [];
@@ -526,6 +545,26 @@ async function search() {
 }
 
 $('search-form').addEventListener('submit', event => { event.preventDefault(); search(); });
+
+function renderPriceFilter() {
+  for (const button of document.querySelectorAll('.price-option')) {
+    const active = button.dataset.price === priceFilter;
+    button.classList.toggle('active', active);
+    button.setAttribute('aria-pressed', String(active));
+  }
+}
+
+for (const button of document.querySelectorAll('.price-option')) {
+  button.addEventListener('click', () => {
+    const next = button.dataset.price === 'free' || button.dataset.price === 'paid' ? button.dataset.price : 'all';
+    if (next === priceFilter) return;
+    priceFilter = next;
+    localStorage.setItem('pico-store-price-filter', priceFilter);
+    renderPriceFilter();
+    if ($('search-word').value.trim()) search();
+  });
+}
+renderPriceFilter();
 $('favorite-toggle').addEventListener('click', () => {
   if (!currentState?.itemId) return;
   favorites = favorites.some(item => item.itemId === currentState.itemId)

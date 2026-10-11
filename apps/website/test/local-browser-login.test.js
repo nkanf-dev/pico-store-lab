@@ -1,10 +1,14 @@
 import assert from 'node:assert/strict';
+import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import test from 'node:test';
 import {
   CN_ACCOUNT_INFO_URL,
   CN_LOGIN_START_URL,
   canonicalDomain,
   domainOk,
+  findBrowser,
   hasSessionCookie,
   pickSessionCookies,
 } from '../src/local-browser-login.js';
@@ -56,4 +60,35 @@ test('pickSessionCookies keeps session cookies and prefers the picoxr.com domain
     sid_tt: 'cn-tt',
     sid_guard: 'guard',
   });
+});
+
+test('findBrowser checks the 32-bit Program Files (x86) for Edge on Windows', t => {
+  if (process.platform !== 'win32') { t.skip('Windows-only Program Files (x86) discovery'); return; }
+  const root = mkdtempSync(join(tmpdir(), 'pico-browser-'));
+  const pf86 = join(root, 'PF86');
+  const edge = join(pf86, 'Microsoft', 'Edge', 'Application', 'msedge.exe');
+  mkdirSync(join(pf86, 'Microsoft', 'Edge', 'Application'), { recursive: true });
+  writeFileSync(edge, 'dummy');
+  const saved = {
+    PROGRAMFILES: process.env.PROGRAMFILES,
+    // eslint-disable-next-line dot-notation
+    PF86: process.env['ProgramFiles(x86)'],
+    LOCALAPPDATA: process.env.LOCALAPPDATA,
+    PICO_BROWSER_PATH: process.env.PICO_BROWSER_PATH,
+    PATH: process.env.PATH,
+  };
+  process.env.PROGRAMFILES = join(root, 'PF');
+  process.env['ProgramFiles(x86)'] = pf86;
+  process.env.LOCALAPPDATA = join(root, 'LocalApp');
+  process.env.PICO_BROWSER_PATH = '';
+  process.env.PATH = '';
+  try {
+    assert.equal(findBrowser(), edge);
+  } finally {
+    process.env.PROGRAMFILES = saved.PROGRAMFILES;
+    process.env['ProgramFiles(x86)'] = saved.PF86;
+    process.env.LOCALAPPDATA = saved.LOCALAPPDATA;
+    process.env.PICO_BROWSER_PATH = saved.PICO_BROWSER_PATH;
+    process.env.PATH = saved.PATH;
+  }
 });

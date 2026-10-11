@@ -731,6 +731,62 @@ test('support probes request one byte, cancel even an ignored range, and exclude
   } finally { env.DB.close(); }
 });
 
+function searchStub() {
+  const payload = JSON.stringify({
+    code: 0,
+    data: {
+      search_list: [{
+        has_more: false,
+        items: [
+          { item_id: '7000000000000000001', package_name: 'com.example.free', name: 'Free App', version_code: 1, price: '0', cover: { square: '' } },
+          { item_id: '7000000000000000002', package_name: 'com.example.paid', name: 'Paid App', version_code: 2, price: '68.00', cover: { square: '' } },
+          { item_id: '7000000000000000003', package_name: 'com.example.alsofree', name: 'Also Free', version_code: 1, price: '0.00', cover: { square: '' } },
+        ],
+      }],
+    },
+  });
+  return async url => (String(url).includes('/api/app/v2/search/aggregation')
+    ? new Response(payload)
+    : new Response('{"code":0,"data":{"search_list":[]}}'));
+}
+
+test('search returns every app without a price filter', async () => {
+  const env = testEnv();
+  try {
+    await withFetch(searchStub(), async () => {
+      const response = await worker.fetch(request('/api/search?region=cn&q=demo'), env);
+      assert.equal(response.status, 200);
+      const body = await response.json();
+      assert.deepEqual(body.items.map(item => item.packageName),
+        ['com.example.free', 'com.example.paid', 'com.example.alsofree']);
+    });
+  } finally { env.DB.close(); }
+});
+
+test('search price=free keeps only zero-priced apps and price=paid only positive prices', async () => {
+  const env = testEnv();
+  try {
+    await withFetch(searchStub(), async () => {
+      const free = await (await worker.fetch(request('/api/search?region=cn&q=demo&price=free'), env)).json();
+      assert.deepEqual(free.items.map(item => item.packageName),
+        ['com.example.free', 'com.example.alsofree']);
+      const paid = await (await worker.fetch(request('/api/search?region=global&q=demo&price=paid'), env)).json();
+      assert.deepEqual(paid.items.map(item => item.packageName), ['com.example.paid']);
+    });
+  } finally { env.DB.close(); }
+});
+
+test('search rejects an unknown price filter with 400', async () => {
+  const env = testEnv();
+  try {
+    await withFetch(searchStub(), async () => {
+      const response = await worker.fetch(request('/api/search?region=cn&q=demo&price=bargain'), env);
+      assert.equal(response.status, 400);
+      assert.equal((await response.json()).error, 'invalid_price_filter');
+    });
+  } finally { env.DB.close(); }
+});
+
 test('official-window login routes are local-only on the hosted worker', async () => {
   const env = testEnv();
   try {

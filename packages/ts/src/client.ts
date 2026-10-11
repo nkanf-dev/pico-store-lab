@@ -4,11 +4,11 @@ import { basename, dirname, join } from 'node:path';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import {
-  type DownloadInfo, type PicoAuth, type PublicItem, type RequestSpec,
+  type DownloadInfo, type PicoAuth, type PriceFilter, type PublicItem, type RequestSpec,
   type SearchResults, type StoreTarget, type StoreOptions, makeAccountRequest,
   makeDownloadInfoRequest, makeMobileAccountRequest, makePublicItemRequest, makeSearchRequest,
   makeAccountItemRequest, makeFreeAcquisitionRequest, parseFreeAcquisition,
-  parseDownloadInfo, parseOfficialJson, parsePublicItem, parseSearchResults,
+  parseDownloadInfo, parseOfficialJson, parsePublicItem, parseSearchResults, filterSearchItems,
 } from './pico.js';
 
 export interface StoreResponse { data: unknown; headers: Headers }
@@ -49,8 +49,9 @@ function accountData(response: StoreResponse): Record<string, unknown> {
 export class PicoStoreClient {
   constructor(readonly options: StoreOptions = {}, readonly transport: Transport = sendRequest) {}
 
-  async search(word: string, nextId = 1): Promise<SearchResults> {
-    return parseSearchResults((await this.transport(makeSearchRequest(word, this.options, nextId), 3)).data);
+  async search(word: string, nextId = 1, price?: PriceFilter): Promise<SearchResults> {
+    const results = parseSearchResults((await this.transport(makeSearchRequest(word, this.options, nextId), 3)).data);
+    return price ? { ...results, items: filterSearchItems(results.items, price) } : results;
   }
 
   async item(target: StoreTarget, auth?: PicoAuth): Promise<PublicItem> {

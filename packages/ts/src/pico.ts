@@ -244,6 +244,32 @@ export function parseSearchResults(response: unknown): SearchResults {
   return { items, nextId };
 }
 
+export type PriceFilter = 'free' | 'paid';
+
+// Accept only an explicit free/paid search filter, matching the Python SDK.
+export function validatePriceFilter(price: string): PriceFilter {
+  if (price !== 'free' && price !== 'paid') throw new Error('price filter must be free or paid');
+  return price;
+}
+
+// An official price string normalizes to zero (covers "0", "0.0", "0.00").
+export function isFreePrice(price: string): boolean {
+  return /^\s*0+(?:\.0+)?\s*$/.test(price ?? '');
+}
+
+// An official price string is a positive numeric amount.
+export function isPaidPrice(price: string): boolean {
+  const match = /^\s*([0-9]+(?:\.[0-9]+)?)\s*$/.exec(price ?? '');
+  return match !== null && Number(match[1]) > 0;
+}
+
+// Keep only free or only paid installable items from one search page.
+export function filterSearchItems(items: SearchItem[], price: string): SearchItem[] {
+  const selected = validatePriceFilter(price);
+  const predicate = selected === 'free' ? isFreePrice : isPaidPrice;
+  return items.filter(item => predicate(item.price));
+}
+
 function checkItem(data: Record<string, unknown>, target: StoreTarget): void {
   if (String(data.item_id) !== target.itemId || data.package_name !== target.packageName) {
     throw new Error('PICO returned an unexpected item or package');

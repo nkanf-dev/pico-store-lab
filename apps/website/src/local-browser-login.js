@@ -108,7 +108,10 @@ function executableOnPath(names) {
 export function findBrowser(override = process.env.PICO_BROWSER_PATH) {
   if (override && exists(override)) return override;
   const pf = process.env.PROGRAMFILES ?? 'C:\\Program Files';
-  const pf86 = process.env.PROGRAMFILES ?? 'C:\\Program Files (x86)';
+  // On 64-bit Windows, 32-bit Edge/Chrome live under "Program Files (x86)",
+  // whose environment variable is literally named ProgramFiles(x86). Using
+  // PROGRAMFILES here points both prefixes at the same folder and hides Edge.
+  const pf86 = process.env['ProgramFiles(x86)'] ?? 'C:\\Program Files (x86)';
   const localApp = process.env.LOCALAPPDATA ?? '';
   const candidates = process.platform === 'win32'
     ? [

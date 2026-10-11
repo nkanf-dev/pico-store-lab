@@ -1,6 +1,6 @@
 import {
-  makePublicItemRequest, makeSearchRequest, parseOfficialJson, parsePublicItem, parseSearchResults,
-  storeOptionsForRegion,
+  filterSearchItems, makePublicItemRequest, makeSearchRequest, parseOfficialJson, parsePublicItem,
+  parseSearchResults, storeOptionsForRegion, validatePriceFilter,
 } from '@nkanf-dev/pico-store-sdk/pico';
 import catalog from '../../../contracts/v1/catalog.json' with { type: 'json' };
 import {
@@ -402,11 +402,22 @@ export default {
       const word = url.searchParams.get('q')?.trim() ?? '';
       if (!word || word.length > 100) return Response.json({ error: 'invalid_search_query' }, { status: 400 });
       const region = regionFrom(url.searchParams.get('region'));
+      const priceParam = url.searchParams.get('price');
+      let priceFilter = null;
+      if (priceParam !== null && priceParam !== '' && priceParam !== 'all') {
+        try {
+          priceFilter = validatePriceFilter(priceParam);
+        } catch {
+          return Response.json({ error: 'invalid_price_filter' }, { status: 400 });
+        }
+      }
       try {
         const spec = makeSearchRequest(word, storeOptions(region));
         const upstream = await fetch(spec.url, { ...spec, signal: AbortSignal.timeout(15000) });
         if (!upstream.ok) throw new Error('upstream search unavailable');
-        return Response.json(parseSearchResults(parseOfficialJson(await upstream.text())), {
+        const parsed = parseSearchResults(parseOfficialJson(await upstream.text()));
+        const result = priceFilter ? { ...parsed, items: filterSearchItems(parsed.items, priceFilter) } : parsed;
+        return Response.json(result, {
           headers: { 'Cache-Control': 'public, max-age=60' },
         });
       } catch {

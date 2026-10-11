@@ -14,9 +14,13 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 - On the local dev server, the website's China panel adds **official-window sign-in**: the Node dev server launches a local Chromium browser (Edge/Chrome first, `PICO_BROWSER_PATH` to override) at the official China SSO page, the user completes mobile + SMS (and any slider) themselves, and the session is captured over the Chrome DevTools Protocol, verified against `matrix-cn.picovr.com`, and saved to the China session slot. The direct server-side China SMS flow is blocked by PICO risk control (upstream error 7); the hosted worker cannot launch a local browser and returns HTTP 501 `browser_login_local_only`, directing users to `pico-store-py --region cn login-window`.
 
+- Website search gains an **All / Free / Paid** price filter (`/api/search?price=free|paid`, both regions) backed by new TypeScript SDK helpers `isFreePrice`, `isPaidPrice`, `validatePriceFilter`, and `filterSearchItems`, mirroring the Python `--price` option; search result cards show each app's price. The **Global/China region toggle moved to the page header beside the language control** (with matching visual weight) instead of sitting below the search box, and the choice persists across pages.
+
 ### Fixed
 
 - Python CLI `search` and `status` print non-ASCII app names directly (UTF-8) instead of `\uXXXX` Unicode escapes.
+
+- Local dev-server official-window login failed to launch any browser on Windows when 32-bit Microsoft Edge was installed under `Program Files (x86)` (the common case): browser discovery read `PROGRAMFILES` for the 32-bit prefix instead of the `ProgramFiles(x86)` environment variable, so the Edge candidate was never checked and the route returned `browser_not_found`. Discovery now uses the correct `ProgramFiles(x86)` prefix (plus the per-user `%LOCALAPPDATA%` install).
 
 ## [0.2.0] - 2026-09-23
 
