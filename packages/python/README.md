@@ -49,7 +49,7 @@ If you prefer to sign in through PICO's official browser page, use `login-window
 pico-store-py --region cn login-window
 ```
 
-Browser discovery checks Edge and Chrome on `PATH`, then platform application registrations, and finally other Chromium-based browsers. It supports Windows, macOS, and Linux XDG desktop entries. To choose a browser yourself, pass its executable path:
+Only Chromium-based browsers are supported, because the login is automated through the Chrome DevTools Protocol; Firefox and Safari are not. Discovery first checks for Microsoft Edge and Google Chrome on `PATH`, then the platform application registrations (Windows App Paths, macOS bundles, and Linux XDG desktop entries), and finally other Chromium-based browsers such as Chromium, Brave, Vivaldi, Opera, Thorium, and Arc. To choose a browser yourself, pass its executable path:
 
 ```sh
 pico-store-py --region cn login-window --browser "/path/to/Chromium Browser"
