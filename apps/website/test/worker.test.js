@@ -252,8 +252,10 @@ test('login stores an opaque session and rejects cross-site posts', async () => 
       assert.equal((await crossed.json()).error, 'origin_rejected');
       const badCode = await worker.fetch(request('/api/account/login', json({ email: 'a@b.c', code: 'abc' })), env);
       assert.equal(badCode.status, 400);
+      const anonymousSession = { authenticated: false,
+        regions: { global: { authenticated: false }, cn: { authenticated: false } } };
       const anonymous = await worker.fetch(request('/api/account/session'), env);
-      assert.deepEqual(await anonymous.json(), { authenticated: false });
+      assert.deepEqual(await anonymous.json(), anonymousSession);
       const cookie = await signIn(env);
       const session = await worker.fetch(request('/api/account/session', { headers: { cookie } }), env);
       assert.equal((await session.json()).email, 'player@example.com');
@@ -264,8 +266,35 @@ test('login stores an opaque session and rejects cross-site posts', async () => 
       assert.ok(!row.token_hash.includes(cookie.split('=')[1]), 'only the cookie hash is stored');
       const loggedOut = await worker.fetch(request('/api/account/logout', json({}, { headers: { cookie } })), env);
       assert.match(loggedOut.headers.get('set-cookie'), /psl_session=;/);
-      assert.deepEqual(await (await worker.fetch(request('/api/account/session', { headers: { cookie } }), env)).json(), { authenticated: false });
+      assert.deepEqual(await (await worker.fetch(request('/api/account/session', { headers: { cookie } }), env)).json(), anonymousSession);
     });
+  } finally { env.DB.close(); }
+});
+
+test('China SMS rejects malformed mobile numbers before contacting PICO', async () => {
+  const env = testEnv();
+  try {
+    const badMobile = await worker.fetch(
+      request('/api/account/cn/send-code', json({ mobile: '123', countryCode: '86' })), env);
+    assert.equal(badMobile.status, 400);
+    assert.equal((await badMobile.json()).error, 'invalid_mobile');
+    const badMainland = await worker.fetch(
+      request('/api/account/cn/login', json({ mobile: '1280013800', code: '123456', countryCode: '86' })), env);
+    assert.equal(badMainland.status, 400);
+    assert.equal((await badMainland.json()).error, 'invalid_mobile');
+    const shortCode = await worker.fetch(
+      request('/api/account/cn/login', json({ mobile: '13800138000', code: '12', countryCode: '86' })), env);
+    assert.equal(shortCode.status, 400);
+  } finally { env.DB.close(); }
+});
+
+test('China downloads require a China-region session independent of the global one', async () => {
+  const env = testEnv();
+  try {
+    const guarded = await worker.fetch(
+      request(`/api/download/info?region=cn&itemId=${PICO_ITEM_ID}&package=com.vrchat.android`), env);
+    assert.equal(guarded.status, 401);
+    assert.equal((await guarded.json()).error, 'not_authenticated');
   } finally { env.DB.close(); }
 });
 
@@ -699,6 +728,77 @@ test('support probes request one byte, cancel even an ignored range, and exclude
       assert.equal(probes, 1);
       assert.doesNotMatch(text, /cdn.picoxr|token|sid=|email/);
     });
+  } finally { env.DB.close(); }
+});
+
+function searchStub() {
+  const payload = JSON.stringify({
+    code: 0,
+    data: {
+      search_list: [{
+        has_more: false,
+        items: [
+          { item_id: '7000000000000000001', package_name: 'com.example.free', name: 'Free App', version_code: 1, price: '0', cover: { square: '' } },
+          { item_id: '7000000000000000002', package_name: 'com.example.paid', name: 'Paid App', version_code: 2, price: '68.00', cover: { square: '' } },
+          { item_id: '7000000000000000003', package_name: 'com.example.alsofree', name: 'Also Free', version_code: 1, price: '0.00', cover: { square: '' } },
+        ],
+      }],
+    },
+  });
+  return async url => (String(url).includes('/api/app/v2/search/aggregation')
+    ? new Response(payload)
+    : new Response('{"code":0,"data":{"search_list":[]}}'));
+}
+
+test('search returns every app without a price filter', async () => {
+  const env = testEnv();
+  try {
+    await withFetch(searchStub(), async () => {
+      const response = await worker.fetch(request('/api/search?region=cn&q=demo'), env);
+      assert.equal(response.status, 200);
+      const body = await response.json();
+      assert.deepEqual(body.items.map(item => item.packageName),
+        ['com.example.free', 'com.example.paid', 'com.example.alsofree']);
+    });
+  } finally { env.DB.close(); }
+});
+
+test('search price=free keeps only zero-priced apps and price=paid only positive prices', async () => {
+  const env = testEnv();
+  try {
+    await withFetch(searchStub(), async () => {
+      const free = await (await worker.fetch(request('/api/search?region=cn&q=demo&price=free'), env)).json();
+      assert.deepEqual(free.items.map(item => item.packageName),
+        ['com.example.free', 'com.example.alsofree']);
+      const paid = await (await worker.fetch(request('/api/search?region=global&q=demo&price=paid'), env)).json();
+      assert.deepEqual(paid.items.map(item => item.packageName), ['com.example.paid']);
+    });
+  } finally { env.DB.close(); }
+});
+
+test('search rejects an unknown price filter with 400', async () => {
+  const env = testEnv();
+  try {
+    await withFetch(searchStub(), async () => {
+      const response = await worker.fetch(request('/api/search?region=cn&q=demo&price=bargain'), env);
+      assert.equal(response.status, 400);
+      assert.equal((await response.json()).error, 'invalid_price_filter');
+    });
+  } finally { env.DB.close(); }
+});
+
+test('official-window login routes are local-only on the hosted worker', async () => {
+  const env = testEnv();
+  try {
+    for (const [path, init] of [
+      ['/api/local/browser-login/start', { method: 'POST' }],
+      ['/api/local/browser-login/status?jobId=x', { method: 'GET' }],
+    ]) {
+      const response = await worker.fetch(request(path, init), env);
+      assert.equal(response.status, 501);
+      const payload = await response.json();
+      assert.equal(payload.error, 'browser_login_local_only');
+    }
   } finally { env.DB.close(); }
 });
 

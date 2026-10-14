@@ -6,15 +6,29 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ### Added
 
-- Python CLI `login-window` (alias `login-gui`) opens the official PICO login page in a dedicated browser window, captures the signed-in session via the Chrome DevTools Protocol, verifies it with the account service, closes the window automatically, and saves the region session. Microsoft Edge or Google Chrome is required; the window uses an isolated temporary browser profile.
+- Website and TypeScript SDK support the China mainland store. The web download panel gains an **International / China (mainland)** switch; search and app details are anonymous and region-scoped against `appstore-cn.picoxr.com`, China sign-in uses a mobile SMS code against `matrix-cn.picovr.com`, and sessions are isolated per region so an international (email) and a China (mobile) login can coexist while each download is authorized against its own region. The SDK adds `StoreRegion`, `storeOptionsForRegion`, `makeMobileAccountRequest`, and client `sendMobileCode`/`loginMobile`, with the China client identity pinned to the B3110 device profile.
 
-- Python CLI `search --price free` and `search --price paid` filter the current search page to free or paid apps; the SDK exposes `PicoStoreClient.search(price=...)`, `filter_search_items`, `is_free_price`, and `is_paid_price.
+- Python CLI `login-window` (alias `login-gui`) opens the official PICO login page in a dedicated browser window, captures the signed-in session via the Chrome DevTools Protocol, verifies it with the account service, closes the window automatically, and saves the region session. A Chromium-based browser is required (Edge and Chrome are preferred; Chromium, Brave, Vivaldi, Opera, Thorium, and Arc also work; Firefox and Safari are unsupported), and the window uses an isolated temporary browser profile.
+
+- Python CLI `search --price free` and `search --price paid` filter the current search page to free or paid apps; the SDK exposes `PicoStoreClient.search(price=...)`, `filter_search_items`, `is_free_price`, and `is_paid_price`.
+
+- On the local dev server, the website's China panel adds official-window sign-in. The user completes mobile verification and any slider in the official browser. The local server captures and verifies the session; hosted Worker sign-in remains local-only.
+
+- Website search gains an **All / Free / Paid** price filter in both regions, with app prices shown in result cards. The region toggle appears in the page header and persists across pages.
+
+### Changed
+
+- CI runs Python lint and tests on Ubuntu, Windows, and macOS.
+
+- Python CLI `--locale zh-CN` localizes help, verification-code prompts, validation errors, and result messages. English remains the default; locale does not change the store region.
 
 ### Fixed
 
 - Python CLI `search` and `status` print non-ASCII app names directly (UTF-8) instead of `\uXXXX` Unicode escapes.
 
-- Python CLI `search --price free` and `search --price paid` filter the current search page to free or paid apps; the SDK exposes `PicoStoreClient.search(price=...)`, `filter_search_items`, `is_free_price`, and `is_paid_price`.
+- Local dev-server official-window login now finds 32-bit Microsoft Edge under `Program Files (x86)` and per-user Chrome under `%LOCALAPPDATA%` on Windows.
+
+- Embedded browser login preserves discovered executable paths across platforms and reports SDK errors in English.
 
 - Python CLI `login-window --region cn` opens the China web SSO at its official entry (`sso.picoxr.com/passport/`) and pins the official web client parameters (`aid=264297`, `account_sdk_source=sso`, `sdk_version=2.2.2`, `language=zh`) instead of relying on the page's undocumented defaults; the international URL is unchanged. Documentation now recommends `login-window` for China because the direct command-line SMS flow can be rejected by PICO device risk control (error 7) without the official device-registration and risk SDKs.
 

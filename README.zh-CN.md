@@ -34,6 +34,8 @@
 
 如果没收到邮件，请查看垃圾邮件，并确认填写的是 PICO 国际区账号的注册邮箱。
 
+**国区商店。** 网页下载面板提供**国际区 / 中国（大陆）**切换。选择**中国（大陆）**后会搜索国区商店（`appstore-cn.picoxr.com`），并使用国区手机号登录：填写手机号（国家码默认 86），点击**发送验证码**，输入短信验证码后点击**登录**。搜索与查看应用详情无需登录；下载则需要登录国区账号。国际区（邮箱）与国区（手机号）会话分别保存，可以同时登录，下载时各自使用对应区域的授权。短信验证码经由 PICO Matrix 服务发送，可能触发限流；若发送失败，请等待后再试，不要重复频繁请求。还没有国区账号？请先在 [PICO 官方通行证页面](https://sso.picoxr.com/passport)注册。
+
 ![网页下载面板，展示应用版本、文件大小与下载按钮](assets/screenshots/web-download-zh-CN.webp)
 
 ### 2. 在头显下载并安装
@@ -72,25 +74,46 @@
 
 ### 4. Python 命令行
 
-需要 Python 3.11 或更高版本。创建虚拟环境并安装 CLI，将示例中的邮箱和应用信息替换为你自己的选择。
+需要 Python 3.11 或更高版本。先创建并激活虚拟环境，再安装 CLI：
 
 ```sh
 python3 -m venv .venv
-. .venv/bin/activate
+. .venv/bin/activate                       # Windows PowerShell 改用：.venv\Scripts\Activate.ps1
 python -m pip install pico-store-lab
-pico-store-py search 'YouTube VR'
-pico-store-py status --item-id 7270207384512020485 --package com.google.android.apps.youtube.vr.pico
+```
+
+以下命令都在已激活的虚拟环境中运行。
+
+**用国际区账号登录。** 先向邮箱发送一次性验证码，再用收到的验证码换取登录会话：
+
+```sh
 pico-store-py send-code --email you@example.com
 pico-store-py login --email you@example.com
+```
+
+**搜索与查看应用。** 搜索应用并查看某个应用的详情；若想单独只查免费应用、或只查需要付费的应用，可分别加 `--price free`（仅显示免费）或 `--price paid`（仅显示付费），国际区、国区均适用：
+
+```sh
+pico-store-py search 'YouTube VR'
+pico-store-py search VRChat --price free
+pico-store-py status --item-id 7270207384512020485 --package com.google.android.apps.youtube.vr.pico
+```
+
+**下载并安装。** 输出文件名必须尚不存在；下载后用头显安装器或 ADB 安装。需要清除已保存的会话时使用 `logout`：
+
+```sh
 pico-store-py download --item-id 7270207384512020485 --package com.google.android.apps.youtube.vr.pico --output ./selected-app.apk
+adb install -r ./selected-app.apk
 pico-store-py logout
 ```
 
-Windows 用户请改用 `.venv\Scripts\Activate.ps1` 激活虚拟环境。请选择尚未存在的输出文件名。下载后，用头显安装器或 `adb install -r ./selected-app.apk` 安装。更多选项见 `pico-store-py --help`。
+完整选项见 `pico-store-py --help`，SDK 用法见 [Python 指南](packages/python/README.md)。
+
+如需中文界面，可加 `--locale zh-CN`，它会把帮助（含各子命令的 `--help`）、隐藏的验证码提示、参数校验报错和结果消息翻译为简体中文，例如 `pico-store-py --locale zh-CN --region cn search AeriPane`。该选项只改变界面语言，不会切换商店区域。
 
 如需缩小搜索范围，可加 `--price free` 或 `--price paid`，例如 `pico-store-py --region cn search 视频 --price free`。筛选作用于当前搜索页。
 
-Python 命令行也支持国区商店。搜索和查看详情在 `--region cn` 下无需登录即可使用：
+Python 命令行也支持国区商店。搜索和查看详情在 `--region cn` 下无需登录即可使用： 国区和国际区会话分别保存；不加 `--region` 时仍使用国际区商店。
 
 ```sh
 pico-store-py --region cn search AeriPane

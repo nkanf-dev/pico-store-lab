@@ -41,7 +41,7 @@ pico-store-py --region cn download --item-id 7680447105202274345 --package com.a
 pico-store-py --region cn logout
 ```
 
-Enter the SMS code at the hidden prompt. Use `--country-code` on `send-code` and `login` for a different dialing code. Omit `--region` to use your international account as before. `--locale zh-CN` changes CLI messages; it does not change the store. To select a headset model, use `--device`, for example `pico-store-py --region cn --device B3110 search AeriPane`.
+Enter the SMS code at the hidden prompt. Use `--country-code` on `send-code` and `login` for a different dialing code. Omit `--region` to use your international account as before. Add `--locale zh-CN` to localize the whole CLI interface — top-level and subcommand `--help`, the hidden verification-code prompts, validation errors and result messages — into Simplified Chinese; it changes interface language only, not the store region. To select a headset model, use `--device`, for example `pico-store-py --region cn --device B3110 search AeriPane`.
 
 The direct `send-code`/`login` SMS flow calls the account API from the command line and can be rejected by PICO's device risk control (for example error 7), because a command-line client cannot run the official device-registration and risk SDKs that the app and the official web page use. The commands are kept for compatibility, but the reliable China sign-in is `login-window` below.
 
@@ -51,7 +51,7 @@ For China, the recommended sign-in is `login-window` (alias `login-gui`). It ope
 pico-store-py --region cn login-window
 ```
 
-Browser discovery checks Edge and Chrome on `PATH`, then platform application registrations, and finally other Chromium-based browsers. It supports Windows, macOS, and Linux XDG desktop entries. To choose a browser yourself, pass its executable path:
+Only Chromium-based browsers are supported, because the login is automated through the Chrome DevTools Protocol; Firefox and Safari are not. Discovery first checks for Microsoft Edge and Google Chrome on `PATH`, then the platform application registrations (Windows App Paths, macOS bundles, and Linux XDG desktop entries), and finally other Chromium-based browsers such as Chromium, Brave, Vivaldi, Opera, Thorium, and Arc. To choose a browser yourself, pass its executable path:
 
 ```sh
 pico-store-py --region cn login-window --browser "/path/to/Chromium Browser"

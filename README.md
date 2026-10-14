@@ -34,6 +34,8 @@ App availability depends on your account’s region. For paid apps, purchase the
 
 If the email hasn’t arrived, check your spam folder and confirm you entered the email used for your PICO international account.
 
+**China mainland store.** The web download panel has an **International / China (mainland)** switch. Choose **China (mainland)** to search the China store (`appstore-cn.picoxr.com`) and sign in with a China mobile number: enter the number (the country code defaults to 86), choose **Send code**, then enter the SMS code and choose **Sign in**. Searching and viewing app details works without signing in; downloading requires a China-region sign-in. International (email) and China (mobile) sessions are stored separately, so you can remain signed in to both and each download is authorized against its own region. SMS codes are sent through PICO's Matrix service and may be rate-limited; if sending fails, wait and retry instead of requesting codes repeatedly. Don't have a China account yet? Register first on the [official PICO passport site](https://sso.picoxr.com/passport).
+
 ![Web download panel with app version, file size and download buttons](assets/screenshots/web-download-en.webp)
 
 ### 2. Download and install on your headset
@@ -72,25 +74,46 @@ Use **Check for updates** in the desktop window or Android account menu to find 
 
 ### 4. Python command line
 
-With Python 3.11 or later, install the CLI in a virtual environment. As above, replace the email and app details with your own choices.
+Requires Python 3.11 or later. First create and activate a virtual environment, then install the CLI:
 
 ```sh
 python3 -m venv .venv
-. .venv/bin/activate
+. .venv/bin/activate                       # Windows PowerShell: .venv\Scripts\Activate.ps1
 python -m pip install pico-store-lab
-pico-store-py search 'YouTube VR'
-pico-store-py status --item-id 7270207384512020485 --package com.google.android.apps.youtube.vr.pico
+```
+
+Run the commands below inside this activated environment.
+
+**Sign in with your international account.** Send a one-time code to your email, then exchange the code you receive for a session:
+
+```sh
 pico-store-py send-code --email you@example.com
 pico-store-py login --email you@example.com
+```
+
+**Search and inspect apps.** Find apps and view one app's details. To look up only free apps or only paid apps separately, add `--price free` or `--price paid` respectively (works in either region):
+
+```sh
+pico-store-py search 'YouTube VR'
+pico-store-py search VRChat --price free
+pico-store-py status --item-id 7270207384512020485 --package com.google.android.apps.youtube.vr.pico
+```
+
+**Download and install.** Pick an output filename that does not exist yet, then install the APK on your headset with its installer or ADB. Use `logout` to clear the saved session when you are done:
+
+```sh
 pico-store-py download --item-id 7270207384512020485 --package com.google.android.apps.youtube.vr.pico --output ./selected-app.apk
+adb install -r ./selected-app.apk
 pico-store-py logout
 ```
 
-On Windows, activate the environment with `.venv\Scripts\Activate.ps1` instead. Choose a new output filename. After downloading, install the APK on your headset using its installer or `adb install -r ./selected-app.apk`. Run `pico-store-py --help` for more options.
+Run `pico-store-py --help` for every option, or read the [Python guide](packages/python/README.md).
+
+To localize the interface, add `--locale zh-CN`; it translates help (including each subcommand's `--help`), the hidden verification-code prompts, validation errors and result messages into Simplified Chinese, for example `pico-store-py --locale zh-CN --region cn search AeriPane`. The locale changes interface language only and never switches the store region.
 
 To narrow search results, add `--price free` or `--price paid`, for example `pico-store-py --region cn search 视频 --price free`. The filter applies to the current search page.
 
-The Python CLI also supports the mainland China store. Searching and app details work anonymously with `--region cn`:
+The Python CLI also supports the mainland China store. Searching and app details work anonymously with `--region cn`: International and China sessions are stored separately; omit `--region` to use the international store.
 
 ```sh
 pico-store-py --region cn search AeriPane

@@ -56,9 +56,15 @@ function cards(lang) {
   }).join('')}</div>`;
 }
 
-function masthead(lang, path) {
+function masthead(lang, path, interactive = false) {
+  const zh = lang === 'zh';
   const home = localized('/', lang);
-  return `<header class="masthead"><a class="brand" href="${home}" aria-label="PICO Store Lab"><span class="brand-mark">P/</span><span>PICO<br>STORE LAB</span></a><nav class="masthead-meta" aria-label="${lang === 'zh' ? '主导航' : 'Main navigation'}"><a href="${home}#catalog">${lang === 'zh' ? '应用' : 'Apps'}</a><a href="${localized('/guides/install-global-apps/', lang)}">${lang === 'zh' ? '安装指南' : 'Guide'}</a><a href="${localized('/download/', lang)}">${lang === 'zh' ? '客户端' : 'Clients'}</a><a id="language" class="language" href="${localized(path, lang === 'zh' ? 'en' : 'zh')}" lang="${lang === 'zh' ? 'en' : 'zh-CN'}">${lang === 'zh' ? 'EN' : '中文'}</a></nav></header>`;
+  // The region switch only works on interactive pages that load app.js; it sits
+  // beside the language control with matching visual weight.
+  const regionSwitch = interactive
+    ? `<div class="masthead-region" role="tablist" aria-label="${zh ? '商店区域' : 'Store region'}"><button type="button" id="region-global" class="masthead-region-option" role="tab" aria-selected="true">${zh ? '国际' : 'Global'}</button><button type="button" id="region-cn" class="masthead-region-option" role="tab" aria-selected="false">${zh ? '中国' : 'China'}</button></div>`
+    : '';
+  return `<header class="masthead"><a class="brand" href="${home}" aria-label="PICO Store Lab"><span class="brand-mark">P/</span><span>PICO<br>STORE LAB</span></a><nav class="masthead-meta" aria-label="${zh ? '主导航' : 'Main navigation'}"><a href="${home}#catalog">${zh ? '应用' : 'Apps'}</a><a href="${localized('/guides/install-global-apps/', lang)}">${zh ? '安装指南' : 'Guide'}</a><a href="${localized('/download/', lang)}">${zh ? '客户端' : 'Clients'}</a>${regionSwitch}<a id="language" class="language" href="${localized(path, zh ? 'en' : 'zh')}" lang="${zh ? 'en' : 'zh-CN'}">${zh ? 'EN' : '中文'}</a></nav></header>`;
 }
 
 function footer(lang) {
@@ -125,7 +131,7 @@ async function page({ path, lang, title, description, body, app, interactive = f
 <link rel="alternate" hreflang="zh-CN" href="${origin}${path}"><link rel="alternate" hreflang="en" href="${origin}/en${path}"><link rel="alternate" hreflang="x-default" href="${origin}${path}">
 <meta property="og:type" content="website"><meta property="og:site_name" content="PICO Store Lab"><meta property="og:title" content="${escape(title)}"><meta property="og:description" content="${escape(description)}"><meta property="og:url" content="${canonical}"><meta property="og:locale" content="${lang === 'zh' ? 'zh_CN' : 'en_US'}"><meta property="og:image" content="${ogImage}"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta name="twitter:card" content="summary_large_image"><script type="application/ld+json">${json(structured)}</script>`;
   const initialCatalog = catalog.map(item => { const known = apps.find(app => app.itemId === item.itemId); return { ...item, ...(known ? { state:appState(known, lang) } : {}) }; });
-  const html = `<!doctype html><html lang="${lang === 'zh' ? 'zh-CN' : 'en'}" data-seo="true" data-build="${buildId}" data-page="${app ? 'app' : path === '/' ? 'home' : 'reading'}"${app ? ` data-item-id="${app.itemId}"` : ''}><head>${head}</head><body class="${app ? 'page-app' : path === '/' ? 'page-home' : 'page-reading'}"><a class="skip-link" href="#main">${lang === 'zh' ? '跳至正文' : 'Skip to content'}</a><div class="shell">${masthead(lang, path)}<main id="main">${translate(body, lang)}</main>${footer(lang)}</div>${interactive ? `<script type="application/json" id="catalog-data">${json(initialCatalog)}</script>` : ''}</body></html>`;
+  const html = `<!doctype html><html lang="${lang === 'zh' ? 'zh-CN' : 'en'}" data-seo="true" data-build="${buildId}" data-page="${app ? 'app' : path === '/' ? 'home' : 'reading'}"${app ? ` data-item-id="${app.itemId}"` : ''}><head>${head}</head><body class="${app ? 'page-app' : path === '/' ? 'page-home' : 'page-reading'}"><a class="skip-link" href="#main">${lang === 'zh' ? '跳至正文' : 'Skip to content'}</a><div class="shell">${masthead(lang, path, interactive)}<main id="main">${translate(body, lang)}</main>${footer(lang)}</div>${interactive ? `<script type="application/json" id="catalog-data">${json(initialCatalog)}</script>` : ''}</body></html>`;
   const destination = new URL(`.${pathname}index.html`, output);
   await mkdir(new URL('./', destination), { recursive:true });
   await writeFile(destination, html);
