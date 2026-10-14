@@ -91,14 +91,21 @@ class BrowserDiscoveryTests(unittest.TestCase):
             executable = Path(temp_dir) / "custom-browser"
             executable.touch()
             executable.chmod(0o755)
+            # Reference the browser by command name in the POSIX desktop entry;
+            # shutil.which resolves it, keeping the test independent of the host
+            # path separator (a host path would be mangled by POSIX shlex).
             (app_dir / "custom-browser.desktop").write_text(
                 "[Desktop Entry]\n"
                 "Type=Application\n"
                 "Name=Google Chrome\n"
-                f"Exec={executable} --new-window %U\n"
-                f"TryExec={executable}\n",
+                "Exec=custom-browser --new-window %U\n"
+                "TryExec=custom-browser\n",
                 encoding="utf-8",
             )
+
+            def which(name: str) -> str | None:
+                return str(executable) if name == "custom-browser" else None
+
             with (
                 unittest.mock.patch("pico_store_lab.browser_login.sys.platform", "linux"),
                 unittest.mock.patch.dict(
@@ -107,9 +114,7 @@ class BrowserDiscoveryTests(unittest.TestCase):
                 ),
                 unittest.mock.patch(
                     "pico_store_lab.browser_login.shutil.which",
-                    side_effect=lambda name: (
-                        name if Path(name).is_absolute() and Path(name).exists() else None
-                    ),
+                    side_effect=which,
                 ),
             ):
                 self.assertEqual(find_browser(), (str(executable), "--new-window"))
@@ -368,7 +373,7 @@ class CaptureLoginTests(unittest.TestCase):
         ):
             auth = capture_login(CN, poll_s=0.01)
 
-        self.assertTrue(window.closed, "登录成功后窗口必须自动关闭")
+        self.assertTrue(window.closed, "the window must close automatically after sign-in")
         self.assertEqual(auth.uid, "838279091207683")
         self.assertEqual(auth.region, "cn")
         self.assertEqual(auth.cookies["sessionid"], "sess")
