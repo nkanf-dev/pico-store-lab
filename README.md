@@ -107,6 +107,10 @@ pico-store-py logout
 
 Run `pico-store-py --help` for every option, or read the [Python guide](packages/python/README.md).
 
+To localize the interface, add `--locale zh-CN`; it translates help (including each subcommand's `--help`), the hidden verification-code prompts, validation errors and result messages into Simplified Chinese, for example `pico-store-py --locale zh-CN --region cn search AeriPane`. The locale changes interface language only and never switches the store region.
+
+To narrow search results, add `--price free` or `--price paid`, for example `pico-store-py --region cn search 视频 --price free`. The filter applies to the current search page.
+
 **Use the mainland China store.** Add `--region cn` and sign in with your China phone number; the CLI prompts you for the SMS code. International and China sessions are stored separately, so omitting `--region` keeps using the international store. Need a China account? [Register with PICO](https://sso.picoxr.com/passport) first.
 
 ```sh
