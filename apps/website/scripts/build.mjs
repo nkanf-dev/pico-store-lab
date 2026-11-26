@@ -24,8 +24,6 @@ const external = (url, label) => `<a href="${escape(url)}" target="_blank" rel="
 const section = (start, end) => template.slice(template.indexOf(start), template.indexOf(end));
 const detailTemplate = section('<section id="app-details"', '<section id="downloader"');
 const downloaderTemplate = section('<section id="downloader"', '<section id="workflow"');
-const workflowTemplate = section('<section id="workflow"', '</main>');
-const discoveryTemplate = section('<section id="discovery"', '<section id="app-details"');
 const headTemplate = template.slice(template.indexOf('<head>') + 6, template.indexOf('</head>'));
 
 function translate(html, lang) {
@@ -52,23 +50,34 @@ function cards(lang) {
     const state = app ? appState(app, lang) : null;
     const href = app ? localized(`/apps/${app.slug}/`, lang) : `${localized('/', lang)}?itemId=${encodeURIComponent(item.itemId)}&package=${encodeURIComponent(item.packageName)}#app-details`;
     const summary = app?.[lang].summary ?? (lang === 'zh' ? '查看 PICO 版本详情，使用国际区账号下载并安装。' : 'Explore the PICO edition, then download and install with your international account.');
-    return `<a class="featured-card" href="${escape(href)}"><div class="card-top"><span class="eyebrow">0${index + 1} / ${lang === 'zh' ? 'PICO 版' : 'PICO EDITION'}</span>${state?.iconUrl ? `<img src="${escape(state.iconUrl)}" width="64" height="64" alt="" loading="lazy" referrerpolicy="no-referrer">` : ''}</div><h2>${escape(item.name)}</h2><p>${escape(summary)}</p><span class="card-link">${lang === 'zh' ? '查看应用与下载' : 'Explore & download'} <span aria-hidden="true">↗</span></span></a>`;
+    return `<a class="featured-card" href="${escape(href)}"><div class="card-top"><span class="eyebrow">0${index + 1} / ${lang === 'zh' ? 'PICO 版' : 'PICO EDITION'}</span>${state?.iconUrl ? `<img src="${escape(state.iconUrl)}" width="64" height="64" alt="">` : ''}</div><h2>${escape(item.name)}</h2><p>${escape(summary)}</p><span class="card-link">${lang === 'zh' ? '查看应用与下载' : 'Explore & download'} <span aria-hidden="true">↗</span></span></a>`;
   }).join('')}</div>`;
 }
 
 function masthead(lang, path, interactive = false) {
   const zh = lang === 'zh';
   const home = localized('/', lang);
-  // The region switch only works on interactive pages that load app.js; it sits
-  // beside the language control with matching visual weight.
+  const tabs = [
+    { id: 'home', href: home, label: zh ? '首页' : 'Home' },
+    { id: 'search', href: localized('/search/', lang), label: zh ? '搜索' : 'Search' },
+    { id: 'all-apps', href: localized('/all-apps/', lang), label: zh ? '全部应用' : 'All apps' },
+    { id: 'guide', href: localized('/guides/install-global-apps/', lang), label: zh ? '安装指南' : 'Guide' },
+    { id: 'download', href: localized('/download/', lang), label: zh ? '客户端' : 'Clients' },
+  ];
+  const active = path === '/' ? 'home'
+    : path.startsWith('/search/') ? 'search'
+      : path.startsWith('/all-apps/') ? 'all-apps'
+        : path.startsWith('/apps/') || path.startsWith('/app/') ? 'search'
+          : path.startsWith('/guides/') ? 'guide'
+            : path.startsWith('/download/') ? 'download' : '';
   const regionSwitch = interactive
     ? `<div class="masthead-region" role="tablist" aria-label="${zh ? '商店区域' : 'Store region'}"><button type="button" id="region-global" class="masthead-region-option" role="tab" aria-selected="true">${zh ? '国际' : 'Global'}</button><button type="button" id="region-cn" class="masthead-region-option" role="tab" aria-selected="false">${zh ? '中国' : 'China'}</button></div>`
     : '';
-  return `<header class="masthead"><a class="brand" href="${home}" aria-label="PICO Store Lab"><span class="brand-mark">P/</span><span>PICO<br>STORE LAB</span></a><nav class="masthead-meta" aria-label="${zh ? '主导航' : 'Main navigation'}"><a href="${home}#catalog">${zh ? '应用' : 'Apps'}</a><a href="${localized('/guides/install-global-apps/', lang)}">${zh ? '安装指南' : 'Guide'}</a><a href="${localized('/download/', lang)}">${zh ? '客户端' : 'Clients'}</a>${regionSwitch}<a id="language" class="language" href="${localized(path, zh ? 'en' : 'zh')}" lang="${zh ? 'en' : 'zh-CN'}">${zh ? 'EN' : '中文'}</a></nav></header>`;
+  return `<header class="masthead site-chrome"><a class="brand" href="${home}" aria-label="PICO Store Lab"><span class="brand-mark">P/</span><span>PICO<br>STORE LAB</span></a><nav class="tabbar" aria-label="${zh ? '主导航' : 'Main navigation'}">${tabs.map(tab => `<a href="${tab.href}"${tab.id === active ? ' class="active" aria-current="page"' : ''}>${tab.label}</a>`).join('')}</nav><div class="masthead-tools">${regionSwitch}<a id="language" class="language" href="${localized(path, zh ? 'en' : 'zh')}" lang="${zh ? 'en' : 'zh-CN'}">${zh ? 'EN' : '中文'}</a></div></header>`;
 }
 
 function footer(lang) {
-  return `<footer><span>PICO STORE LAB / OPEN SOURCE</span><nav><a href="${localized('/about/', lang)}">${lang === 'zh' ? '关于项目' : 'About'}</a> · ${external(repositoryUrl, 'GitHub')}</nav><span>${lang === 'zh' ? '由社区维护，与 PICO 官方无关联。' : 'A community project, independent of PICO.'}</span></footer>`;
+  return `<footer class="site-footer"><div class="footer-wordmark"><span class="footer-slash">P/</span><span>PICO<br>STORE LAB</span></div><div class="footer-meta"><span>PICO STORE LAB / OPEN SOURCE</span><nav><a href="${localized('/search/', lang)}">${lang === 'zh' ? '搜索' : 'Search'}</a><a href="${localized('/all-apps/', lang)}">${lang === 'zh' ? '全部应用' : 'All apps'}</a><a href="${localized('/about/', lang)}">${lang === 'zh' ? '关于项目' : 'About'}</a>${external(repositoryUrl, 'GitHub')}</nav><p>${lang === 'zh' ? '由社区维护，与 PICO 官方无关联。' : 'A community project, independent of PICO.'}</p></div></footer>`;
 }
 
 function steps(steps) {
@@ -102,17 +111,84 @@ function appGuide(app, lang) {
   return `<section class="app-guide"><div class="reading-heading"><p class="eyebrow">${lang === 'zh' ? '下载与安装' : 'DOWNLOAD & INSTALL'}</p><h2>${lang === 'zh' ? '从这里开始，一步步装好。' : 'Get it onto your headset.'}</h2></div>${steps(copy.steps)}<a class="text-link" href="${localized('/guides/install-global-apps/', lang)}">${lang === 'zh' ? '查看完整安装指南' : 'Read the installation guide'} ↗</a>${adaptationLink}<div class="faq">${copy.faq.map(item => `<details><summary>${escape(item.q)}</summary><p>${escape(item.a)}</p></details>`).join('')}</div><p class="source-links">${app.sources.map(link => external(link.url, link.label)).join(' · ')}</p></section>`;
 }
 
+function genericAppGuide(lang) {
+  const zh = lang === 'zh';
+  const copy = zh ? {
+    eyebrow: '下载与安装', title: '确认设备，再开始安装。',
+    steps: [
+      { title: '先登录 PICO 账号', text: '国际区应用用国际区账号，中国区应用用中国区账号；需要 PICO 账号的应用可选国际区登录适配。' },
+      { title: '在详情页下载 APK', text: '点击“下载此应用”，网页会校验账号与设备兼容性，再返回安装包或直达 PICO 商店。' },
+      { title: '在头显中安装', text: '把 APK 放进 PICO 头显的文件管理器打开安装；系统提示未知来源时，允许当前文件管理器安装。' },
+    ],
+    guide: '查看完整安装指南',
+    faq: [
+      { q: '为什么这个应用不在“全部应用”里？', a: '“全部应用”按 PICO 4 Ultra 的商店兼容性生成。只支持其他头显的应用仍可通过搜索找到，并在这里查看详情。' },
+      { q: '下载按钮提示没有权限怎么办？', a: '确认当前区域与账号一致；付费应用需要账号已拥有该应用，免费应用也需要先登录再下载。' },
+    ],
+  } : {
+    eyebrow: 'DOWNLOAD & INSTALL', title: 'Check the headset, then install.',
+    steps: [
+      { title: 'Sign in to PICO first', text: 'Use a global account for global apps and a China account for China apps. Apps that require PICO sign-in can use international sign-in adaptation.' },
+      { title: 'Download the APK from this page', text: 'Choose “Download this app”. The page checks account and device compatibility before returning the package or opening PICO Store.' },
+      { title: 'Install on the headset', text: 'Open the APK in the PICO file manager. If the system warns about unknown sources, allow the current file manager to install it.' },
+    ],
+    guide: 'Read the installation guide',
+    faq: [
+      { q: 'Why is this app missing from All apps?', a: 'All apps follows PICO 4 Ultra store compatibility. Apps made only for other headsets remain searchable and keep their detail page here.' },
+      { q: 'What if download says I do not have permission?', a: 'Check that the region matches your account. Paid apps must already be owned; free apps still require sign-in first.' },
+    ],
+  };
+  return `<section class="app-guide"><div class="reading-heading"><p class="eyebrow">${copy.eyebrow}</p><h2>${copy.title}</h2></div>${steps(copy.steps)}<a class="text-link" href="${localized('/guides/install-global-apps/', lang)}">${copy.guide} ↗</a><div class="faq">${copy.faq.map(item => `<details><summary>${escape(item.q)}</summary><p>${escape(item.a)}</p></details>`).join('')}</div></section>`;
+}
+
 function appDownloadNotice(app, lang) {
   const notice = app[lang].downloadNotice;
   if (!notice) return '';
   return `<aside class="adapted-download-notice" aria-labelledby="adapted-download-heading"><div><p class="eyebrow">${lang === 'zh' ? '下载方式提醒' : 'DOWNLOAD OPTIONS'}</p><h2 id="adapted-download-heading">${escape(notice.title)}</h2><p>${escape(notice.text)}</p></div><div class="adapted-download-actions"><a class="action primary" href="${localized('/download/', lang)}">${escape(notice.clientLabel)} ↗</a><a class="text-link" href="#downloader">${escape(notice.originalLabel)} ↓</a></div></aside>`;
 }
 
+function homeBody(lang) {
+  const zh = lang === 'zh';
+  return `<section class="hero home-hero"><div class="hero-copy"><p class="eyebrow"><span class="indicator"></span>PICO STORE LAB</p><h1>${zh ? '在国区 PICO 上，<br><em>找到你想用的应用。</em>' : 'Your PICO.<br><em>More to explore.</em>'}</h1><p class="intro">${zh ? '浏览 PICO 应用，用自己的国际区或中国区账号下载；需要 PICO 账号的应用还能选择国际区登录适配。' : 'Browse PICO apps and download with your international or China account. Choose sign-in adaptation for apps that use PICO accounts.'}</p><div class="hero-actions"><a class="action primary" href="${localized('/search/', lang)}">${zh ? '搜索应用' : 'Search apps'} ↗</a><a class="action secondary" href="${localized('/all-apps/', lang)}">${zh ? '全部应用' : 'All apps'} ↗</a></div></div></section>`;
+}
+
+function searchPageBody(lang) {
+  const zh = lang === 'zh';
+  return `<header class="page-heading"><p class="eyebrow"><span class="indicator"></span>${zh ? 'PICO 商店 / 搜索' : 'PICO STORE / SEARCH'}</p><h1>${zh ? '搜索应用' : 'Search apps'}</h1><p>${zh ? '输入应用名称，查看商店结果，再进入应用详情页登录并下载。' : 'Enter an app name, review store results, then open a detail page to sign in and download.'}</p></header>
+<section class="search-panel" aria-label="${zh ? '搜索' : 'Search'}">
+  <form id="search-form" class="store-search"><label for="search-word">${zh ? '应用名称' : 'App name'}</label><div><input id="search-word" type="search" required maxlength="100" placeholder="${zh ? '例如 WPS Office、VRChat' : 'For example WPS Office, VRChat'}"><button type="submit">${zh ? '搜索' : 'Search'}</button></div></form>
+  <div class="price-filter" role="group" aria-label="${zh ? '价格筛选' : 'Price filter'}"><button type="button" class="price-option" data-price="all" aria-pressed="true">${zh ? '全部' : 'All'}</button><button type="button" class="price-option" data-price="free" aria-pressed="false">${zh ? '免费' : 'Free'}</button><button type="button" class="price-option" data-price="paid" aria-pressed="false">${zh ? '付费' : 'Paid'}</button></div>
+  <p id="search-status" class="search-status" role="status" aria-live="polite"></p>
+  <div id="search-results" class="search-results store-search-results"></div>
+</section>`;
+}
+
+function allAppsPageBody(lang) {
+  const zh = lang === 'zh';
+  return `<header class="page-heading all-apps-heading"><div><p class="eyebrow"><span class="indicator"></span>${zh ? 'PICO 商店 / 全部应用' : 'PICO STORE / ALL APPS'}</p><h1>${zh ? '全部应用' : 'All apps'}</h1><p>${zh ? '按分类、价格和排序筛选，找到要下载的 PICO 应用。' : 'Filter by category, price and sort order to find a PICO app to download.'}</p></div><span id="all-apps-count" class="apps-total" aria-live="polite">—</span></header>
+<section class="store-toolbar" aria-label="${zh ? '筛选和排序' : 'Filters and sorting'}">
+  <label class="store-filter store-filter-query"><span>${zh ? '搜索' : 'Search'}</span><input id="all-apps-query" type="search" maxlength="80" placeholder="${zh ? '名称或发行商' : 'Name or publisher'}"></label>
+  <label class="store-filter"><span>${zh ? '分类' : 'Category'}</span><select id="all-apps-category"><option value="all">${zh ? '全部分类' : 'All categories'}</option></select></label>
+  <label class="store-filter"><span>${zh ? '价格' : 'Price'}</span><select id="all-apps-price"><option value="all">${zh ? '全部价格' : 'All prices'}</option><option value="free">${zh ? '免费' : 'Free'}</option><option value="paid">${zh ? '付费' : 'Paid'}</option></select></label>
+  <label class="store-filter"><span>${zh ? '排序' : 'Sort'}</span><select id="all-apps-sort"><option value="comprehensive">${zh ? '综合排序' : 'Recommended'}</option><option value="rating">${zh ? '分数最高' : 'Highest rated'}</option><option value="price_asc">${zh ? '价格由低到高' : 'Price low to high'}</option><option value="price_desc">${zh ? '价格由高到低' : 'Price high to low'}</option><option value="updated">${zh ? '最新发布' : 'Newest'}</option></select></label>
+</section>
+<p id="all-apps-status" class="all-apps-status" role="status" aria-live="polite">${zh ? '正在拉取商店目录…' : 'Loading the store catalog…'}</p>
+<div id="all-apps-results" class="all-apps-results store-list" hidden></div>
+<nav id="all-apps-pagination" class="all-apps-pagination store-pagination" aria-label="${zh ? '全部应用分页' : 'All apps pages'}" hidden><button id="all-apps-prev" type="button">${zh ? '← 上一页' : '← Previous'}</button><span id="all-apps-page" class="all-apps-page">1 / 1</span><button id="all-apps-next" type="button">${zh ? '下一页 →' : 'Next →'}</button></nav>
+<p class="store-note">${zh ? '列表按 PICO 4 Ultra（A9210）的商店兼容性生成。WPS Office 等国区仅支持其他设备的应用不会出现在这里，可以在搜索页找到。' : 'This list follows the PICO 4 Ultra (A9210) store compatibility. Apps such as WPS Office that only support other devices stay out of this list; use Search to find them.'}</p>`;
+}
+
+function appPageBody(lang) {
+  const zh = lang === 'zh';
+  return `<nav class="breadcrumbs"><a id="app-breadcrumb-link" href="${localized('/search/', lang)}">${zh ? '搜索' : 'Search'}</a><span>/</span><span>${zh ? '应用' : 'App'}</span></nav>${detailTemplate}${downloaderTemplate}${genericAppGuide(lang)}`;
+}
+
 const records = [];
-async function page({ path, lang, title, description, body, app, interactive = false, type = 'WebPage' }) {
+async function page({ path, lang, title, description, body, app, interactive = false, script = interactive ? 'app.js' : '', pageType = '', type = 'WebPage' }) {
   const pathname = localized(path, lang);
   const canonical = `${origin}${pathname}`;
   const ogImage = `${origin}/social-cover.png`;
+  const pageKind = pageType || (app ? 'app' : path === '/' ? 'home' : 'reading');
   const structured = [
     { '@context':'https://schema.org', '@type':type, '@id':`${canonical}#page`, name:title, description, url:canonical,
       inLanguage:lang === 'zh' ? 'zh-CN' : 'en', isPartOf:{ '@id':`${origin}/#website` },
@@ -126,12 +202,12 @@ async function page({ path, lang, title, description, body, app, interactive = f
   ] });
   let head = headTemplate.replace(/<title>[\s\S]*?<\/title>/, `<title>${escape(title)}</title>`)
     .replace(/<meta name="description"[^>]*>/, `<meta name="description" content="${escape(description)}">`)
-    .replace('<script type="module" src="/app.js"></script>', interactive ? '<script type="module" src="/app.js"></script>' : '');
+    .replace('<script type="module" src="/app.js"></script>', script ? `<script type="module" src="/${script}"></script>` : '');
   head += `<script defer src="/metrics.js"></script><link rel="stylesheet" href="/pages.css"><link rel="canonical" href="${canonical}">
 <link rel="alternate" hreflang="zh-CN" href="${origin}${path}"><link rel="alternate" hreflang="en" href="${origin}/en${path}"><link rel="alternate" hreflang="x-default" href="${origin}${path}">
 <meta property="og:type" content="website"><meta property="og:site_name" content="PICO Store Lab"><meta property="og:title" content="${escape(title)}"><meta property="og:description" content="${escape(description)}"><meta property="og:url" content="${canonical}"><meta property="og:locale" content="${lang === 'zh' ? 'zh_CN' : 'en_US'}"><meta property="og:image" content="${ogImage}"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta name="twitter:card" content="summary_large_image"><script type="application/ld+json">${json(structured)}</script>`;
   const initialCatalog = catalog.map(item => { const known = apps.find(app => app.itemId === item.itemId); return { ...item, ...(known ? { state:appState(known, lang) } : {}) }; });
-  const html = `<!doctype html><html lang="${lang === 'zh' ? 'zh-CN' : 'en'}" data-seo="true" data-build="${buildId}" data-page="${app ? 'app' : path === '/' ? 'home' : 'reading'}"${app ? ` data-item-id="${app.itemId}"` : ''}><head>${head}</head><body class="${app ? 'page-app' : path === '/' ? 'page-home' : 'page-reading'}"><a class="skip-link" href="#main">${lang === 'zh' ? '跳至正文' : 'Skip to content'}</a><div class="shell">${masthead(lang, path, interactive)}<main id="main">${translate(body, lang)}</main>${footer(lang)}</div>${interactive ? `<script type="application/json" id="catalog-data">${json(initialCatalog)}</script>` : ''}</body></html>`;
+  const html = `<!doctype html><html lang="${lang === 'zh' ? 'zh-CN' : 'en'}" data-seo="true" data-build="${buildId}" data-page="${pageKind}"${app ? ` data-item-id="${app.itemId}"` : ''}><head>${head}</head><body class="page-${pageKind}"><a class="skip-link" href="#main">${lang === 'zh' ? '跳至正文' : 'Skip to content'}</a><div class="shell">${masthead(lang, path, interactive)}<main id="main">${translate(body, lang)}</main>${footer(lang)}</div>${interactive ? `<script type="application/json" id="catalog-data">${json(initialCatalog)}</script>` : ''}</body></html>`;
   const destination = new URL(`.${pathname}index.html`, output);
   await mkdir(new URL('./', destination), { recursive:true });
   await writeFile(destination, html);
@@ -144,22 +220,25 @@ await cp(source, output, { recursive:true });
 
 for (const lang of ['zh', 'en']) {
   const zh = lang === 'zh';
-  const hero = `<section class="hero"><div class="hero-copy"><p class="eyebrow"><span class="indicator"></span>PICO STORE LAB</p><h1>${zh ? '在国区 PICO 上，<br><em>找到你想用的应用。</em>' : 'Your PICO.<br><em>More to explore.</em>'}</h1><p class="intro">${zh ? '查找 PICO 应用，用自己的国际区账号下载；需要 PICO 账号的应用还能选择国际区登录适配。' : 'Find PICO apps and download with your international account. Choose sign-in adaptation for apps that use PICO accounts.'}</p><div class="hero-actions"><a class="action primary" href="#catalog">${zh ? '选择应用' : 'Explore apps'} ↓</a><a id="guide-link" class="action secondary" href="${localized('/guides/international-sign-in/', lang)}">${zh ? '了解国际区登录适配' : 'International sign-in'} ↗</a></div></div><div class="hero-art" aria-hidden="true"><div class="orbit orbit-one"></div><div class="orbit orbit-two"></div><div class="hero-glyph">P<span>/</span></div><div class="art-caption">PICO APPS<br>INTERNATIONAL SIGN-IN</div></div></section>`;
   const featured = `<section id="catalog" class="section-head"><span>${zh ? '推荐应用' : 'FEATURED APPS'}</span><span>01 / APPS</span></section>${cards(lang)}`;
-  const discovery = discoveryTemplate.replace('id="catalog"', 'id="more-apps"');
-  const workflow = workflowTemplate.replaceAll(playerGuideUrl, localized('/guides/install-global-apps/', lang))
-    .replaceAll(releasesUrl, localized('/download/', lang));
   await page({ path:'/', lang, title:zh ? 'PICO 国际区应用下载与安装指南 | PICO Store Lab' : 'PICO apps, downloads & installation | PICO Store Lab',
-    description:zh ? '在国区 PICO 上查找应用的 PICO 版本，使用自己的 PICO 国际区账号下载并安装。' : 'Browse PICO apps, then download and install with your international account.',
-    body:hero + featured + discovery + detailTemplate + downloaderTemplate + workflow, interactive:true });
+    description:zh ? '在国区 PICO 上查找应用的 PICO 版本，使用自己的 PICO 国际区或中国区账号下载并安装。' : 'Browse PICO apps, then download and install with your international or China account.',
+    body:homeBody(lang) + featured, interactive:true, script:'app.js', pageType:'home' });
+  await page({ path:'/search/', lang, title:zh ? '搜索 PICO 应用 | PICO Store Lab' : 'Search PICO apps | PICO Store Lab',
+    description:zh ? '按名称搜索 PICO 商店应用，进入详情页登录并下载。' : 'Search PICO Store apps by name, then open a detail page to sign in and download.',
+    body:searchPageBody(lang), interactive:true, script:'search.js', pageType:'search' });
+  await page({ path:'/all-apps/', lang, title:zh ? '全部 PICO 应用 | PICO Store Lab' : 'All PICO apps | PICO Store Lab',
+    description:zh ? '浏览全部 PICO 应用，按分类、价格和综合/评分/价格/最新发布排序。' : 'Browse all PICO apps with category, price and recommended/rating/price/newest sorting.',
+    body:allAppsPageBody(lang), interactive:true, script:'all-apps.js', pageType:'all-apps' });
+  await page({ path:'/app/', lang, title:zh ? 'PICO 应用详情与下载 | PICO Store Lab' : 'PICO app details and download | PICO Store Lab',
+    description:zh ? '查看 PICO 应用详情，使用国际区或中国区账号登录并下载 APK。' : 'View PICO app details, sign in with an international or China account, and download the APK.',
+    body:appPageBody(lang), interactive:true, script:'app.js', pageType:'app' });
   for (const app of apps) {
-    const breadcrumb = `<nav class="breadcrumbs"><a href="${localized('/', lang)}">${zh ? '应用' : 'Apps'}</a><span>/</span><span>${escape(app.name)}</span></nav>`;
-    // Keep the existing search/favorites controls available without moving them above the selected app.
-    const discovery = `<div class="secondary-discovery">${discoveryTemplate.replace('id="catalog"', 'id="more-apps"')}</div>`;
+    const breadcrumb = `<nav class="breadcrumbs"><a href="${localized('/search/', lang)}">${zh ? '搜索' : 'Search'}</a><span>/</span><span>${escape(app.name)}</span></nav>`;
     await page({ path:`/apps/${app.slug}/`, lang, app, interactive:true,
       title:`${app.name} ${zh ? 'PICO 版下载与安装指南' : 'for PICO — download & install'} | PICO Store Lab`,
       description:app[lang].summary + (zh ? ' 查看支持设备、国际账号注册和国区头显安装步骤。' : ' Find device information, account setup and installation steps.'),
-      body:breadcrumb + appDetails(app, lang) + appDownloadNotice(app, lang) + downloaderTemplate + appGuide(app, lang) + discovery + workflow });
+      body:breadcrumb + appDetails(app, lang) + appDownloadNotice(app, lang) + downloaderTemplate + appGuide(app, lang), pageType:'app' });
   }
   const guideCopy = guide[lang];
   await page({ path:'/guides/install-global-apps/', lang, title:`${guideCopy.title} | PICO Store Lab`, description:guideCopy.description,

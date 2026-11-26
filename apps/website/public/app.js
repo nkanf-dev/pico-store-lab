@@ -1,4 +1,7 @@
 const $ = id => document.getElementById(id);
+// Detail pages intentionally contain only the detail/downloader sections. The
+// shared script still runs there, so optional controls are bound defensively.
+const on = (id, event, handler) => { const element = $(id); if (element) element.addEventListener(event, handler); };
 const translations = {
   "en": {
     "indexLabel": "PICO APP CATALOG",
@@ -138,6 +141,8 @@ const translations = {
     "aboutApp": "About this app",
     "free": "Free",
     "noAdaptation": "No sign-in adaptation needed",
+    "compatibility": "Compatibility notice",
+    "spaceProOnly": "PICO Space Pro only. It is not in the PICO 4 Ultra catalog; open it from search instead.",
     "publisher": "Publisher",
     "genres": "Category",
     "ageRating": "Age rating",
@@ -309,6 +314,8 @@ const translations = {
     "aboutApp": "应用介绍",
     "free": "免费",
     "noAdaptation": "无需登录适配",
+    "compatibility": "兼容性提示",
+    "spaceProOnly": "仅支持 PICO Space Pro，不会出现在按 PICO 4 Ultra 生成的“全部应用”列表；仍可从搜索结果进入详情。",
     "publisher": "开发商",
     "genres": "类型",
     "ageRating": "年龄分级",
@@ -370,7 +377,9 @@ let detailRequest = 0;
 let favorites = [];
 try { favorites = JSON.parse(localStorage.getItem('pico-store-favorites') || '[]'); } catch { favorites = []; }
 if (!Array.isArray(favorites)) favorites = [];
-let region = localStorage.getItem('pico-store-region') === 'cn' ? 'cn' : 'global';
+let region = selectedQuery.get('region') === 'cn' ? 'cn'
+  : selectedQuery.get('region') === 'global' ? 'global'
+    : localStorage.getItem('pico-store-region') === 'cn' ? 'cn' : 'global';
 const storedPrice = localStorage.getItem('pico-store-price-filter');
 let priceFilter = storedPrice === 'free' || storedPrice === 'paid' ? storedPrice : 'all';
 let sessions = { global: { authenticated: false, label: '' }, cn: { authenticated: false, label: '' } };
@@ -400,14 +409,13 @@ function applyLocale() {
     element.textContent = t(element.dataset.i18n);
   }
   for (const element of document.querySelectorAll('[data-i18n-placeholder]')) element.placeholder = t(element.dataset.i18nPlaceholder);
-  $('language').textContent = t('language');
-  $('language').setAttribute('aria-label', t('languageLabel'));
-  const guide = `${locale === 'en' ? '/en' : ''}/guides/install-global-apps/`;
-  if ($('guide-link')) $('guide-link').href = guide;
-  $('workflow-guide-link').href = guide;
+  if ($('language')) {
+    $('language').textContent = t('language');
+    $('language').setAttribute('aria-label', t('languageLabel'));
+  }
   if (!pageContext.seo) document.title = locale === 'en' ? 'PICO Store Lab — Browse and download PICO apps' : 'PICO Store Lab — 浏览与下载 PICO 应用';
-  if (currentState) render(currentState, fromSnapshot);
-  if (allAppsLoaded) renderAllApps();
+  if (currentState && $('app-details')) render(currentState, fromSnapshot);
+  if (allAppsLoaded && $('all-apps-results')) renderAllApps();
   renderAccount();
   renderDownload();
 }
@@ -445,9 +453,9 @@ function renderCards(container, items, showUpdated = false, showScore = false) {
 }
 
 function renderCatalog() {
-  renderCards($('catalog-items'), catalogItems);
-  renderCards($('search-results'), searchItems);
-  renderCards($('favorite-items'), favorites);
+  // Kept for the legacy template in public/index.html; the generated site uses
+  // dedicated search and catalog pages instead.
+  if ($('catalog-items')) renderCards($('catalog-items'), catalogItems);
 }
 
 function allAppsHref(item) {
@@ -483,7 +491,7 @@ function allAppsPrice(item) {
 }
 
 function renderAllApps() {
-  if (!allAppsLoaded) return;
+  if (!allAppsLoaded || !$('all-apps-results')) return;
   const container = $('all-apps-results');
   const items = filteredAllApps();
   const totalPages = Math.max(1, Math.ceil(items.length / ALL_APPS_PAGE_SIZE));
@@ -578,7 +586,7 @@ async function loadAllApps() {
   $('all-apps-load').disabled = true;
   $('all-apps-status').textContent = t('allAppsLoading');
   try {
-    const response = await fetch(`/api/apps?region=${region}&sort=updated`);
+    const response = await fetch(`/api/apps?region=${region}&sort=updated&lang=${locale === 'zh-CN' ? 'zh' : 'en'}`);
     if (!response.ok) throw new Error('apps unavailable');
     const result = await response.json();
     allApps = Array.isArray(result.items) ? result.items : [];
@@ -601,24 +609,24 @@ async function loadAllApps() {
   }
 }
 
-$('all-apps-load').addEventListener('click', loadAllApps);
-$('all-apps-sort').addEventListener('change', () => {
+on('all-apps-load', 'click', loadAllApps);
+on('all-apps-sort', 'change', () => {
   allAppsSort = $('all-apps-sort').value;
   allAppsPage = 1;
   renderAllApps();
 });
-$('all-apps-query').addEventListener('input', () => {
+on('all-apps-query', 'input', () => {
   allAppsQuery = $('all-apps-query').value;
   allAppsPage = 1;
   renderAllApps();
 });
-$('all-apps-prev').addEventListener('click', () => {
+on('all-apps-prev', 'click', () => {
   if (allAppsPage <= 1) return;
   allAppsPage -= 1;
   renderAllApps();
   $('all-apps-results').scrollIntoView({ behavior: 'smooth', block: 'start' });
 });
-$('all-apps-next').addEventListener('click', () => {
+on('all-apps-next', 'click', () => {
   allAppsPage += 1;
   renderAllApps();
   $('all-apps-results').scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -641,7 +649,7 @@ async function selectItem(itemId, scroll = false) {
   }
   refreshDownload();
   try {
-    const url = `/api/item?region=${region}&itemId=${encodeURIComponent(item.itemId)}&package=${encodeURIComponent(item.packageName)}`;
+    const url = `/api/item?region=${region}&itemId=${encodeURIComponent(item.itemId)}&package=${encodeURIComponent(item.packageName)}&lang=${locale === 'zh-CN' ? 'zh' : 'en'}`;
     const response = await fetch(url);
     if (!response.ok) throw new Error('item unavailable');
     const detail = await response.json();
@@ -688,8 +696,13 @@ function renderDetails(state) {
   $('app-publisher').textContent = state.publisher || '';
   $('app-summary').textContent = readableText(state.summary);
   const adaptationNote = $('adaptation-note');
-  adaptationNote.hidden = !state.noAdaptationReason;
-  adaptationNote.textContent = state.noAdaptationReason ? `${t('noAdaptation')}: ${state.noAdaptationReason}` : '';
+  const platforms = String(state.supportedPlatforms || '');
+  const spaceProOnly = /space pro/i.test(platforms) && !/4 ultra|pico 4|neo/i.test(platforms);
+  const compatibility = state.noAdaptationReason
+    ? `${t('noAdaptation')}: ${state.noAdaptationReason}`
+    : spaceProOnly ? `${t('compatibility')}: ${t('spaceProOnly')}` : '';
+  adaptationNote.hidden = !compatibility;
+  adaptationNote.textContent = compatibility;
   $('app-price').textContent = state.price !== undefined && state.price !== ''
     ? Number(state.price) === 0 ? t('free') : `${state.price} ${state.currency || ''}` : '';
   $('download-selected-name').textContent = state.name || '';
@@ -705,7 +718,7 @@ function renderDetails(state) {
     link.href = url; link.target = '_blank'; link.rel = 'noopener noreferrer';
     const image = document.createElement('img');
     image.src = url; image.alt = `${state.name || ''} — ${t('screenshot')} ${index + 1}`;
-    image.loading = 'lazy'; image.referrerPolicy = 'no-referrer';
+    image.loading = 'eager';
     link.append(image); gallery.append(link);
   }
   gallery.hidden = !gallery.children.length;
@@ -775,12 +788,11 @@ async function search() {
     if (!response.ok) throw new Error('search unavailable');
     const result = await response.json();
     searchItems = result.items ?? [];
-    renderCatalog();
     $('search-status').textContent = searchItems.length ? '' : t('searchEmpty');
   } catch { $('search-status').textContent = t('searchFailed'); }
 }
 
-$('search-form').addEventListener('submit', event => { event.preventDefault(); search(); });
+on('search-form', 'submit', event => { event.preventDefault(); search(); });
 
 function renderPriceFilter() {
   for (const button of document.querySelectorAll('.price-option')) {
@@ -801,17 +813,19 @@ for (const button of document.querySelectorAll('.price-option')) {
   });
 }
 renderPriceFilter();
-$('favorite-toggle').addEventListener('click', () => {
+on('favorite-toggle', 'click', () => {
   if (!currentState?.itemId) return;
   favorites = favorites.some(item => item.itemId === currentState.itemId)
     ? favorites.filter(item => item.itemId !== currentState.itemId)
     : [...favorites, { itemId: currentState.itemId, packageName: currentState.packageName, name: currentState.name }];
   localStorage.setItem('pico-store-favorites', JSON.stringify(favorites));
-  renderCatalog();
-  $('favorite-toggle').textContent = t(favorites.some(item => item.itemId === currentState.itemId) ? 'favoriteRemove' : 'favoriteAdd');
+  if ($('favorite-toggle')) $('favorite-toggle').textContent = t(favorites.some(item => item.itemId === currentState.itemId) ? 'favoriteRemove' : 'favoriteAdd');
 });
 
 async function loadState() {
+  // The home page only needs the shared region/language chrome; its cards are
+  // already server-rendered, so do not fetch the release catalog there.
+  if (pageContext.page === 'home' && !selectedId) return;
   // Curated public content is immediately useful even when an upstream lookup fails.
   if (pageContext.seo && selectedId) {
     const initial = initialCatalog.find(item => item.itemId === selectedId);
@@ -821,7 +835,6 @@ async function loadState() {
     }
   }
   function chooseSelection() {
-    renderCatalog();
     if (selectedId && !catalogItems.some(item => item.itemId === selectedId)) {
       const packageName = selectedQuery.get('package') || '';
       if (/^[A-Za-z0-9_]+(?:\.[A-Za-z0-9_]+)+$/.test(packageName)) {
@@ -1003,9 +1016,11 @@ async function api(path, options = {}) {
 }
 
 function renderAccount() {
-  $('account-status').textContent = accountStatusKey ? t(accountStatusKey)
-    : account.authenticated ? `${t('signedInAs')}${account.email ?? ''}` : t('signedOut');
-  $('download-card').hidden = !account.authenticated;
+  if ($('account-status')) {
+    $('account-status').textContent = accountStatusKey ? t(accountStatusKey)
+      : account.authenticated ? `${t('signedInAs')}${account.email ?? ''}` : t('signedOut');
+  }
+  if ($('download-card')) $('download-card').hidden = !account.authenticated;
 }
 
 function setAccountStatus(key = null) {
@@ -1070,12 +1085,13 @@ function setCnAccountStatus(key = null) {
 // active region's sign-in state in the shared download card.
 function applyRegion({ reloadDetail = true } = {}) {
   localStorage.setItem('pico-store-region', region);
-  $('global-login').hidden = region !== 'global';
-  $('cn-login').hidden = region !== 'cn';
-  $('region-global').setAttribute('aria-selected', String(region === 'global'));
-  $('region-cn').setAttribute('aria-selected', String(region === 'cn'));
-  $('region-global').classList.toggle('active', region === 'global');
-  $('region-cn').classList.toggle('active', region === 'cn');
+  if ($('global-login')) $('global-login').hidden = region !== 'global';
+  if ($('cn-login')) $('cn-login').hidden = region !== 'cn';
+  for (const [id, value] of [['region-global', 'global'], ['region-cn', 'cn']]) {
+    if (!$(`${id}`)) continue;
+    $(`${id}`).setAttribute('aria-selected', String(region === value));
+    $(`${id}`).classList.toggle('active', region === value);
+  }
   const intro = $('download-intro-text');
   if (intro) intro.textContent = region === 'cn' ? t('cnDownloadIntro') : t('downloadIntro');
   const regionTag = $('download-region-tag');
@@ -1085,17 +1101,19 @@ function applyRegion({ reloadDetail = true } = {}) {
   allAppsLoading = false;
   allAppsPage = 1;
   allAppsQuery = '';
-  $('all-apps-query').value = '';
-  $('all-apps-tools').hidden = true;
-  $('all-apps-count').textContent = '—';
+  for (const id of ['all-apps-query', 'all-apps-tools', 'all-apps-count', 'all-apps-results', 'all-apps-pagination', 'all-apps-status', 'all-apps-load']) {
+    if (!$(id)) continue;
+    if (id === 'all-apps-query') $(id).value = '';
+    if (id === 'all-apps-tools') $(id).hidden = true;
+    if (id === 'all-apps-count') $(id).textContent = '—';
+    if (id === 'all-apps-results') { $(id).replaceChildren(); $(id).hidden = true; }
+    if (id === 'all-apps-pagination') $(id).hidden = true;
+    if (id === 'all-apps-status') $(id).textContent = '';
+    if (id === 'all-apps-load') $(id).disabled = false;
+  }
   cnMobileTicket = '';
   cnSsoCookies = {};
   cnTicketMobile = '';
-  $('all-apps-results').replaceChildren();
-  $('all-apps-results').hidden = true;
-  $('all-apps-pagination').hidden = true;
-  $('all-apps-status').textContent = '';
-  $('all-apps-load').disabled = false;
   syncActiveAccount();
   setAccountStatus();
   setCnAccountStatus();
@@ -1105,7 +1123,7 @@ function applyRegion({ reloadDetail = true } = {}) {
 }
 
 for (const [id, value] of [['region-global', 'global'], ['region-cn', 'cn']]) {
-  $(id).addEventListener('click', () => {
+  on(id, 'click', () => {
     if (region === value || accountBusy) return;
     region = value;
     applyRegion();
@@ -1190,7 +1208,7 @@ async function refreshAccount() {
   if (account.authenticated) await refreshDownload();
 }
 
-$('send-code').addEventListener('click', async () => {
+on('send-code', 'click', async () => {
   setAccountStatus('sendingCode');
   try {
     await api('/api/account/send-code', { method: 'POST', body: JSON.stringify({ email: $('account-email').value.trim() }) });
@@ -1201,7 +1219,7 @@ $('send-code').addEventListener('click', async () => {
   }
 });
 
-$('account-form').addEventListener('submit', async event => {
+on('account-form', 'submit', async event => {
   event.preventDefault();
   if (accountBusy) return;
   accountRequest += 1;
@@ -1224,7 +1242,7 @@ $('account-form').addEventListener('submit', async event => {
   }
 });
 
-$('sign-out').addEventListener('click', async () => {
+on('sign-out', 'click', async () => {
   if (accountBusy) return;
   accountRequest += 1;
   setAccountBusy(true);
@@ -1244,7 +1262,7 @@ $('sign-out').addEventListener('click', async () => {
   }
 });
 
-$('cn-send-code').addEventListener('click', async () => {
+on('cn-send-code', 'click', async () => {
   const mobile = $('cn-mobile').value.trim();
   const countryCode = $('cn-country').value.trim() || '86';
   setCnAccountStatus('smsSending');
@@ -1263,7 +1281,7 @@ $('cn-send-code').addEventListener('click', async () => {
   }
 });
 
-$('cn-account-form').addEventListener('submit', async event => {
+on('cn-account-form', 'submit', async event => {
   event.preventDefault();
   if (accountBusy) return;
   const mobile = $('cn-mobile').value.trim();
@@ -1295,7 +1313,7 @@ $('cn-account-form').addEventListener('submit', async event => {
   }
 });
 
-$('acquire-apk').addEventListener('click', async () => {
+on('acquire-apk', 'click', async () => {
   if (!account.authenticated || accountBusy || !apk?.canAcquire || !selectedId) return;
   const itemId = selectedId;
   const packageName = selectedPackage();
@@ -1318,7 +1336,7 @@ $('acquire-apk').addEventListener('click', async () => {
   renderDownload();
 });
 
-$('copy-report').addEventListener('click', async () => {
+on('copy-report', 'click', async () => {
   const report = await collectDownloadReport();
   if (!report) return;
   try {
@@ -1329,9 +1347,9 @@ $('copy-report').addEventListener('click', async () => {
     $('download-status').textContent = t('reportSaveHint');
   }
 });
-$('save-report').addEventListener('click', async () => { saveDownloadReport(await collectDownloadReport()); });
+on('save-report', 'click', async () => { saveDownloadReport(await collectDownloadReport()); });
 
-$('copy-md5').addEventListener('click', async () => {
+on('copy-md5', 'click', async () => {
   if (!apk?.available) return;
   try {
     await navigator.clipboard.writeText(apk.md5);
@@ -1341,8 +1359,31 @@ $('copy-md5').addEventListener('click', async () => {
   }
 });
 
+// A detail opened from the catalog should keep the catalog's navigation context
+// instead of claiming it was reached through search.
+function applyNavigationContext() {
+  if (new URLSearchParams(location.search).get('from') !== 'all-apps') return;
+  const basePath = locale === 'en' ? '/en' : '';
+  const breadcrumb = $('app-breadcrumb-link');
+  if (breadcrumb) {
+    breadcrumb.href = `${basePath}/all-apps/`;
+    breadcrumb.textContent = locale === 'en' ? 'All apps' : '全部应用';
+  }
+  const tabbar = document.querySelector('.tabbar');
+  if (!tabbar) return;
+  const allApps = [...tabbar.querySelectorAll('a')].find(link => link.getAttribute('href')?.endsWith('/all-apps/'));
+  if (!allApps) return;
+  for (const link of tabbar.querySelectorAll('a')) {
+    link.classList.remove('active');
+    link.removeAttribute('aria-current');
+  }
+  allApps.classList.add('active');
+  allApps.setAttribute('aria-current', 'page');
+}
+
 // Account and download state must exist before the first render, so boot last.
 applyLocale();
+applyNavigationContext();
 applyRegion({ reloadDetail: false });
 loadState();
 refreshAccount();

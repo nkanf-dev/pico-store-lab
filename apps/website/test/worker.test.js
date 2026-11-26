@@ -87,13 +87,12 @@ async function signIn(env, email = 'player@example.com') {
 
 test('player path links the website to the repo, guide, and clients', () => {
   const html = readFileSync(new URL('../dist/index.html', import.meta.url), 'utf8');
-  const script = readFileSync(new URL('../public/app.js', import.meta.url), 'utf8');
   const english = readFileSync(new URL('../../../README.md', import.meta.url), 'utf8');
   const chinese = readFileSync(new URL('../../../README.zh-CN.md', import.meta.url), 'utf8');
   assert.match(html, /href="https:\/\/github\.com\/nkanf-dev\/pico-store-lab"/);
-  assert.match(html, /id="guide-link"/);
+  assert.match(html, /href="\/guides\/install-global-apps\/"/);
   assert.match(html, /href="\/download\/"/);
-  assert.match(script, /\/guides\/install-global-apps\//);
+  assert.match(html, /aria-label="主导航"/);
   for (const guide of [english, chinese]) {
     assert.match(guide, /<a id="player-guide"><\/a>/);
     assert.match(guide, /send-code --email you@example\.com/);
@@ -137,12 +136,34 @@ test('Virtual Desktop and sign-in guides are available in both languages', () =>
   }
 });
 
+test('standalone search, catalog and detail pages render their own controls', () => {
+  const dist = new URL('../dist/', import.meta.url);
+  for (const prefix of ['', 'en/']) {
+    const searchHtml = readFileSync(new URL(`${prefix}search/index.html`, dist), 'utf8');
+    const allAppsHtml = readFileSync(new URL(`${prefix}all-apps/index.html`, dist), 'utf8');
+    const detailHtml = readFileSync(new URL(`${prefix}app/index.html`, dist), 'utf8');
+    assert.match(searchHtml, /id="search-form"/);
+    assert.match(searchHtml, /href="[^"]*\/all-apps\/"/);
+    assert.match(allAppsHtml, /id="all-apps-sort"/);
+    assert.match(allAppsHtml, /value="price_asc"/);
+    assert.match(allAppsHtml, /id="all-apps-category"/);
+    assert.match(detailHtml, /id="app-breadcrumb-link"/);
+    assert.match(detailHtml, /class="app-guide"/);
+  }
+});
+
 test('the page, the script, and both locales stay in agreement', () => {
-  const html = readFileSync(new URL('../dist/index.html', import.meta.url), 'utf8');
+  const dist = new URL('../dist/', import.meta.url);
+  const html = ['index.html', 'app/index.html', 'search/index.html', 'all-apps/index.html', 'apps/vrchat/index.html']
+    .map(path => readFileSync(new URL(path, dist), 'utf8')).join('\n');
   const source = readFileSync(new URL('../public/app.js', import.meta.url), 'utf8');
   const htmlIds = new Set([...html.matchAll(/id="([^"]+)"/g)].map(match => match[1]));
+  // These legacy single-page controls remain behind optional guards in app.js;
+  // the standalone /all-apps/ page owns the live catalog UI now.
+  const legacyOptional = new Set(['all-apps-tools', 'all-apps-load', 'catalog-items']);
   for (const [, name] of source.matchAll(/\$\('([^']+)'\)/g)) {
-    assert.ok(htmlIds.has(name), `app.js references #${name}, which index.html does not define`);
+    if (legacyOptional.has(name)) continue;
+    assert.ok(htmlIds.has(name), `app.js references #${name}, which no built page defines`);
   }
   const start = source.indexOf('const translations = {');
   const literal = source.slice(source.indexOf('{', start), source.indexOf('\n};', start) + 3);

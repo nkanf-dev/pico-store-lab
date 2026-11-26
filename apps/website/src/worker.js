@@ -28,10 +28,15 @@ function regionFrom(value) {
   return value === 'cn' ? 'cn' : 'global';
 }
 
-function storeOptions(region) {
-  return storeOptionsForRegion(regionFrom(region));
+function storeOptions(region, language = null) {
+  const options = storeOptionsForRegion(regionFrom(region));
+  return language ? { ...options, language } : options;
 }
 const MAX_REQUEST_BODY_BYTES = 4 * 1024;
+
+function languageFrom(value) {
+  return value === 'en' ? 'en' : 'zh';
+}
 
 // Section IDs differ by storefront. Global's "see all" section is 51; the
 // China store has separate game (96) and app (97) sections but no single all-
@@ -41,8 +46,8 @@ const APP_LIST_MAX_PAGES = 20;
 const APP_LIST_PAGE_SIZE = 100;
 const APP_LIST_CACHE_SECONDS = 300;
 
-async function fetchSectionPageItems(sectionId, region, fetchImpl = fetch) {
-  const options = storeOptions(region);
+async function fetchSectionPageItems(sectionId, region, language, fetchImpl = fetch) {
+  const options = storeOptions(region, language);
   const items = [];
   for (let page = 1; page <= APP_LIST_MAX_PAGES; page++) {
     const spec = makeSectionRequest(sectionId, options, page, APP_LIST_PAGE_SIZE);
@@ -74,9 +79,9 @@ function sortAppList(items, sort, region) {
   return items.sort((a, b) => byUpdated(a, b) || byName(a, b));
 }
 
-async function loadAllApps(region, fetchImpl = fetch) {
+async function loadAllApps(region, language = 'zh', fetchImpl = fetch) {
   const cache = typeof globalThis.caches !== 'undefined' ? globalThis.caches?.default : null;
-  const cacheKey = new Request(`https://pico-store-lab.invalid/api/apps/${region}`);
+  const cacheKey = new Request(`https://pico-store-lab.invalid/api/apps/${region}/${language}`);
   if (cache) {
     const hit = await cache.match(cacheKey);
     if (hit) {
@@ -84,7 +89,7 @@ async function loadAllApps(region, fetchImpl = fetch) {
     }
   }
   const sections = APP_SECTIONS[region] ?? APP_SECTIONS.global;
-  const lists = await Promise.all(sections.map(id => fetchSectionPageItems(id, region, fetchImpl)));
+  const lists = await Promise.all(sections.map(id => fetchSectionPageItems(id, region, language, fetchImpl)));
   const seen = new Set();
   const items = [];
   for (const item of lists.flat()) {
@@ -496,7 +501,7 @@ export default {
         }
       }
       try {
-        const spec = makeSearchRequest(word, storeOptions(region));
+        const spec = makeSearchRequest(word, storeOptions(region, languageFrom(url.searchParams.get('lang'))));
         const upstream = await fetch(spec.url, { ...spec, signal: AbortSignal.timeout(15000) });
         if (!upstream.ok) throw new Error('upstream search unavailable');
         const parsed = parseSearchResults(parseOfficialJson(await upstream.text()));
@@ -512,11 +517,12 @@ export default {
       if (request.method !== 'GET') return new Response('Method Not Allowed', { status: 405 });
       const region = regionFrom(url.searchParams.get('region'));
       const target = { itemId: url.searchParams.get('itemId') ?? '', packageName: url.searchParams.get('package') ?? '' };
+      const language = languageFrom(url.searchParams.get('lang'));
       try {
-        const spec = makePublicItemRequest(storeOptions(region), target);
+        const spec = makePublicItemRequest(storeOptions(region, language), target);
         const upstream = await fetch(spec.url, { ...spec, signal: AbortSignal.timeout(15000) });
         if (!upstream.ok) throw new Error('upstream item unavailable');
-        return Response.json(parsePublicItem(parseOfficialJson(await upstream.text()), target, storeOptions(region)), {
+        return Response.json(parsePublicItem(parseOfficialJson(await upstream.text()), target, storeOptions(region, language)), {
           headers: { 'Cache-Control': 'public, max-age=60' },
         });
       } catch {
@@ -526,12 +532,13 @@ export default {
     if (url.pathname === '/api/apps') {
       if (request.method !== 'GET') return new Response('Method Not Allowed', { status: 405 });
       const region = regionFrom(url.searchParams.get('region'));
+      const language = languageFrom(url.searchParams.get('lang'));
       const sort = url.searchParams.get('sort') ?? 'updated';
       if (!['updated', 'name', 'rating'].includes(sort)) {
         return Response.json({ error: 'invalid_sort' }, { status: 400 });
       }
       try {
-        const result = await loadAllApps(region);
+        const result = await loadAllApps(region, language);
         const items = sortAppList([...result.items], sort, region);
         return Response.json({ ...result, sort, items }, {
           headers: { 'Cache-Control': `public, max-age=${APP_LIST_CACHE_SECONDS}` },

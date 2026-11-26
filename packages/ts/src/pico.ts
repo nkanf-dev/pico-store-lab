@@ -131,6 +131,8 @@ export interface SearchResults { items: SearchItem[]; nextId: number | null }
 export interface SectionApp extends StoreTarget {
   name: string;
   versionCode: number | null;
+  // PICO's display version (for example 26.6.0) when the section row carries it.
+  appVersion?: string;
   price: string;
   currency: string;
   iconUrl: string | null;
@@ -298,11 +300,13 @@ export function parseSectionPage(response: unknown): SectionPage {
     const cover = item.cover && typeof item.cover === 'object' ? item.cover as Record<string, unknown> : null;
     const detail = item.detail && typeof item.detail === 'object' ? item.detail as Record<string, unknown> : {};
     const versionCode = Number(item.version_code);
+    const appVersion = String(detail.app_version ?? item.version ?? '').trim();
     const updatedAt = Number(detail.app_update_time ?? item.app_update_time);
     const score = Number(item.score);
     items.push({
       itemId, packageName, name: String(item.name || packageName),
       versionCode: Number.isSafeInteger(versionCode) && versionCode > 0 ? versionCode : null,
+      ...(appVersion ? { appVersion } : {}),
       price: String(item.price ?? ''),
       currency: String(item.currency ?? ''),
       iconUrl: parseImageUrl(cover?.square ?? item.icon),
