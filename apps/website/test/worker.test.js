@@ -449,9 +449,11 @@ test('the all-apps endpoint aggregates section pages and supports time/name/rati
 test('the China all-apps list merges games and apps without duplicates', async () => {
   const env = testEnv();
   const seenSections = [];
+  const seenDevices = new Set();
   const stub = async (url, init = {}) => {
     const body = JSON.parse(init.body ?? '{}');
     seenSections.push(body.section_id);
+    seenDevices.add(new URL(String(url)).searchParams.get('device_name'));
     const shared = { item_id: 10, package_name: 'com.example.shared', name: 'Shared', version_code: 1, price: '0', currency: 'CNY', score: 4.1, detail: { app_update_time: '300' } };
     const own = body.section_id === 96
       ? { item_id: 11, package_name: 'com.example.game', name: 'Game', version_code: 1, price: '0', currency: 'CNY', score: 4.4, detail: { app_update_time: '310' } }
@@ -466,6 +468,7 @@ test('the China all-apps list merges games and apps without duplicates', async (
       assert.equal(body.total, 3);
       assert.deepEqual(body.items.map(item => item.name), ['App', 'Game', 'Shared']);
       assert.deepEqual(seenSections.sort(), [96, 97]);
+      assert.deepEqual([...seenDevices], ['A9210']);
     });
   } finally { env.DB.close(); }
 });

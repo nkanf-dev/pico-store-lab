@@ -47,7 +47,13 @@ const APP_LIST_PAGE_SIZE = 100;
 const APP_LIST_CACHE_SECONDS = 300;
 
 async function fetchSectionPageItems(sectionId, region, language, fetchImpl = fetch) {
-  const options = storeOptions(region, language);
+  const storeRegion = regionFrom(region);
+  const baseOptions = storeOptions(region, language);
+  // The China client identity is validated for account traffic (B3110 / Space
+  // Pro), but the public catalog should describe the PICO 4 Ultra the site
+  // targets. Ask the section endpoint for A9210 so the list and its compatibility
+  // note describe the same headset.
+  const options = storeRegion === 'cn' ? { ...baseOptions, deviceName: 'A9210' } : baseOptions;
   const items = [];
   for (let page = 1; page <= APP_LIST_MAX_PAGES; page++) {
     const spec = makeSectionRequest(sectionId, options, page, APP_LIST_PAGE_SIZE);
@@ -81,7 +87,7 @@ function sortAppList(items, sort, region) {
 
 async function loadAllApps(region, language = 'zh', fetchImpl = fetch) {
   const cache = typeof globalThis.caches !== 'undefined' ? globalThis.caches?.default : null;
-  const cacheKey = new Request(`https://pico-store-lab.invalid/api/apps/${region}/${language}`);
+  const cacheKey = new Request(`https://pico-store-lab.invalid/api/apps/${region}/${language}/A9210`);
   if (cache) {
     const hit = await cache.match(cacheKey);
     if (hit) {
