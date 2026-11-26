@@ -56,7 +56,9 @@ function priceLabel(value) {
   const price = String(value ?? '').trim();
   if (/^0+(?:\.0+)?$/.test(price)) return t('free');
   if (!price) return '';
-  return `¥${price}`;
+  // The search payload carries an amount but not a currency; the region
+  // determines whether it is CNY or USD.
+  return region === 'cn' ? `¥${price}` : `$${price}`;
 }
 
 function renderRegion() {
