@@ -105,10 +105,24 @@ function comprehensiveValue(item) {
   return score * 0.65 + freshness * 0.35;
 }
 
+function comparablePrice(item) {
+  const value = String(item.price ?? '').trim();
+  if (!value) return null;
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+}
+
 function compare(a, b, key) {
   if (key === 'rating') return (b.score ?? -1) - (a.score ?? -1) || (b.updatedAt ?? 0) - (a.updatedAt ?? 0);
-  if (key === 'price_asc') return priceNumber(a) - priceNumber(b) || (b.updatedAt ?? 0) - (a.updatedAt ?? 0);
-  if (key === 'price_desc') return priceNumber(b) - priceNumber(a) || (b.updatedAt ?? 0) - (a.updatedAt ?? 0);
+  if (key === 'price_asc' || key === 'price_desc') {
+    const left = comparablePrice(a);
+    const right = comparablePrice(b);
+    // Rows without a public price belong at the end in either direction.
+    if (left === null && right === null) return (b.updatedAt ?? 0) - (a.updatedAt ?? 0);
+    if (left === null) return 1;
+    if (right === null) return -1;
+    return (key === 'price_asc' ? left - right : right - left) || (b.updatedAt ?? 0) - (a.updatedAt ?? 0);
+  }
   if (key === 'updated') return (b.updatedAt ?? 0) - (a.updatedAt ?? 0);
   return comprehensiveValue(b) - comprehensiveValue(a) || (b.updatedAt ?? 0) - (a.updatedAt ?? 0);
 }
@@ -210,7 +224,10 @@ function renderRows(items) {
     naming.append(el('strong', '', item.name), el('small', '', item.publisher || '—'));
     main.append(art, naming);
 
-    row.append(main, el('span', 'store-version', versionLabel(item)),
+    const versionText = versionLabel(item);
+    const version = el('span', 'store-version', versionText);
+    if (versionText !== '—') version.title = versionText;
+    row.append(main, version,
       el('span', 'store-category', genreList(item.genres).join(' · ') || '—'),
       el('span', 'store-rating', typeof item.score === 'number' && Number.isFinite(item.score) ? `★ ${item.score.toFixed(1)}` : '—'),
       el('span', 'store-price', priceLabel(item)),

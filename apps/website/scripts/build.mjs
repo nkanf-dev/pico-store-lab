@@ -154,7 +154,7 @@ function homeBody(lang) {
 
 function searchPageBody(lang) {
   const zh = lang === 'zh';
-  return `<header class="page-heading"><p class="eyebrow"><span class="indicator"></span>${zh ? 'PICO 商店 / 搜索' : 'PICO STORE / SEARCH'}</p><h1>${zh ? '搜索应用' : 'Search apps'}</h1><p>${zh ? '输入应用名称，查看商店结果，再进入应用详情页登录并下载。' : 'Enter an app name, review store results, then open a detail page to sign in and download.'}</p></header>
+  return `<header class="page-heading"><div><p class="eyebrow"><span class="indicator"></span>${zh ? 'PICO 商店 / 搜索' : 'PICO STORE / SEARCH'}</p><h1>${zh ? '搜索应用' : 'Search apps'}</h1><p>${zh ? '输入应用名称，查看商店结果，再进入应用详情页登录并下载。' : 'Enter an app name, review store results, then open a detail page to sign in and download.'}</p></div></header>
 <section class="search-panel" aria-label="${zh ? '搜索' : 'Search'}">
   <form id="search-form" class="store-search"><label for="search-word">${zh ? '应用名称' : 'App name'}</label><div><input id="search-word" type="search" required maxlength="100" placeholder="${zh ? '例如 WPS Office、VRChat' : 'For example WPS Office, VRChat'}"><button type="submit">${zh ? '搜索' : 'Search'}</button></div></form>
   <div class="price-filter" role="group" aria-label="${zh ? '价格筛选' : 'Price filter'}"><button type="button" class="price-option" data-price="all" aria-pressed="true">${zh ? '全部' : 'All'}</button><button type="button" class="price-option" data-price="free" aria-pressed="false">${zh ? '免费' : 'Free'}</button><button type="button" class="price-option" data-price="paid" aria-pressed="false">${zh ? '付费' : 'Paid'}</button></div>
@@ -175,7 +175,7 @@ function allAppsPageBody(lang) {
 <p id="all-apps-status" class="all-apps-status" role="status" aria-live="polite">${zh ? '正在拉取商店目录…' : 'Loading the store catalog…'}</p>
 <div id="all-apps-results" class="all-apps-results store-list" hidden></div>
 <nav id="all-apps-pagination" class="all-apps-pagination store-pagination" aria-label="${zh ? '全部应用分页' : 'All apps pages'}" hidden><button id="all-apps-prev" type="button">${zh ? '← 上一页' : '← Previous'}</button><span id="all-apps-page" class="all-apps-page">1 / 1</span><button id="all-apps-next" type="button">${zh ? '下一页 →' : 'Next →'}</button></nav>
-<p class="store-note">${zh ? '列表按 PICO 4 Ultra（A9210）的商店兼容性生成。WPS Office 等国区仅支持其他设备的应用不会出现在这里，可以在搜索页找到。' : 'This list follows the PICO 4 Ultra (A9210) store compatibility. Apps such as WPS Office that only support other devices stay out of this list; use Search to find them.'}</p>`;
+<p class="store-note">${zh ? '列表按 PICO 4 Ultra（A9210）的商店目录生成。WPS Office 仅支持 PICO Space Pro，不在这个目录中，可以在搜索页找到。' : 'This list follows the PICO 4 Ultra (A9210) store catalog. WPS Office only supports PICO Space Pro and is not in this catalog; use Search to find it.'}</p>`;
 }
 
 function appPageBody(lang) {

@@ -103,7 +103,7 @@ function resultCard(item) {
   const name = document.createElement('strong');
   name.textContent = item.name || item.packageName;
   const meta = document.createElement('span');
-  const version = item.versionCode ? `${t('version')} ${item.versionCode}` : '';
+  const version = item.appVersion ? `${t('version')} ${item.appVersion}` : '';
   const price = priceLabel(item.price);
   meta.textContent = [version, price].filter(Boolean).join(' · ');
   body.append(name, meta);
