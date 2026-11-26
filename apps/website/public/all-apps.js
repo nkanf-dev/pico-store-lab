@@ -6,6 +6,7 @@ const copy = {
     loaded: 'Showing {start}–{end} of {total}',
     empty: 'No apps match these filters.',
     catalogScope: 'This list contains PICO 4 Ultra compatible apps only. Apps made for other headsets are available through Search.',
+    wpsScope: 'WPS Office only supports PICO Space Pro, so it is not in the PICO 4 Ultra “All apps” catalog.',
     failed: 'Could not load the app list. Please try again.',
     searchStore: 'Search the store for “{query}”',
     free: 'Free',
@@ -24,6 +25,7 @@ const copy = {
     loaded: '显示 {start}–{end} / 共 {total} 款',
     empty: '没有符合筛选条件的应用。',
     catalogScope: '本列表只包含 PICO 4 Ultra 可用的应用；其他设备专用的应用请用搜索查找。',
+    wpsScope: 'WPS Office 仅支持 PICO Space Pro，不在 PICO 4 Ultra 的“全部应用”目录中。',
     failed: '无法加载应用列表，请稍后重试。',
     searchStore: '在商店搜索「{query}」',
     free: '免费',
@@ -168,7 +170,8 @@ function renderRows(items) {
     const empty = el('p', 'store-empty', t('empty'));
     container.append(empty);
     if (query.trim()) {
-      const scope = el('p', 'store-note', t('catalogScope'));
+      const scopeText = query.toLocaleLowerCase(locale).includes('wps') ? t('wpsScope') : t('catalogScope');
+      const scope = el('p', 'store-note', scopeText);
       container.append(scope);
       const link = el('a', 'store-empty-link', t('searchStore', { query: query.trim() }));
       const base = locale === 'en' ? '/en' : '';
