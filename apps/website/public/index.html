@@ -44,6 +44,20 @@
         <p id="search-status" role="status" aria-live="polite"></p>
         <div id="search-results" class="search-results"></div>
       </section>
+      <section id="all-apps" class="all-apps" aria-labelledby="all-apps-heading">
+        <div class="section-head"><span id="all-apps-heading" data-i18n="allAppsLabel">ALL APPS</span><span data-i18n="allAppsHint">FULL STORE LIST</span></div>
+        <div class="all-apps-controls">
+          <button id="all-apps-load" type="button" data-i18n="loadAllApps">Load all apps</button>
+          <label for="all-apps-sort" data-i18n="sortLabel">Sort</label>
+          <select id="all-apps-sort">
+            <option value="updated" data-i18n="sortUpdated">Recently updated</option>
+            <option value="name" data-i18n="sortName">Name A–Z</option>
+            <option value="rating" data-i18n="sortRating">Rating</option>
+          </select>
+          <span id="all-apps-status" class="muted" role="status" aria-live="polite"></span>
+        </div>
+        <div id="all-apps-results" class="catalog-items" hidden></div>
+      </section>
       <section id="catalog" class="section-head" aria-label="Recommended apps"><span data-i18n="catalogLabel">01 / RECOMMENDED</span><span data-i18n="catalogHint">CHOOSE AN APP</span></section>
       <div id="catalog-items" class="catalog-items" role="group" aria-label="Available apps"></div>
       <section class="section-head" aria-label="Favorites"><span data-i18n="favoritesLabel">FAVORITES</span><span data-i18n="favoritesHint">SAVED ON THIS DEVICE</span></section>
@@ -103,8 +117,6 @@
               <a href="https://sso.picoxr.com/passport" target="_blank" rel="noopener noreferrer" data-i18n="cnRegisterLink">Register on PICO’s China website ↗</a>
               <span class="register-hint" data-i18n="cnRegisterHint">New numbers must finish registration on the official website before signing in here.</span>
             </p>
-            <button id="cn-browser-login" type="button" class="primary" data-i18n="cnBrowserLogin">Sign in through the official PICO window (recommended)</button>
-            <p id="cn-browser-status" role="status" aria-live="polite" class="muted"></p>
             <div class="login-divider"><span data-i18n="orSmsLogin">Or sign in with an SMS code</span></div>
             <form id="cn-account-form" class="account-form" autocomplete="off">
               <label for="cn-mobile" data-i18n="mobileLabel">China mobile number</label>
@@ -119,6 +131,9 @@
               </div>
               <p id="cn-account-status" role="status" aria-live="polite" class="muted"></p>
             </form>
+            <div class="login-divider cn-browser-divider"><span data-i18n="cnBrowserDivider">Local fallback</span></div>
+            <button id="cn-browser-login" type="button" data-i18n="cnBrowserLogin">Sign in through the official PICO window</button>
+            <p id="cn-browser-status" role="status" aria-live="polite" class="muted"></p>
           </div>
           <div id="download-card" class="download-card" hidden>
             <p class="label" data-i18n="apkLabel">APK</p>

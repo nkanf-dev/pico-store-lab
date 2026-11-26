@@ -18,18 +18,21 @@ The download interface supports two store regions selected by the client and pas
 
 The **Global/China region toggle is in the page header right next to the language control** (with matching weight) rather than inside the search panel; it persists across pages and drives every search, detail and download request. Search also accepts a price filter — `price=free` or `price=paid`, omitted (or `all`) for every app — exposed by the **All / Free / Paid** segmented control above the results. A price that normalizes to zero (`0`, `0.00`) counts as free and a positive numeric amount counts as paid, matching the Python SDK's `--price` option; an unknown value returns HTTP 400 `invalid_price_filter`.
 
-#### China sign-in: official browser window (recommended)
+#### All-apps listing
 
-PICO's direct mobile-SMS endpoint is gated by device risk control (a native device registration, fingerprint headers and a slider challenge). A server that simply replays the SMS request is rejected with upstream error 7, both from the hosted worker and from a local dev server; requesting codes repeatedly does not help. The reliable path is to let the **official PICO SSO page run in a real local browser**, where its human-verification step actually executes.
+The discovery section has an **All apps / 全部应用** panel. `GET /api/apps?region=global|cn&sort=updated|name|rating` walks the storefront sections (`51` globally; `96` games plus `97` apps in China) at 100 items per page, merges duplicates by `item_id`, and returns one JSON list with `itemId`, `packageName`, `name`, `price`, `currency`, `cover`, `score`, `versionCode`, `updatedAt`, `publisher` and `genres`. The default sort is `updated` (newest `detail.app_update_time` first); `name` is A–Z and `rating` is highest score first. An unsupported sort returns HTTP 400 `invalid_sort`.
 
-When you run the site locally with `npm run dev -w @pico-store/website`, the China panel shows **"Sign in through the official PICO window (recommended)"**. Clicking it (`POST /api/local/browser-login/start`, polled via `GET /api/local/browser-login/status`) makes the Node dev server:
+Responses are cached for five minutes when the Worker Cache API is available. The page loads the full merged list on demand, sorts it in place and shows the update time on every card, so switching between time, name and rating order does not trigger another upstream crawl. The China list merges games and apps, then removes duplicates that appear in both sections.
 
-1. discover a Chromium-based browser (Microsoft Edge and Google Chrome first, then Brave/Vivaldi/other Chromium builds; on Windows it checks both `Program Files` and `Program Files (x86)`, where 32-bit Edge is normally installed, plus the per-user `%LOCALAPPDATA%` install; override with the `PICO_BROWSER_PATH` environment variable),
-2. launch it with a temporary profile and the Chrome DevTools Protocol on `127.0.0.1`, pointed at the official China SSO page,
-3. wait while you complete mobile-number + SMS sign-in (including any slider) yourself — the window closes automatically when done,
-4. read the signed-in cookies over CDP, verify them against `matrix-cn.picovr.com`, and store the China session in the same regional vault slot as the SMS flow.
+#### China sign-in: official SSO web flow
 
-This lives in `src/local-browser-login.js`, which is imported **only** by the Node dev server (`src/dev-server.js`); it uses Node APIs that do not exist on Cloudflare Workers and must never be imported from `src/worker.js`. The hosted site cannot launch a browser on your machine, so those two routes return HTTP 501 `browser_login_local_only` in production, and the UI points you to the Python CLI instead: `pico-store-py --region cn login-window`. The on-page China SMS form (`/api/account/cn/send-code`, `/api/account/cn/login`) is retained but is expected to fail with error 7 outside the official clients. Local-window login requires a Node runtime with a global `WebSocket` (Node.js 22 or newer).
+The China panel uses the same web flow as `sso.picoxr.com`, not the native app's Matrix endpoint. PICO's app API (`matrix-cn.picovr.com/passport/mobile/send_code/v1`) is gated by device risk control and returns error 7 to a server that has no device registration; that endpoint is not used for browser sign-in.
+
+The worker sends the six-digit code through `https://sso.picoxr.com/send_activation_code/v2/` with the official web query parameters, then signs in through `https://sso.picoxr.com/quick_login/v2/`. The send response carries a `mobile_ticket` that binds the code challenge; `/api/account/cn/send-code` returns it to the page, and `/api/account/cn/login` requires the same ticket together with the code. The SSO response sets the session cookies; the worker verifies them against the China store before sealing the session into the China slot of the regional vault. A missing or stale ticket is rejected as `code_expired`, and a wrong code is reported as `invalid_code`.
+
+The local browser-window fallback (`src/local-browser-login.js`, `POST /api/local/browser-login/start`, polled via `GET /api/local/browser-login/status`) remains available when the site runs under the Node dev server. It launches a temporary Chromium profile pointed at the official SSO page, lets the user complete any interactive challenge, reads the signed-in cookies over CDP, verifies them against the China store and stores the same regional session. The hosted worker cannot launch a browser, so those routes return HTTP 501 `browser_login_local_only`; the UI labels that button as a local-only fallback. Local-window login requires Node.js 22 or newer for its global `WebSocket`.
+
+Both paths only store the PICO session after a successful login. No phone number, code, password or cookie is written to D1 or logs.
 
 ## Deploy
 

@@ -288,6 +288,120 @@ test('China SMS rejects malformed mobile numbers before contacting PICO', async 
   } finally { env.DB.close(); }
 });
 
+test('China SMS uses the official SSO web flow and logs in with its mobile ticket', async () => {
+  const env = testEnv();
+  const calls = [];
+  const stub = async (url, init = {}) => {
+    const target = String(url);
+    calls.push({ url: target, body: String(init.body ?? '') });
+    if (target.includes('/send_activation_code/v2/')) {
+      assert.match(target, /aid=264297/);
+      assert.match(calls.at(-1).body, /mix_mode=1/);
+      assert.match(calls.at(-1).body, /mobile=[0-9a-f]+/);
+      return Response.json({ error_code: 0, mobile_ticket: 'mobile_ticket_TESTTICKET123' });
+    }
+    if (target.includes('/quick_login/v2/')) {
+      assert.match(calls.at(-1).body, /mobile_ticket=mobile_ticket_TESTTICKET123/);
+      return Response.json({ error_code: 0, data: { user_id_str: '4711' } }, {
+        headers: { 'set-cookie': 'sessionid=web-session; Domain=.picoxr.com; Path=/; HttpOnly' },
+      });
+    }
+    throw new Error(`unexpected upstream request: ${target}`);
+  };
+  try {
+    await withFetch(stub, async () => {
+      const sent = await worker.fetch(
+        request('/api/account/cn/send-code', json({ mobile: '13000000000', countryCode: '86' })), env);
+      assert.equal(sent.status, 200);
+      const sentBody = await sent.json();
+      assert.equal(sentBody.mobileTicket, 'mobile_ticket_TESTTICKET123');
+
+      const login = await worker.fetch(request('/api/account/cn/login', json({
+        mobile: '13000000000', countryCode: '86', code: '123456', mobileTicket: sentBody.mobileTicket,
+      })), env);
+      assert.equal(login.status, 200);
+      assert.match(login.headers.get('set-cookie'), /psl_session=/);
+      const session = await worker.fetch(request('/api/account/session', {
+        headers: { cookie: login.headers.get('set-cookie').split(';')[0] },
+      }), env);
+      const state = await session.json();
+      assert.equal(state.regions.cn.authenticated, true);
+      assert.equal(state.regions.cn.label, '+86 13000000000');
+      assert.equal(calls.filter(call => call.url.includes('matrix-cn')).length, 0);
+    });
+  } finally { env.DB.close(); }
+});
+
+test('China SMS login requires the ticket returned by send-code', async () => {
+  const env = testEnv();
+  try {
+    const response = await worker.fetch(request('/api/account/cn/login', json({
+      mobile: '13000000000', countryCode: '86', code: '123456',
+    })), env);
+    assert.equal(response.status, 400);
+    assert.equal((await response.json()).error, 'code_expired');
+  } finally { env.DB.close(); }
+});
+
+test('the all-apps endpoint aggregates section pages and supports time/name/rating sorts', async () => {
+  const env = testEnv();
+  const items = [
+    { item_id: 1, package_name: 'com.example.alpha', name: 'Alpha', version_code: 1, price: '0', currency: 'USD', score: 4.0, cover: { square: 'https://cdn.example/a.png' }, detail: { app_update_time: '100', app_publisher: 'A', app_genres: 'Game' } },
+    { item_id: 2, package_name: 'com.example.beta', name: 'Beta', version_code: 2, price: '5.99', currency: 'USD', score: 4.8, cover: { square: 'https://cdn.example/b.png' }, detail: { app_update_time: '200', app_publisher: 'B', app_genres: 'App' } },
+    { item_id: 3, package_name: 'com.example.gamma', name: 'Gamma', version_code: 3, price: '0', currency: 'USD', score: 0, detail: { app_update_time: '150' } },
+  ];
+  const sectionCalls = [];
+  const stub = async (url, init = {}) => {
+    const body = JSON.parse(init.body ?? '{}');
+    sectionCalls.push({ section: body.section_id, page: body.pageable?.page });
+    return Response.json({ code: 0, data: { items, has_more: false } });
+  };
+  try {
+    await withFetch(stub, async () => {
+      const updated = await worker.fetch(request('/api/apps?region=global&sort=updated'), env);
+      assert.equal(updated.status, 200);
+      const updatedBody = await updated.json();
+      assert.deepEqual(updatedBody.items.map(item => item.name), ['Beta', 'Gamma', 'Alpha']);
+      assert.equal(updatedBody.items[0].updatedAt, 200);
+      assert.deepEqual(sectionCalls, [{ section: 51, page: 1 }]);
+
+      const rating = await (await worker.fetch(request('/api/apps?region=global&sort=rating'), env)).json();
+      assert.deepEqual(rating.items.map(item => item.name), ['Beta', 'Alpha', 'Gamma']);
+
+      const named = await (await worker.fetch(request('/api/apps?region=global&sort=name'), env)).json();
+      assert.deepEqual(named.items.map(item => item.name), ['Alpha', 'Beta', 'Gamma']);
+
+      const invalid = await worker.fetch(request('/api/apps?region=global&sort=wat'), env);
+      assert.equal(invalid.status, 400);
+      assert.equal((await invalid.json()).error, 'invalid_sort');
+    });
+  } finally { env.DB.close(); }
+});
+
+test('the China all-apps list merges games and apps without duplicates', async () => {
+  const env = testEnv();
+  const seenSections = [];
+  const stub = async (url, init = {}) => {
+    const body = JSON.parse(init.body ?? '{}');
+    seenSections.push(body.section_id);
+    const shared = { item_id: 10, package_name: 'com.example.shared', name: 'Shared', version_code: 1, price: '0', currency: 'CNY', score: 4.1, detail: { app_update_time: '300' } };
+    const own = body.section_id === 96
+      ? { item_id: 11, package_name: 'com.example.game', name: 'Game', version_code: 1, price: '0', currency: 'CNY', score: 4.4, detail: { app_update_time: '310' } }
+      : { item_id: 12, package_name: 'com.example.app', name: 'App', version_code: 1, price: '0', currency: 'CNY', score: 4.2, detail: { app_update_time: '320' } };
+    return Response.json({ code: 0, data: { items: [shared, own], has_more: false } });
+  };
+  try {
+    await withFetch(stub, async () => {
+      const response = await worker.fetch(request('/api/apps?region=cn&sort=updated'), env);
+      assert.equal(response.status, 200);
+      const body = await response.json();
+      assert.equal(body.total, 3);
+      assert.deepEqual(body.items.map(item => item.name), ['App', 'Game', 'Shared']);
+      assert.deepEqual(seenSections.sort(), [96, 97]);
+    });
+  } finally { env.DB.close(); }
+});
+
 test('China downloads require a China-region session independent of the global one', async () => {
   const env = testEnv();
   try {
@@ -389,7 +503,7 @@ test('downloads require a session and a configured secret, and reject a malforme
       const cookie = await signIn(env);
       for (const [query, error] of [
         ['itemId=not-an-id&package=x.y', 'invalid_item_id'],
-        ['itemId=1234567890123456789', 'invalid_package'],
+        ['itemId=1300000000023456789', 'invalid_package'],
         [`itemId=${PICO_ITEM_ID}&package=not-a-package`, 'invalid_package'],
       ]) {
         const response = await worker.fetch(request(`/api/download?${query}`, { headers: { cookie } }), env);
@@ -403,13 +517,13 @@ test('downloads require a session and a configured secret, and reject a malforme
 test('an app outside our catalog downloads with its package name', async () => {
   const env = testEnv();
   const { stub, calls } = upstreamStub({
-    itemId: '1234567890123456789', packageName: 'com.example.delisted', name: 'Delisted App',
+    itemId: '1300000000023456789', packageName: 'com.example.delisted', name: 'Delisted App',
   });
   try {
     await withFetch(stub, async () => {
       const cookie = await signIn(env);
       const info = await worker.fetch(
-        request('/api/download/info?itemId=1234567890123456789&package=com.example.delisted', { headers: { cookie } }), env,
+        request('/api/download/info?itemId=1300000000023456789&package=com.example.delisted', { headers: { cookie } }), env,
       );
       assert.equal(info.status, 200);
       const metadata = await info.json();

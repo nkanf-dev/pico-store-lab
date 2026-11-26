@@ -1,6 +1,6 @@
 import {
-  filterSearchItems, makePublicItemRequest, makeSearchRequest, parseOfficialJson, parsePublicItem,
-  parseSearchResults, storeOptionsForRegion, validatePriceFilter,
+  filterSearchItems, makePublicItemRequest, makeSearchRequest, makeSectionRequest, parseOfficialJson,
+  parsePublicItem, parseSearchResults, parseSectionPage, storeOptionsForRegion, validatePriceFilter,
 } from '@nkanf-dev/pico-store-sdk/pico';
 import catalog from '../../../contracts/v1/catalog.json' with { type: 'json' };
 import {
@@ -31,6 +31,76 @@ function storeOptions(region) {
   return storeOptionsForRegion(regionFrom(region));
 }
 const MAX_REQUEST_BODY_BYTES = 4 * 1024;
+
+// Section IDs differ by storefront. Global's "see all" section is 51; the
+// China store has separate game (96) and app (97) sections but no single all-
+// apps section, so the list is the deduplicated union of both.
+const APP_SECTIONS = { global: [51], cn: [96, 97] };
+const APP_LIST_MAX_PAGES = 20;
+const APP_LIST_PAGE_SIZE = 100;
+const APP_LIST_CACHE_SECONDS = 300;
+
+async function fetchSectionPageItems(sectionId, region, fetchImpl = fetch) {
+  const options = storeOptions(region);
+  const items = [];
+  for (let page = 1; page <= APP_LIST_MAX_PAGES; page++) {
+    const spec = makeSectionRequest(sectionId, options, page, APP_LIST_PAGE_SIZE);
+    let response;
+    try {
+      response = await fetchImpl(spec.url, { ...spec, signal: AbortSignal.timeout(20000) });
+    } catch {
+      throw new DeliveryError('upstream_unreachable', 502);
+    }
+    if (!response.ok) throw new DeliveryError('upstream_unreachable', 502, { upstreamStatus: response.status });
+    let parsed;
+    try {
+      parsed = parseSectionPage(parseOfficialJson(await response.text()));
+    } catch {
+      throw new DeliveryError('upstream_invalid_response', 502);
+    }
+    items.push(...parsed.items);
+    // Some storefront pages report has_more=true but then return an empty page.
+    if (!parsed.hasMore || parsed.items.length === 0) break;
+  }
+  return items;
+}
+
+function sortAppList(items, sort, region) {
+  const byUpdated = (a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0);
+  const byName = (a, b) => a.name.localeCompare(b.name, region === 'cn' ? 'zh-CN' : 'en');
+  if (sort === 'name') return items.sort((a, b) => byName(a, b) || byUpdated(a, b));
+  if (sort === 'rating') return items.sort((a, b) => (b.score ?? -1) - (a.score ?? -1) || byUpdated(a, b));
+  return items.sort((a, b) => byUpdated(a, b) || byName(a, b));
+}
+
+async function loadAllApps(region, fetchImpl = fetch) {
+  const cache = typeof globalThis.caches !== 'undefined' ? globalThis.caches?.default : null;
+  const cacheKey = new Request(`https://pico-store-lab.invalid/api/apps/${region}`);
+  if (cache) {
+    const hit = await cache.match(cacheKey);
+    if (hit) {
+      try { return await hit.json(); } catch { /* fall through to a fresh read */ }
+    }
+  }
+  const sections = APP_SECTIONS[region] ?? APP_SECTIONS.global;
+  const lists = await Promise.all(sections.map(id => fetchSectionPageItems(id, region, fetchImpl)));
+  const seen = new Set();
+  const items = [];
+  for (const item of lists.flat()) {
+    if (seen.has(item.itemId)) continue;
+    seen.add(item.itemId);
+    items.push(item);
+  }
+  if (!items.length) throw new DeliveryError('apps_unavailable', 502);
+  sortAppList(items, 'updated', region);
+  const payload = { region, total: items.length, refreshedAt: new Date().toISOString(), items };
+  if (cache) {
+    await cache.put(cacheKey, Response.json(payload, {
+      headers: { 'Cache-Control': `public, max-age=${APP_LIST_CACHE_SECONDS}` },
+    }));
+  }
+  return payload;
+}
 
 export async function checkForRelease(env, fetchImpl = fetch, now = () => new Date(), target = catalog[0]) {
   if (!env.DB) throw new Error('D1 DB binding is required for release tracking');
@@ -207,21 +277,26 @@ async function handleAccount(request, env, url) {
     await pruneSessions(db);
     if (url.pathname === '/api/account/cn/send-code') {
       await rateLimit(db, [[mobileScope, LIMITS.sendCodePerEmail], [ipScope, LIMITS.sendCodePerIp]]);
+      let sent;
       try {
-        await sendMobileVerificationCode(mobile, options);
+        sent = await sendMobileVerificationCode(mobile, options);
       } catch (error) {
         if (error instanceof DeliveryError) throw error;
         throw new DeliveryError('account_unavailable', 502);
       }
-      return apiResponse({ sent: true, region: 'cn' });
+      // The ticket is a one-time continuation token tied to this mobile number;
+      // it is not a session and cannot be used without the SMS code.
+      return apiResponse({ sent: true, region: 'cn', mobileTicket: sent.mobileTicket });
     }
     const code = typeof body.code === 'string' ? body.code.trim() : '';
     if (!/^[0-9]{6}$/.test(code)) throw new DeliveryError('invalid_code', 400);
+    const mobileTicket = typeof body.mobileTicket === 'string' ? body.mobileTicket : '';
+    if (!/^mobile_ticket_[A-Za-z0-9]+$/.test(mobileTicket)) throw new DeliveryError('code_expired', 400);
     const key = await sessionKey(env);
     await rateLimit(db, [[mobileScope, LIMITS.loginPerEmail], [ipScope, LIMITS.loginPerIp]]);
     let auth;
     try {
-      auth = await loginWithMobile(mobile, code, options);
+      auth = await loginWithMobile(mobile, code, { ...options, mobileTicket });
     } catch (error) {
       if (error instanceof DeliveryError) throw error;
       throw new DeliveryError('account_rejected', 401);
@@ -437,6 +512,24 @@ export default {
         });
       } catch {
         return Response.json({ error: 'item_unavailable' }, { status: 502 });
+      }
+    }
+    if (url.pathname === '/api/apps') {
+      if (request.method !== 'GET') return new Response('Method Not Allowed', { status: 405 });
+      const region = regionFrom(url.searchParams.get('region'));
+      const sort = url.searchParams.get('sort') ?? 'updated';
+      if (!['updated', 'name', 'rating'].includes(sort)) {
+        return Response.json({ error: 'invalid_sort' }, { status: 400 });
+      }
+      try {
+        const result = await loadAllApps(region);
+        const items = sortAppList([...result.items], sort, region);
+        return Response.json({ ...result, sort, items }, {
+          headers: { 'Cache-Control': `public, max-age=${APP_LIST_CACHE_SECONDS}` },
+        });
+      } catch (error) {
+        return fail(error instanceof DeliveryError ? error
+          : new DeliveryError('apps_unavailable', 502));
       }
     }
     if (url.pathname === '/api/releases' || url.pathname === '/api/catalog') {

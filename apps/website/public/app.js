@@ -14,6 +14,17 @@ const translations = {
     "priceAll": "All",
     "priceFree": "Free",
     "pricePaid": "Paid",
+    "allAppsLabel": "ALL APPS",
+    "allAppsHint": "FULL STORE LIST",
+    "loadAllApps": "Load all apps",
+    "allAppsLoading": "Loading all apps…",
+    "allAppsLoaded": "apps loaded",
+    "allAppsEmpty": "No apps found.",
+    "allAppsFailed": "Could not load the app list. Please try again.",
+    "sortLabel": "Sort",
+    "sortUpdated": "Recently updated",
+    "sortName": "Name A–Z",
+    "sortRating": "Rating",
     "favoritesLabel": "FAVORITES",
     "favoritesHint": "SAVED ON THIS DEVICE",
     "favoriteAdd": "Add to favorites ☆",
@@ -140,9 +151,12 @@ const translations = {
     "errInvalidMobile": "Enter a valid mobile number, without the country code.",
     "errInvalidCountryCode": "Enter a valid country code.",
     "errAccountRegistrationRequired": "This number is not registered. Finish sign-up on PICO’s website, then sign in here.",
-    "errSmsRateLimited": "PICO risk control blocked this SMS request (error 7). Official sign-in completes a browser human-verification step this page cannot perform, so requesting codes repeatedly will not help; use the official-window sign-in above instead.",
-    "cnBrowserLogin": "Sign in through the official PICO window (recommended)",
-    "orSmsLogin": "Or sign in with an SMS code",
+    "errSmsRateLimited": "PICO temporarily blocked SMS sending. Wait a few minutes, then try again.",
+    "errInvalidSmsCode": "The SMS code is incorrect. Check it and try again.",
+    "errCodeExpired": "The code request expired. Request a new SMS code.",
+    "cnBrowserLogin": "Sign in through the official PICO window (local only)",
+    "cnBrowserDivider": "Local fallback",
+    "orSmsLogin": "Sign in with an SMS code",
     "cnBrowserStarting": "Opening the official PICO sign-in window…",
     "cnBrowserWaiting": "Complete phone + SMS sign-in (and any slider) in the pop-up PICO window. It closes automatically when done.",
     "cnBrowserSuccess": "Signed in to the China store.",
@@ -165,6 +179,17 @@ const translations = {
     "priceAll": "全部",
     "priceFree": "免费",
     "pricePaid": "付费",
+    "allAppsLabel": "全部应用",
+    "allAppsHint": "商店全量列表",
+    "loadAllApps": "加载全部应用",
+    "allAppsLoading": "正在加载全部应用…",
+    "allAppsLoaded": "个应用",
+    "allAppsEmpty": "没有找到应用。",
+    "allAppsFailed": "无法加载应用列表，请稍后重试。",
+    "sortLabel": "排序",
+    "sortUpdated": "最近更新",
+    "sortName": "名称 A–Z",
+    "sortRating": "评分",
     "favoritesLabel": "收藏",
     "favoritesHint": "保存在此设备",
     "favoriteAdd": "加入收藏 ☆",
@@ -291,9 +316,12 @@ const translations = {
     "errInvalidMobile": "请输入有效的手机号（不含国家码）。",
     "errInvalidCountryCode": "请输入有效的国家码。",
     "errAccountRegistrationRequired": "该手机号尚未注册，请先在 PICO 官网完成注册，再回到这里登录。",
-    "errSmsRateLimited": "PICO 风控拦截了本次短信请求（错误 7）。官方登录需要在浏览器中完成人机验证，本页面无法代为完成，重复请求也不会成功；请改用上方的官网窗口登录。",
-    "cnBrowserLogin": "使用官网窗口登录（推荐）",
-    "orSmsLogin": "或使用短信验证码登录",
+    "errSmsRateLimited": "PICO 暂时限制了短信发送频率，请等待几分钟后重试。",
+    "errInvalidSmsCode": "短信验证码不正确，请核对后重试。",
+    "errCodeExpired": "验证码请求已过期，请重新获取短信验证码。",
+    "cnBrowserLogin": "使用 PICO 官网窗口登录（仅本地运行可用）",
+    "cnBrowserDivider": "本地备用登录",
+    "orSmsLogin": "使用短信验证码登录",
     "cnBrowserStarting": "正在打开 PICO 官方登录窗口…",
     "cnBrowserWaiting": "请在弹出的 PICO 窗口中完成手机号 + 短信验证码登录（含滑块验证），完成后窗口会自动关闭。",
     "cnBrowserSuccess": "已登录国区商店。",
@@ -315,6 +343,10 @@ let locale = requested === 'en' || requested === 'zh-CN'
 let currentState = null;
 let catalogItems = initialCatalog;
 let searchItems = [];
+let allApps = [];
+let allAppsLoaded = false;
+let allAppsLoading = false;
+let allAppsSort = 'updated';
 const selectedQuery = new URL(location.href).searchParams;
 let selectedId = pageContext.itemId || (/^[0-9]{1,20}$/.test(selectedQuery.get('itemId') || '') ? selectedQuery.get('itemId') : null);
 let fromSnapshot = false;
@@ -350,11 +382,12 @@ function applyLocale() {
   $('workflow-guide-link').href = guide;
   if (!pageContext.seo) document.title = locale === 'en' ? 'PICO Store Lab — Browse and download PICO apps' : 'PICO Store Lab — 浏览与下载 PICO 应用';
   if (currentState) render(currentState, fromSnapshot);
+  if (allAppsLoaded) renderAllApps();
   renderAccount();
   renderDownload();
 }
 
-function renderCards(container, items) {
+function renderCards(container, items, showUpdated = false, showScore = false) {
   container.replaceChildren();
   for (const item of items) {
     const button = document.createElement('a');
@@ -366,7 +399,10 @@ function renderCards(container, items) {
     const name = document.createElement('strong');
     name.textContent = item.name;
     const subtitle = document.createElement('span');
-    subtitle.textContent = t('viewApp');
+    const details = [t('viewApp')];
+    if (showUpdated && item.updatedAt) details.push(formatTime(item.updatedAt * 1000));
+    if (showScore && typeof item.score === 'number' && Number.isFinite(item.score)) details.push(`★ ${item.score.toFixed(2)}`);
+    subtitle.textContent = details.join(' · ');
     button.append(name, subtitle);
     if (typeof item.price === 'string' && item.price.trim() !== '') {
       const price = document.createElement('em');
@@ -389,8 +425,54 @@ function renderCatalog() {
   renderCards($('favorite-items'), favorites);
 }
 
+function sortedAllApps() {
+  const items = [...allApps];
+  const byUpdated = (a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0);
+  const byName = (a, b) => a.name.localeCompare(b.name, locale);
+  if (allAppsSort === 'name') return items.sort((a, b) => byName(a, b) || byUpdated(a, b));
+  if (allAppsSort === 'rating') return items.sort((a, b) => (b.score ?? -1) - (a.score ?? -1) || byUpdated(a, b));
+  return items.sort((a, b) => byUpdated(a, b) || byName(a, b));
+}
+
+function renderAllApps() {
+  if (!allAppsLoaded) return;
+  const container = $('all-apps-results');
+  const items = sortedAllApps();
+  renderCards(container, items, true, allAppsSort === 'rating');
+  container.hidden = false;
+  $('all-apps-status').textContent = items.length
+    ? `${items.length} ${t('allAppsLoaded')}` : t('allAppsEmpty');
+}
+
+async function loadAllApps() {
+  if (allAppsLoading) return;
+  allAppsLoading = true;
+  $('all-apps-load').disabled = true;
+  $('all-apps-status').textContent = t('allAppsLoading');
+  try {
+    const response = await fetch(`/api/apps?region=${region}&sort=updated`);
+    if (!response.ok) throw new Error('apps unavailable');
+    const result = await response.json();
+    allApps = Array.isArray(result.items) ? result.items : [];
+    allAppsLoaded = true;
+    renderAllApps();
+  } catch {
+    allAppsLoaded = false;
+    $('all-apps-status').textContent = t('allAppsFailed');
+  } finally {
+    allAppsLoading = false;
+    $('all-apps-load').disabled = false;
+  }
+}
+
+$('all-apps-load').addEventListener('click', loadAllApps);
+$('all-apps-sort').addEventListener('change', () => {
+  allAppsSort = $('all-apps-sort').value;
+  renderAllApps();
+});
+
 async function selectItem(itemId, scroll = false) {
-  const item = [...catalogItems, ...searchItems, ...favorites].find(entry => entry.itemId === itemId);
+  const item = [...catalogItems, ...searchItems, ...favorites, ...allApps].find(entry => entry.itemId === itemId);
   if (!item) return;
   selectedId = itemId;
   document.body?.classList.add('has-selection');
@@ -650,7 +732,7 @@ const ERROR_KEYS = {
   not_authenticated: 'errNotAuthenticated', rate_limited: 'errRateLimited', invalid_email: 'errInvalidEmail',
   invalid_code: 'errInvalidCode', account_rejected: 'errAccountRejected', account_unavailable: 'errAccountUnavailable',
   invalid_mobile: 'errInvalidMobile', invalid_country_code: 'errInvalidCountryCode',
-  account_registration_required: 'errAccountRegistrationRequired',
+  account_registration_required: 'errAccountRegistrationRequired', code_expired: 'errCodeExpired',
   invalid_item_id: 'errInvalidItemId', invalid_package: 'errInvalidPackage',
   entitlement_required: 'errEntitlementRequired',
   apk_unavailable: 'errUnavailable', apk_metadata_unavailable: 'errUnavailable', entitlement_unconfirmed: 'errUnavailable',
@@ -659,9 +741,12 @@ const ERROR_KEYS = {
   storage_not_configured: 'errMisconfigured', session_secret_missing: 'errMisconfigured',
   browser_login_local_only: 'cnBrowserLocalOnly',
 };
+const cnErrorKey = payload => payload?.error === 'invalid_code' ? 'errInvalidSmsCode' : errorKey(payload);
 
 let account = { authenticated: false, email: null };
 let cnAccountStatusKey = null;
+let cnMobileTicket = '';
+let cnTicketMobile = '';
 
 function syncActiveAccount() {
   const active = sessions[region] ?? { authenticated: false, label: '' };
@@ -842,6 +927,15 @@ function applyRegion({ reloadDetail = true } = {}) {
   if (intro) intro.textContent = region === 'cn' ? t('cnDownloadIntro') : t('downloadIntro');
   const regionTag = $('download-region-tag');
   if (regionTag) regionTag.textContent = `${t('regionLabel')}: ${region === 'cn' ? t('regionCn') : t('regionGlobal')}`;
+  allApps = [];
+  allAppsLoaded = false;
+  allAppsLoading = false;
+  cnMobileTicket = '';
+  cnTicketMobile = '';
+  $('all-apps-results').replaceChildren();
+  $('all-apps-results').hidden = true;
+  $('all-apps-status').textContent = '';
+  $('all-apps-load').disabled = false;
   syncActiveAccount();
   setAccountStatus();
   setCnAccountStatus();
@@ -866,7 +960,7 @@ function downloadError(error) {
 // The app ID alone is not enough to ask PICO for a download, so pair it with
 // whichever package name the catalog, the search results, or the snapshot has.
 function selectedPackage() {
-  const entry = [...catalogItems, ...searchItems, ...favorites]
+  const entry = [...catalogItems, ...searchItems, ...favorites, ...allApps]
     .find(item => item.itemId === selectedId);
   return currentState?.itemId === selectedId ? currentState.packageName : entry?.packageName;
 }
@@ -1037,33 +1131,43 @@ $('cn-send-code').addEventListener('click', async () => {
   const countryCode = $('cn-country').value.trim() || '86';
   setCnAccountStatus('smsSending');
   try {
-    await api('/api/account/cn/send-code', { method: 'POST', body: JSON.stringify({ mobile, countryCode }) });
+    const payload = await api('/api/account/cn/send-code', { method: 'POST', body: JSON.stringify({ mobile, countryCode }) });
+    cnMobileTicket = typeof payload.mobileTicket === 'string' ? payload.mobileTicket : '';
+    cnTicketMobile = mobile;
     setCnAccountStatus('smsSent');
     $('cn-code').focus();
   } catch (error) {
-    setCnAccountStatus(error.payload?.upstreamCode === 7 ? 'errSmsRateLimited' : errorKey(error.payload));
+    cnMobileTicket = '';
+    cnTicketMobile = '';
+    setCnAccountStatus(error.payload?.upstreamCode === 7 ? 'errSmsRateLimited' : cnErrorKey(error.payload));
   }
 });
 
 $('cn-account-form').addEventListener('submit', async event => {
   event.preventDefault();
   if (accountBusy) return;
-  accountRequest += 1;
-  setAccountBusy(true);
-  invalidateDownload();
   const mobile = $('cn-mobile').value.trim();
   const countryCode = $('cn-country').value.trim() || '86';
   const code = $('cn-code').value.trim();
+  if (!cnMobileTicket || cnTicketMobile !== mobile) {
+    setCnAccountStatus('errCodeExpired');
+    return;
+  }
+  accountRequest += 1;
+  setAccountBusy(true);
+  invalidateDownload();
   setCnAccountStatus('signingIn');
   try {
-    await api('/api/account/cn/login', { method: 'POST', body: JSON.stringify({ mobile, countryCode, code }) });
+    await api('/api/account/cn/login', { method: 'POST', body: JSON.stringify({ mobile, countryCode, code, mobileTicket: cnMobileTicket }) });
     sessions.cn = { authenticated: true, label: `+${countryCode} ${mobile}` };
     syncActiveAccount();
     if (pageContext.seo) window.picoTrack?.('login_success');
     $('cn-code').value = '';
+    cnMobileTicket = '';
+    cnTicketMobile = '';
     setCnAccountStatus();
   } catch (error) {
-    setCnAccountStatus(error.payload?.upstreamCode === 7 ? 'errSmsRateLimited' : errorKey(error.payload));
+    setCnAccountStatus(error.payload?.upstreamCode === 7 ? 'errSmsRateLimited' : cnErrorKey(error.payload));
   } finally {
     setAccountBusy(false);
     await refreshDownload();
