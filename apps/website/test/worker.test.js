@@ -124,6 +124,9 @@ test('Virtual Desktop and sign-in guides are available in both languages', () =>
     const guide = readFileSync(new URL('guides/international-sign-in/index.html', root), 'utf8');
     const technical = readFileSync(new URL('guides/how-adaptation-works/index.html', root), 'utf8');
     assert.match(home, /Virtual Desktop/);
+    assert.match(home, /data-home-region="cn"/);
+    assert.match(home, /Dream World|梦境世界/);
+    assert.match(home, /(?:国区推荐|CHINA FEATURED)/);
     assert.match(app, /Virtual Desktop/);
     assert.match(app, /"price":""/);
     assert.match(app, /class="adapted-download-notice"/);
@@ -141,6 +144,7 @@ test('standalone search, catalog and detail pages render their own controls', ()
   for (const prefix of ['', 'en/']) {
     const searchHtml = readFileSync(new URL(`${prefix}search/index.html`, dist), 'utf8');
     const allAppsHtml = readFileSync(new URL(`${prefix}all-apps/index.html`, dist), 'utf8');
+    const allAppsScript = readFileSync(new URL('all-apps.js', dist), 'utf8');
     const detailHtml = readFileSync(new URL(`${prefix}app/index.html`, dist), 'utf8');
     assert.match(searchHtml, /id="search-form"/);
     assert.match(searchHtml, /href="[^"]*\/all-apps\/"/);
@@ -150,6 +154,11 @@ test('standalone search, catalog and detail pages render their own controls', ()
     assert.match(allAppsHtml, /value="B3110"/);
     assert.match(allAppsHtml, /value="A8A10"/);
     assert.match(allAppsHtml, /value="A8110"/);
+    assert.match(allAppsHtml, /value="A7H10">PICO Neo3<\/option>/);
+    assert.doesNotMatch(allAppsHtml, /PICO 4 Ultra \(A9210\)/);
+    assert.ok(allAppsHtml.indexOf('id="device-select"') < allAppsHtml.indexOf('id="region-global"'), 'device control precedes store region');
+    assert.match(allAppsScript, /store-sort/);
+    assert.match(allAppsScript, /A7H10/);
     assert.doesNotMatch(allAppsHtml, /id="all-apps-query"/);
     assert.doesNotMatch(allAppsHtml, /id="all-apps-sort"/);
     assert.doesNotMatch(allAppsHtml, /id="all-apps-category"/);
@@ -507,6 +516,12 @@ test('the all-apps endpoint validates and forwards the selected headset', async 
       const invalid = await worker.fetch(request('/api/apps?region=cn&device=pico-unknown'), env);
       assert.equal(invalid.status, 400);
       assert.equal((await invalid.json()).error, 'invalid_device');
+
+      seenDevices.clear();
+      const neo3 = await worker.fetch(request('/api/apps?region=cn&device=A7H10'), env);
+      assert.equal(neo3.status, 200);
+      assert.equal((await neo3.json()).device, 'A7H10');
+      assert.deepEqual([...seenDevices], ['A7H10']);
     });
   } finally { env.DB.close(); }
 });
@@ -640,6 +655,25 @@ test('an app outside our catalog downloads with its package name', async () => {
       assert.equal(metadata.packageName, 'com.example.delisted');
       assert.equal(metadata.fileName, 'com.example.delisted-972240.apk');
       assert.equal(calls.some(call => call.url.includes('/api/app/v1/download/info')), true);
+    });
+  } finally { env.DB.close(); }
+});
+
+test('download lookup and browser target carry the selected headset', async () => {
+  const env = testEnv();
+  const { stub, calls } = upstreamStub();
+  try {
+    await withFetch(stub, async () => {
+      const cookie = await signIn(env);
+      const info = await worker.fetch(
+        request(`/api/download/info?itemId=${PICO_ITEM_ID}&package=com.vrchat.android&device=A8110`, { headers: { cookie } }), env,
+      );
+      assert.equal(info.status, 200);
+      const metadata = await info.json();
+      assert.match(metadata.downloadUrl, /device=A8110/);
+      const lookup = calls.find(call => call.url.includes('/api/app/v1/download/info'));
+      assert.ok(lookup, 'download info upstream was called');
+      assert.equal(new URL(lookup.url).searchParams.get('device_name'), 'A8110');
     });
   } finally { env.DB.close(); }
 });

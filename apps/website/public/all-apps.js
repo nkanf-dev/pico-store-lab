@@ -30,7 +30,7 @@ const copy = {
 const locale = document.documentElement.lang === 'zh-CN' ? 'zh-CN' : 'en';
 const t = key => copy[locale][key] ?? copy.en[key] ?? key;
 const params = new URLSearchParams(location.search);
-const DEVICE_CODES = ['B3110', 'A9210', 'A8A10', 'A8110'];
+const DEVICE_CODES = ['B3110', 'A9210', 'A8A10', 'A8110', 'A7H10'];
 const DEFAULT_DEVICE = 'A9210';
 
 const storedRegion = localStorage.getItem('pico-store-region');
@@ -75,6 +75,60 @@ function versionLabel(item) {
   if (item.appVersion) return item.appVersion;
   const code = Number(item.versionCode);
   return Number.isSafeInteger(code) && code > 0 && code < 1000000 ? `v${code}` : '—';
+}
+
+let sortKey = 'updated';
+let sortDirection = 'desc';
+const DEFAULT_DIRECTION = { name: 'asc', category: 'asc', version: 'desc', rating: 'desc', price: 'asc', updated: 'desc' };
+const collator = new Intl.Collator(locale === 'zh-CN' ? 'zh-CN' : 'en', { numeric: true, sensitivity: 'base' });
+
+function numberValue(value) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+}
+
+function sortValue(item, key) {
+  if (key === 'name') return String(item.name ?? '');
+  if (key === 'version') {
+    const code = Number(item.versionCode);
+    if (Number.isFinite(code) && code > 0) return code;
+    const version = parseFloat(item.appVersion);
+    return Number.isFinite(version) ? version : null;
+  }
+  if (key === 'category') return genreList(item.genres).join(' · ');
+  if (key === 'rating') return numberValue(item.score);
+  if (key === 'price') return numberValue(item.price);
+  if (key === 'updated') return numberValue(item.updatedAt);
+  return null;
+}
+
+function sortedItems(items) {
+  const direction = sortDirection === 'asc' ? 1 : -1;
+  return [...items].sort((left, right) => {
+    const leftValue = sortValue(left, sortKey);
+    const rightValue = sortValue(right, sortKey);
+    if (leftValue == null && rightValue == null) return collator.compare(String(left.name ?? ''), String(right.name ?? ''));
+    if (leftValue == null || rightValue == null) return leftValue == null ? 1 : -1;
+    const comparison = typeof leftValue === 'string'
+      ? collator.compare(leftValue, rightValue)
+      : leftValue - rightValue;
+    if (comparison !== 0) return comparison * direction;
+    return collator.compare(String(left.name ?? ''), String(right.name ?? ''));
+  });
+}
+
+function sortMark(key) {
+  if (sortKey !== key) return '↕';
+  return sortDirection === 'asc' ? '↑' : '↓';
+}
+
+function selectSort(key) {
+  if (sortKey === key) sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
+  else {
+    sortKey = key;
+    sortDirection = DEFAULT_DIRECTION[key] ?? 'desc';
+  }
+  render();
 }
 
 function el(tag, className, text = '') {
@@ -133,11 +187,30 @@ function renderRows(items) {
     $('all-apps-count').textContent = '0';
     return;
   }
+  const ordered = sortedItems(items);
   const head = el('div', 'store-row store-row-head');
-  for (const label of [t('app'), t('version'), t('category'), t('rating'), t('price'), t('updated'), '']) head.append(el('span', '', label));
+  const columns = [
+    ['name', t('app')],
+    ['version', t('version')],
+    ['category', t('category')],
+    ['rating', t('rating')],
+    ['price', t('price')],
+    ['updated', t('updated')],
+  ];
+  for (const [key, label] of columns) {
+    const button = el('button', 'store-sort');
+    button.type = 'button';
+    button.dataset.sort = key;
+    button.classList.toggle('is-active', sortKey === key);
+    button.title = `${label} · ${sortMark(key)}`;
+    button.append(el('span', 'store-sort-label', label), el('span', 'store-sort-mark', sortMark(key)));
+    button.addEventListener('click', () => selectSort(key));
+    head.append(button);
+  }
+  head.append(el('span', 'store-head-tail', ''));
   container.append(head);
 
-  items.forEach((item, index) => {
+  ordered.forEach((item, index) => {
     const row = document.createElement('a');
     row.className = 'store-row';
     row.classList.add(index % 2 ? 'store-row-alt' : 'store-row-base');

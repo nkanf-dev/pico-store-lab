@@ -28,7 +28,7 @@ function regionFrom(value) {
   return value === 'cn' ? 'cn' : 'global';
 }
 
-const DEVICE_CODES = new Set(['B3110', 'A9210', 'A8A10', 'A8110']);
+const DEVICE_CODES = new Set(['B3110', 'A9210', 'A8A10', 'A8110', 'A7H10']);
 const DEFAULT_DEVICE = 'A9210';
 
 function deviceFrom(value, fallback = DEFAULT_DEVICE) {
@@ -37,9 +37,18 @@ function deviceFrom(value, fallback = DEFAULT_DEVICE) {
   return value;
 }
 
-function storeOptions(region, language = null) {
+function optionalDevice(value) {
+  if (!value) return null;
+  return deviceFrom(value);
+}
+
+function storeOptions(region, language = null, device = null) {
   const options = storeOptionsForRegion(regionFrom(region));
-  return language ? { ...options, language } : options;
+  return {
+    ...options,
+    ...(language ? { language } : {}),
+    ...(device ? { deviceName: device } : {}),
+  };
 }
 const MAX_REQUEST_BODY_BYTES = 4 * 1024;
 
@@ -398,21 +407,24 @@ async function handleDownload(request, env, url) {
     if (request.headers.get('origin') !== url.origin) throw new DeliveryError('origin_rejected', 403);
     const body = await readBody(request);
     const region = regionFrom(body.region);
+    const device = optionalDevice(typeof body.device === 'string' ? body.device : '');
     const entry = await requireRegionAuth(request, env, region);
     const targetUrl = new URL('/api/download', url);
     if (typeof body.itemId === 'string') targetUrl.searchParams.set('itemId', body.itemId);
     if (typeof body.packageName === 'string') targetUrl.searchParams.set('package', body.packageName);
     targetUrl.searchParams.set('region', region);
+    if (device) targetUrl.searchParams.set('device', device);
     const target = downloadTarget(targetUrl);
-    const resolved = await resolveDownload(target, entry.auth, { acquire: true, storeOptions: storeOptions(region) });
+    const resolved = await resolveDownload(target, entry.auth, { acquire: true, storeOptions: storeOptions(region, null, device) });
     return apiResponse(apkMetadata(resolved, targetUrl));
   }
   if (request.method !== 'GET') throw new DeliveryError('method_not_allowed', 405);
   if (!env.DB) throw new DeliveryError('storage_not_configured', 503);
   const region = regionFrom(url.searchParams.get('region'));
+  const device = optionalDevice(url.searchParams.get('device'));
   const target = downloadTarget(url);
   const entry = await requireRegionAuth(request, env, region);
-  let resolved = await resolveDownload(target, entry.auth, { storeOptions: storeOptions(region) });
+  let resolved = await resolveDownload(target, entry.auth, { storeOptions: storeOptions(region, null, device) });
   if (url.pathname === '/api/download/info') {
     return apiResponse(apkMetadata(resolved, relativeUrl(url, '/api/download')));
   }
@@ -439,7 +451,7 @@ async function handleDownload(request, env, url) {
     // A signed CDN link can expire during a rollout. Re-read entitlement and
     // metadata before trying again; never turn an ownership rejection into a download.
     try {
-      resolved = await resolveDownload(target, entry.auth, { storeOptions: storeOptions(region) });
+      resolved = await resolveDownload(target, entry.auth, { storeOptions: storeOptions(region, null, device) });
       return await apkResponse(resolved.info, resolved.fileName, request);
     } catch (retryError) {
       if (!(retryError instanceof DeliveryError) || retryError.status < 500) throw retryError;
@@ -518,8 +530,8 @@ export default {
         }
       }
       try {
-        const base = storeOptions(region, languageFrom(url.searchParams.get('lang')));
-        const spec = makeSearchRequest(word, device ? { ...base, deviceName: device } : base);
+        const base = storeOptions(region, languageFrom(url.searchParams.get('lang')), device);
+        const spec = makeSearchRequest(word, base);
         const upstream = await fetch(spec.url, { ...spec, signal: AbortSignal.timeout(15000) });
         if (!upstream.ok) throw new Error('upstream search unavailable');
         const parsed = parseSearchResults(parseOfficialJson(await upstream.text()));
@@ -536,11 +548,18 @@ export default {
       const region = regionFrom(url.searchParams.get('region'));
       const target = { itemId: url.searchParams.get('itemId') ?? '', packageName: url.searchParams.get('package') ?? '' };
       const language = languageFrom(url.searchParams.get('lang'));
+      let device;
       try {
-        const spec = makePublicItemRequest(storeOptions(region, language), target);
+        device = optionalDevice(url.searchParams.get('device'));
+      } catch (error) {
+        return fail(error);
+      }
+      const options = storeOptions(region, language, device);
+      try {
+        const spec = makePublicItemRequest(options, target);
         const upstream = await fetch(spec.url, { ...spec, signal: AbortSignal.timeout(15000) });
         if (!upstream.ok) throw new Error('upstream item unavailable');
-        return Response.json(parsePublicItem(parseOfficialJson(await upstream.text()), target, storeOptions(region, language)), {
+        return Response.json(parsePublicItem(parseOfficialJson(await upstream.text()), target, options), {
           headers: { 'Cache-Control': 'public, max-age=60' },
         });
       } catch {

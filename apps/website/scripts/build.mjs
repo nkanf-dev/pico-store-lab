@@ -44,8 +44,42 @@ function appState(app, lang) {
     supportedPlatforms: copy.platforms.join(' · '), releases: [] };
 }
 
-function cards(lang) {
-  return `<div class="featured-apps">${catalog.map((item, index) => {
+const CN_HOME_APPS = [
+  {
+    itemId: '2075', packageName: 'com.zmvr.mj', name: '梦境世界', nameEn: 'Dream World',
+    iconUrl: 'https://static.appstore.picovr.com/developer-platform/submission/assets/cover_art/square/2024-01-22/030bd09e7655ba16bbd4e919caff88b2.png',
+    summary: {
+      zh: '国区商店的多人 VR 应用，和朋友一起探索、射击和创建场景。',
+      en: 'A social VR world from the China store for exploring and playing together.',
+    },
+  },
+  {
+    itemId: '7340942965126447123', packageName: 'com.lotushine.vrwordchopper', name: 'VR单词斩', nameEn: 'VR Word Slash',
+    iconUrl: 'https://static.appstore.picovr.com/developer-platform/submission/assets/cover_art/square/2024-03-06/647ed273bcc41782c2562abf0df6620a.png',
+    summary: {
+      zh: '在 VR 里练习单词的教育应用，适合碎片时间学习。',
+      en: 'A VR vocabulary trainer for short, focused study sessions.',
+    },
+  },
+  {
+    itemId: '2209', packageName: 'com.Appnori.AllInOneSports', name: '多合一运动 VR', nameEn: 'All-in-One Sports VR',
+    iconUrl: 'https://static.appstore.picovr.com/developer-platform/submission/assets/cover_art/square/2026-11-13/22584c9c28c6b0d43d5b88acbde70ade.png',
+    summary: {
+      zh: '集合多种运动的 VR 应用，在家也能活动起来。',
+      en: 'A collection of VR sports for staying active at home.',
+    },
+  },
+];
+
+function cards(lang, region = 'global') {
+  const items = region === 'cn' ? CN_HOME_APPS : catalog;
+  return `<div class="featured-apps">${items.map((item, index) => {
+    if (region === 'cn') {
+      const href = `${localized('/app/', lang)}?itemId=${encodeURIComponent(item.itemId)}&package=${encodeURIComponent(item.packageName)}&region=cn&from=home`;
+      const name = lang === 'zh' ? item.name : item.nameEn;
+      const summary = item.summary[lang];
+      return `<a class="featured-card" href="${escape(href)}"><div class="card-top"><span class="eyebrow">0${index + 1} / ${lang === 'zh' ? '国区' : 'CHINA'}</span><img src="${escape(item.iconUrl)}" width="64" height="64" alt=""></div><h2>${escape(name)}</h2><p>${escape(summary)}</p><span class="card-link">${lang === 'zh' ? '查看应用与下载' : 'Explore & download'} <span aria-hidden="true">↗</span></span></a>`;
+    }
     const app = apps.find(page => page.itemId === item.itemId);
     const state = app ? appState(app, lang) : null;
     const href = app ? localized(`/apps/${app.slug}/`, lang) : `${localized('/', lang)}?itemId=${encodeURIComponent(item.itemId)}&package=${encodeURIComponent(item.packageName)}#app-details`;
@@ -59,12 +93,13 @@ const DEVICE_OPTIONS = [
   { code: 'A9210', name: 'PICO 4 Ultra' },
   { code: 'A8A10', name: 'PICO 4 Pro' },
   { code: 'A8110', name: 'PICO 4' },
+  { code: 'A7H10', name: 'PICO Neo3' },
 ];
 
 function deviceSwitch(lang) {
   const zh = lang === 'zh';
-  const options = DEVICE_OPTIONS.map(device => `<option value="${device.code}">${device.name} (${device.code})</option>`).join('');
-  return `<label class="device-switch"><span>${zh ? '设备' : 'Device'}</span><select id="device-select" aria-label="${zh ? '选择设备' : 'Select device'}">${options}</select></label>`;
+  const options = DEVICE_OPTIONS.map(device => `<option value="${device.code}">${device.name}</option>`).join('');
+  return `<label class="device-switch"><select id="device-select" aria-label="${zh ? '选择设备' : 'Select device'}">${options}</select></label>`;
 }
 
 function masthead(lang, path, interactive = false) {
@@ -87,7 +122,7 @@ function masthead(lang, path, interactive = false) {
     ? `<div class="masthead-region" role="tablist" aria-label="${zh ? '商店区域' : 'Store region'}"><button type="button" id="region-global" class="masthead-region-option" role="tab" aria-selected="true">${zh ? '国际' : 'Global'}</button><button type="button" id="region-cn" class="masthead-region-option" role="tab" aria-selected="false">${zh ? '中国' : 'China'}</button></div>`
     : '';
   const devices = interactive ? deviceSwitch(lang) : '';
-  return `<header class="masthead site-chrome"><a class="brand" href="${home}" aria-label="PICO Store Lab"><span class="brand-mark">P/</span><span>PICO<br>STORE LAB</span></a><nav class="tabbar" aria-label="${zh ? '主导航' : 'Main navigation'}">${tabs.map(tab => `<a href="${tab.href}"${tab.id === active ? ' class="active" aria-current="page"' : ''}>${tab.label}</a>`).join('')}</nav><div class="masthead-tools">${regionSwitch}${devices}<a id="language" class="language" href="${localized(path, zh ? 'en' : 'zh')}" lang="${zh ? 'en' : 'zh-CN'}">${zh ? 'EN' : '中文'}</a></div></header>`;
+  return `<header class="masthead site-chrome"><a class="brand" href="${home}" aria-label="PICO Store Lab"><span class="brand-mark">P/</span><span>PICO<br>STORE LAB</span></a><nav class="tabbar" aria-label="${zh ? '主导航' : 'Main navigation'}">${tabs.map(tab => `<a href="${tab.href}"${tab.id === active ? ' class="active" aria-current="page"' : ''}>${tab.label}</a>`).join('')}</nav><div class="masthead-tools">${devices}${regionSwitch}<a id="language" class="language" href="${localized(path, zh ? 'en' : 'zh')}" lang="${zh ? 'en' : 'zh-CN'}">${zh ? 'EN' : '中文'}</a></div></header>`;
 }
 
 function footer(lang) {
@@ -161,9 +196,34 @@ function appDownloadNotice(app, lang) {
   return `<aside class="adapted-download-notice" aria-labelledby="adapted-download-heading"><div><p class="eyebrow">${lang === 'zh' ? '下载方式提醒' : 'DOWNLOAD OPTIONS'}</p><h2 id="adapted-download-heading">${escape(notice.title)}</h2><p>${escape(notice.text)}</p></div><div class="adapted-download-actions"><a class="action primary" href="${localized('/download/', lang)}">${escape(notice.clientLabel)} ↗</a><a class="text-link" href="#downloader">${escape(notice.originalLabel)} ↓</a></div></aside>`;
 }
 
-function homeBody(lang) {
+function homeBody(lang, region = 'global') {
   const zh = lang === 'zh';
-  return `<section class="hero home-hero"><div class="hero-copy"><p class="eyebrow"><span class="indicator"></span>PICO STORE LAB</p><h1>${zh ? '在国区 PICO 上，<br><em>找到你想用的应用。</em>' : 'Your PICO.<br><em>More to explore.</em>'}</h1><p class="intro">${zh ? '浏览 PICO 应用，用自己的国际区或中国区账号下载；需要 PICO 账号的应用还能选择国际区登录适配。' : 'Browse PICO apps and download with your international or China account. Choose sign-in adaptation for apps that use PICO accounts.'}</p><div class="hero-actions"><a class="action primary" href="${localized('/search/', lang)}">${zh ? '搜索应用' : 'Search apps'} ↗</a><a class="action secondary" href="${localized('/all-apps/', lang)}">${zh ? '全部应用' : 'All apps'} ↗</a></div></div></section>`;
+  const copy = region === 'cn'
+    ? (zh ? {
+      title: '在 PICO 国区商店，<br><em>找到你想用的应用。</em>',
+      intro: '浏览 PICO 国区商店的应用，查看版本、价格和适用设备；登录国区账号后即可下载安装。',
+    } : {
+      title: 'PICO China Store.<br><em>Find what you need.</em>',
+      intro: 'Browse the PICO China store, review versions, prices and device support, then sign in with your China account to download.',
+    })
+    : (zh ? {
+      title: '在国区 PICO 上，<br><em>找到你想用的应用。</em>',
+      intro: '浏览 PICO 应用，用自己的国际区或中国区账号下载；需要 PICO 账号的应用还能选择国际区登录适配。',
+    } : {
+      title: 'Your PICO.<br><em>More to explore.</em>',
+      intro: 'Browse PICO apps and download with your international or China account. Choose sign-in adaptation for apps that use PICO accounts.',
+    });
+  return `<section class="hero home-hero"><div class="hero-copy"><p class="eyebrow"><span class="indicator"></span>PICO STORE LAB</p><h1>${copy.title}</h1><p class="intro">${copy.intro}</p><div class="hero-actions"><a class="action primary" href="${localized('/search/', lang)}">${zh ? '搜索应用' : 'Search apps'} ↗</a><a class="action secondary" href="${localized('/all-apps/', lang)}">${zh ? '全部应用' : 'All apps'} ↗</a></div></div></section>`;
+}
+
+function homeFeatured(lang, region = 'global') {
+  const zh = lang === 'zh';
+  const label = region === 'cn' ? (zh ? '国区推荐' : 'CHINA FEATURED') : (zh ? '推荐应用' : 'FEATURED APPS');
+  return `<section class="section-head"><span>${label}</span><span>01 / APPS</span></section><span class="home-catalog-anchor" data-catalog-anchor aria-hidden="true"${region === 'global' ? ' id="catalog"' : ''}></span>${cards(lang, region)}`;
+}
+
+function homePageBody(lang) {
+  return ['global', 'cn'].map(region => `<div class="home-region" data-home-region="${region}"${region === 'cn' ? ' hidden' : ''}>${homeBody(lang, region)}${homeFeatured(lang, region)}</div>`).join('');
 }
 
 function searchPageBody(lang) {
@@ -226,10 +286,9 @@ await cp(source, output, { recursive:true });
 
 for (const lang of ['zh', 'en']) {
   const zh = lang === 'zh';
-  const featured = `<section id="catalog" class="section-head"><span>${zh ? '推荐应用' : 'FEATURED APPS'}</span><span>01 / APPS</span></section>${cards(lang)}`;
   await page({ path:'/', lang, title:zh ? 'PICO 国际区应用下载与安装指南 | PICO Store Lab' : 'PICO apps, downloads & installation | PICO Store Lab',
     description:zh ? '在国区 PICO 上查找应用的 PICO 版本，使用自己的 PICO 国际区或中国区账号下载并安装。' : 'Browse PICO apps, then download and install with your international or China account.',
-    body:homeBody(lang) + featured, interactive:true, script:'app.js', pageType:'home' });
+    body:homePageBody(lang), interactive:true, script:'app.js', pageType:'home' });
   await page({ path:'/search/', lang, title:zh ? '搜索 PICO 应用 | PICO Store Lab' : 'Search PICO apps | PICO Store Lab',
     description:zh ? '按名称搜索 PICO 商店应用，进入详情页登录并下载。' : 'Search PICO Store apps by name, then open a detail page to sign in and download.',
     body:searchPageBody(lang), interactive:true, script:'search.js', pageType:'search' });

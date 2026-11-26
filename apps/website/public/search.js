@@ -25,7 +25,7 @@ const locale = document.documentElement.lang === 'zh-CN' ? 'zh-CN' : 'en';
 const t = key => copy[locale][key] ?? copy.en[key] ?? key;
 const params = new URLSearchParams(location.search);
 const base = locale === 'en' ? '/en' : '';
-const DEVICE_CODES = ['B3110', 'A9210', 'A8A10', 'A8110'];
+const DEVICE_CODES = ['B3110', 'A9210', 'A8A10', 'A8110', 'A7H10'];
 const DEFAULT_DEVICE = 'A9210';
 let region = params.get('region') === 'cn' ? 'cn'
   : params.get('region') === 'global' ? 'global'

@@ -382,7 +382,7 @@ let region = selectedQuery.get('region') === 'cn' ? 'cn'
     : localStorage.getItem('pico-store-region') === 'cn' ? 'cn' : 'global';
 const storedPrice = localStorage.getItem('pico-store-price-filter');
 let priceFilter = storedPrice === 'free' || storedPrice === 'paid' ? storedPrice : 'all';
-const DEVICE_CODES = ['B3110', 'A9210', 'A8A10', 'A8110'];
+const DEVICE_CODES = ['B3110', 'A9210', 'A8A10', 'A8110', 'A7H10'];
 const DEFAULT_DEVICE = 'A9210';
 const storedDevice = localStorage.getItem('pico-store-device');
 let device = DEVICE_CODES.includes(selectedQuery.get('device') || '') ? selectedQuery.get('device')
@@ -655,7 +655,7 @@ async function selectItem(itemId, scroll = false) {
   }
   refreshDownload();
   try {
-    const url = `/api/item?region=${region}&itemId=${encodeURIComponent(item.itemId)}&package=${encodeURIComponent(item.packageName)}&lang=${locale === 'zh-CN' ? 'zh' : 'en'}`;
+    const url = `/api/item?region=${region}&device=${device}&itemId=${encodeURIComponent(item.itemId)}&package=${encodeURIComponent(item.packageName)}&lang=${locale === 'zh-CN' ? 'zh' : 'en'}`;
     const response = await fetch(url);
     if (!response.ok) throw new Error('item unavailable');
     const detail = await response.json();
@@ -974,7 +974,7 @@ async function collectDownloadReport() {
   if (!report) return null;
   if (!report.connection && !report.failure) {
     $('download-status').textContent = t('preparingReport');
-    const query = new URLSearchParams({ itemId: report.application.itemId, region });
+    const query = new URLSearchParams({ itemId: report.application.itemId, region, device });
     if (report.application.packageName) query.set('package', report.application.packageName);
     try {
       const result = await api(`/api/download/diagnostics?${query}`, { signal: AbortSignal.timeout(20_000) });
@@ -1092,19 +1092,43 @@ function setCnAccountStatus(key = null) {
   status.classList.toggle('is-error', Boolean(key?.startsWith('err')));
 }
 
+function syncContextLocation() {
+  const current = new URL(location.href);
+  current.searchParams.set('region', region);
+  current.searchParams.set('device', device);
+  history.replaceState(null, '', current);
+}
+
+// Detail pages own their download state. Reloading them makes the app metadata
+// and the APK entitlement lookup use the newly selected store and headset.
+function navigateForContext() {
+  localStorage.setItem('pico-store-region', region);
+  localStorage.setItem('pico-store-device', device);
+  const target = new URL(location.href);
+  target.searchParams.set('region', region);
+  target.searchParams.set('device', device);
+  location.assign(target.href);
+}
+
+function renderHomeRegion() {
+  if (pageContext.page !== 'home') return;
+  for (const slot of document.querySelectorAll('.home-region[data-home-region]')) {
+    slot.hidden = slot.dataset.homeRegion !== region;
+    const anchor = slot.querySelector('[data-catalog-anchor]');
+    if (anchor) anchor.id = slot.hidden ? '' : 'catalog';
+  }
+}
+
 function applyDevice() {
   localStorage.setItem('pico-store-device', device);
   if ($('device-select')) $('device-select').value = device;
-  const current = new URL(location.href);
-  if (current.searchParams.get('device') !== device) {
-    current.searchParams.set('device', device);
-    history.replaceState(null, '', current);
-  }
+  syncContextLocation();
 }
 
 // Toggle the international email form vs the China SMS form, and reflect the
 // active region's sign-in state in the shared download card.
-function applyRegion({ reloadDetail = true } = {}) {  localStorage.setItem('pico-store-region', region);
+function applyRegion({ reloadDetail = true } = {}) {
+  localStorage.setItem('pico-store-region', region);
   if ($('global-login')) $('global-login').hidden = region !== 'global';
   if ($('cn-login')) $('cn-login').hidden = region !== 'cn';
   for (const [id, value] of [['region-global', 'global'], ['region-cn', 'cn']]) {
@@ -1146,7 +1170,13 @@ for (const [id, value] of [['region-global', 'global'], ['region-cn', 'cn']]) {
   on(id, 'click', () => {
     if (region === value || accountBusy) return;
     region = value;
+    if (pageContext.page === 'app') {
+      navigateForContext();
+      return;
+    }
     applyRegion();
+    syncContextLocation();
+    renderHomeRegion();
   });
 }
 
@@ -1154,7 +1184,12 @@ on('device-select', 'change', event => {
   const next = DEVICE_CODES.includes(event.target.value) ? event.target.value : DEFAULT_DEVICE;
   if (next === device) return;
   device = next;
+  if (pageContext.page === 'app') {
+    navigateForContext();
+    return;
+  }
   applyDevice();
+  syncContextLocation();
 });
 
 function downloadError(error) {
@@ -1176,7 +1211,7 @@ async function refreshDownload() {
   const itemId = selectedId;
   const ticket = apkRequest;
   const accountTicket = accountRequest;
-  const query = new URLSearchParams({ itemId, region });
+  const query = new URLSearchParams({ itemId, region, device });
   const packageName = selectedPackage();
   if (packageName) query.set('package', packageName);
   $('download-status').textContent = t('checkingEntitlement');
@@ -1350,7 +1385,7 @@ on('acquire-apk', 'click', async () => {
   let next;
   const report = newDownloadReport(itemId, packageName);
   try {
-    next = await api('/api/download/acquire', { method: 'POST', body: JSON.stringify({ itemId, packageName, region }) });
+    next = await api('/api/download/acquire', { method: 'POST', body: JSON.stringify({ itemId, packageName, region, device }) });
     report.events.push({ stage: 'acquisition', result: 'ready' });
   } catch (error) {
     next = downloadError(error);
@@ -1416,5 +1451,7 @@ applyLocale();
 applyDevice();
 applyNavigationContext();
 applyRegion({ reloadDetail: false });
+syncContextLocation();
+renderHomeRegion();
 loadState();
 refreshAccount();
