@@ -54,6 +54,19 @@ function cards(lang) {
   }).join('')}</div>`;
 }
 
+const DEVICE_OPTIONS = [
+  { code: 'B3110', name: 'PICO Space Pro' },
+  { code: 'A9210', name: 'PICO 4 Ultra' },
+  { code: 'A8A10', name: 'PICO 4 Pro' },
+  { code: 'A8110', name: 'PICO 4' },
+];
+
+function deviceSwitch(lang) {
+  const zh = lang === 'zh';
+  const options = DEVICE_OPTIONS.map(device => `<option value="${device.code}">${device.name} (${device.code})</option>`).join('');
+  return `<label class="device-switch"><span>${zh ? '设备' : 'Device'}</span><select id="device-select" aria-label="${zh ? '选择设备' : 'Select device'}">${options}</select></label>`;
+}
+
 function masthead(lang, path, interactive = false) {
   const zh = lang === 'zh';
   const home = localized('/', lang);
@@ -73,11 +86,12 @@ function masthead(lang, path, interactive = false) {
   const regionSwitch = interactive
     ? `<div class="masthead-region" role="tablist" aria-label="${zh ? '商店区域' : 'Store region'}"><button type="button" id="region-global" class="masthead-region-option" role="tab" aria-selected="true">${zh ? '国际' : 'Global'}</button><button type="button" id="region-cn" class="masthead-region-option" role="tab" aria-selected="false">${zh ? '中国' : 'China'}</button></div>`
     : '';
-  return `<header class="masthead site-chrome"><a class="brand" href="${home}" aria-label="PICO Store Lab"><span class="brand-mark">P/</span><span>PICO<br>STORE LAB</span></a><nav class="tabbar" aria-label="${zh ? '主导航' : 'Main navigation'}">${tabs.map(tab => `<a href="${tab.href}"${tab.id === active ? ' class="active" aria-current="page"' : ''}>${tab.label}</a>`).join('')}</nav><div class="masthead-tools">${regionSwitch}<a id="language" class="language" href="${localized(path, zh ? 'en' : 'zh')}" lang="${zh ? 'en' : 'zh-CN'}">${zh ? 'EN' : '中文'}</a></div></header>`;
+  const devices = interactive ? deviceSwitch(lang) : '';
+  return `<header class="masthead site-chrome"><a class="brand" href="${home}" aria-label="PICO Store Lab"><span class="brand-mark">P/</span><span>PICO<br>STORE LAB</span></a><nav class="tabbar" aria-label="${zh ? '主导航' : 'Main navigation'}">${tabs.map(tab => `<a href="${tab.href}"${tab.id === active ? ' class="active" aria-current="page"' : ''}>${tab.label}</a>`).join('')}</nav><div class="masthead-tools">${regionSwitch}${devices}<a id="language" class="language" href="${localized(path, zh ? 'en' : 'zh')}" lang="${zh ? 'en' : 'zh-CN'}">${zh ? 'EN' : '中文'}</a></div></header>`;
 }
 
 function footer(lang) {
-  return `<footer class="site-footer"><div class="footer-wordmark"><span class="footer-slash">P/</span><span>PICO<br>STORE LAB</span></div><div class="footer-meta"><span>PICO STORE LAB / OPEN SOURCE</span><nav><a href="${localized('/search/', lang)}">${lang === 'zh' ? '搜索' : 'Search'}</a><a href="${localized('/all-apps/', lang)}">${lang === 'zh' ? '全部应用' : 'All apps'}</a><a href="${localized('/about/', lang)}">${lang === 'zh' ? '关于项目' : 'About'}</a>${external(repositoryUrl, 'GitHub')}</nav><p>${lang === 'zh' ? '由社区维护，与 PICO 官方无关联。' : 'A community project, independent of PICO.'}</p></div></footer>`;
+  return `<footer class="site-footer"><div class="footer-wordmark"><span class="footer-slash">P/</span><span>PICO<br>STORE LAB</span></div><div class="footer-meta"><span>PICO STORE LAB / OPEN SOURCE</span><nav><a href="${localized('/about/', lang)}">${lang === 'zh' ? '关于项目' : 'About'}</a>${external(repositoryUrl, 'GitHub')}</nav><p>${lang === 'zh' ? '由社区维护，与 PICO 官方无关联。' : 'A community project, independent of PICO.'}</p></div></footer>`;
 }
 
 function steps(steps) {
@@ -165,17 +179,9 @@ function searchPageBody(lang) {
 
 function allAppsPageBody(lang) {
   const zh = lang === 'zh';
-  return `<header class="page-heading all-apps-heading"><div><p class="eyebrow"><span class="indicator"></span>${zh ? 'PICO 商店 / 全部应用' : 'PICO STORE / ALL APPS'}</p><h1>${zh ? '全部应用' : 'All apps'}</h1><p>${zh ? '按分类、价格和排序筛选，找到要下载的 PICO 应用。' : 'Filter by category, price and sort order to find a PICO app to download.'}</p></div><span id="all-apps-count" class="apps-total" aria-live="polite">—</span></header>
-<section class="store-toolbar" aria-label="${zh ? '筛选和排序' : 'Filters and sorting'}">
-  <label class="store-filter store-filter-query"><span>${zh ? '搜索' : 'Search'}</span><input id="all-apps-query" type="search" maxlength="80" placeholder="${zh ? '名称或发行商' : 'Name or publisher'}"></label>
-  <label class="store-filter"><span>${zh ? '分类' : 'Category'}</span><select id="all-apps-category"><option value="all">${zh ? '全部分类' : 'All categories'}</option></select></label>
-  <label class="store-filter"><span>${zh ? '价格' : 'Price'}</span><select id="all-apps-price"><option value="all">${zh ? '全部价格' : 'All prices'}</option><option value="free">${zh ? '免费' : 'Free'}</option><option value="paid">${zh ? '付费' : 'Paid'}</option></select></label>
-  <label class="store-filter"><span>${zh ? '排序' : 'Sort'}</span><select id="all-apps-sort"><option value="comprehensive">${zh ? '综合排序' : 'Recommended'}</option><option value="rating">${zh ? '分数最高' : 'Highest rated'}</option><option value="price_asc">${zh ? '价格由低到高' : 'Price low to high'}</option><option value="price_desc">${zh ? '价格由高到低' : 'Price high to low'}</option><option value="updated">${zh ? '最新发布' : 'Newest'}</option></select></label>
-</section>
+  return `<header class="page-heading all-apps-heading"><div><p class="eyebrow"><span class="indicator"></span>${zh ? 'PICO 商店 / 全部应用' : 'PICO STORE / ALL APPS'}</p><h1>${zh ? '全部应用' : 'All apps'}</h1><p>${zh ? '浏览 PICO 商店的全部应用，按最近更新排列。' : 'Browse the complete PICO store catalog, ordered by recent updates.'}</p></div><span id="all-apps-count" class="apps-total" aria-live="polite">—</span></header>
 <p id="all-apps-status" class="all-apps-status" role="status" aria-live="polite">${zh ? '正在拉取商店目录…' : 'Loading the store catalog…'}</p>
-<div id="all-apps-results" class="all-apps-results store-list" hidden></div>
-<nav id="all-apps-pagination" class="all-apps-pagination store-pagination" aria-label="${zh ? '全部应用分页' : 'All apps pages'}" hidden><button id="all-apps-prev" type="button">${zh ? '← 上一页' : '← Previous'}</button><span id="all-apps-page" class="all-apps-page">1 / 1</span><button id="all-apps-next" type="button">${zh ? '下一页 →' : 'Next →'}</button></nav>
-<p class="store-note">${zh ? '列表按 PICO 4 Ultra（A9210）的商店目录生成。WPS Office 仅支持 PICO Space Pro，不在这个目录中，可以在搜索页找到。' : 'This list follows the PICO 4 Ultra (A9210) store catalog. WPS Office only supports PICO Space Pro and is not in this catalog; use Search to find it.'}</p>`;
+<div id="all-apps-results" class="all-apps-results store-list" hidden></div>`;
 }
 
 function appPageBody(lang) {
@@ -228,7 +234,7 @@ for (const lang of ['zh', 'en']) {
     description:zh ? '按名称搜索 PICO 商店应用，进入详情页登录并下载。' : 'Search PICO Store apps by name, then open a detail page to sign in and download.',
     body:searchPageBody(lang), interactive:true, script:'search.js', pageType:'search' });
   await page({ path:'/all-apps/', lang, title:zh ? '全部 PICO 应用 | PICO Store Lab' : 'All PICO apps | PICO Store Lab',
-    description:zh ? '浏览全部 PICO 应用，按分类、价格和综合/评分/价格/最新发布排序。' : 'Browse all PICO apps with category, price and recommended/rating/price/newest sorting.',
+    description:zh ? '浏览 PICO 商店的全部应用，切换设备查看对应目录。' : 'Browse the complete PICO store catalog and switch headsets to see the matching list.',
     body:allAppsPageBody(lang), interactive:true, script:'all-apps.js', pageType:'all-apps' });
   await page({ path:'/app/', lang, title:zh ? 'PICO 应用详情与下载 | PICO Store Lab' : 'PICO app details and download | PICO Store Lab',
     description:zh ? '查看 PICO 应用详情，使用国际区或中国区账号登录并下载 APK。' : 'View PICO app details, sign in with an international or China account, and download the APK.',

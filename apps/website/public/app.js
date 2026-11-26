@@ -382,6 +382,12 @@ let region = selectedQuery.get('region') === 'cn' ? 'cn'
     : localStorage.getItem('pico-store-region') === 'cn' ? 'cn' : 'global';
 const storedPrice = localStorage.getItem('pico-store-price-filter');
 let priceFilter = storedPrice === 'free' || storedPrice === 'paid' ? storedPrice : 'all';
+const DEVICE_CODES = ['B3110', 'A9210', 'A8A10', 'A8110'];
+const DEFAULT_DEVICE = 'A9210';
+const storedDevice = localStorage.getItem('pico-store-device');
+let device = DEVICE_CODES.includes(selectedQuery.get('device') || '') ? selectedQuery.get('device')
+  : DEVICE_CODES.includes(storedDevice || '') ? storedDevice
+    : DEFAULT_DEVICE;
 let sessions = { global: { authenticated: false, label: '' }, cn: { authenticated: false, label: '' } };
 
 function t(key, vars = null) {
@@ -586,7 +592,7 @@ async function loadAllApps() {
   $('all-apps-load').disabled = true;
   $('all-apps-status').textContent = t('allAppsLoading');
   try {
-    const response = await fetch(`/api/apps?region=${region}&sort=updated&lang=${locale === 'zh-CN' ? 'zh' : 'en'}`);
+    const response = await fetch(`/api/apps?region=${region}&device=${device}&sort=updated&lang=${locale === 'zh-CN' ? 'zh' : 'en'}`);
     if (!response.ok) throw new Error('apps unavailable');
     const result = await response.json();
     allApps = Array.isArray(result.items) ? result.items : [];
@@ -784,7 +790,7 @@ async function search() {
   $('search-status').textContent = t('searching');
   try {
     const priceQuery = priceFilter === 'all' ? '' : `&price=${priceFilter}`;
-    const response = await fetch(`/api/search?region=${region}&q=${encodeURIComponent(word)}${priceQuery}`);
+    const response = await fetch(`/api/search?region=${region}&device=${device}&q=${encodeURIComponent(word)}${priceQuery}`);
     if (!response.ok) throw new Error('search unavailable');
     const result = await response.json();
     searchItems = result.items ?? [];
@@ -955,7 +961,9 @@ function newDownloadReport(itemId, packageName) {
 }
 
 function renderReport() {
-  $('download-diagnostics').hidden = !downloadReport;
+  const diagnostics = $('download-diagnostics');
+  if (!diagnostics) return;
+  diagnostics.hidden = !downloadReport;
   $('report-reference').hidden = !downloadReport?.failure;
   $('report-reference').textContent = downloadReport ? `${t('reportReference')}: ${downloadReport.reportId}` : '';
   $('diagnostic-report').textContent = downloadReport ? JSON.stringify(downloadReport, null, 2) : '';
@@ -1029,7 +1037,9 @@ function setAccountStatus(key = null) {
 }
 
 function renderDownload() {
-  $('download-card').hidden = !account.authenticated;
+  const downloadCard = $('download-card');
+  if (!downloadCard) return;
+  downloadCard.hidden = !account.authenticated;
   renderReport();
   const button = $('download-apk');
   const direct = $('download-direct');
@@ -1064,7 +1074,7 @@ function renderDownload() {
 function invalidateDownload(message) {
   apkRequest += 1;
   downloadReport = null;
-  $('download-diagnostics').open = false;
+  if ($('download-diagnostics')) $('download-diagnostics').open = false;
   apk = message ? { available: false, message } : null;
   renderDownload();
 }
@@ -1077,14 +1087,24 @@ function setAccountBusy(busy) {
 function setCnAccountStatus(key = null) {
   cnAccountStatusKey = key;
   const status = $('cn-account-status');
+  if (!status) return;
   status.textContent = key ? t(key) : '';
   status.classList.toggle('is-error', Boolean(key?.startsWith('err')));
 }
 
+function applyDevice() {
+  localStorage.setItem('pico-store-device', device);
+  if ($('device-select')) $('device-select').value = device;
+  const current = new URL(location.href);
+  if (current.searchParams.get('device') !== device) {
+    current.searchParams.set('device', device);
+    history.replaceState(null, '', current);
+  }
+}
+
 // Toggle the international email form vs the China SMS form, and reflect the
 // active region's sign-in state in the shared download card.
-function applyRegion({ reloadDetail = true } = {}) {
-  localStorage.setItem('pico-store-region', region);
+function applyRegion({ reloadDetail = true } = {}) {  localStorage.setItem('pico-store-region', region);
   if ($('global-login')) $('global-login').hidden = region !== 'global';
   if ($('cn-login')) $('cn-login').hidden = region !== 'cn';
   for (const [id, value] of [['region-global', 'global'], ['region-cn', 'cn']]) {
@@ -1129,6 +1149,13 @@ for (const [id, value] of [['region-global', 'global'], ['region-cn', 'cn']]) {
     applyRegion();
   });
 }
+
+on('device-select', 'change', event => {
+  const next = DEVICE_CODES.includes(event.target.value) ? event.target.value : DEFAULT_DEVICE;
+  if (next === device) return;
+  device = next;
+  applyDevice();
+});
 
 function downloadError(error) {
   const canAcquire = error.payload?.canAcquire === true;
@@ -1366,7 +1393,10 @@ function applyNavigationContext() {
   const basePath = locale === 'en' ? '/en' : '';
   const breadcrumb = $('app-breadcrumb-link');
   if (breadcrumb) {
-    breadcrumb.href = `${basePath}/all-apps/`;
+    const target = new URL(`${basePath}/all-apps/`, location.origin);
+    target.searchParams.set('region', region);
+    target.searchParams.set('device', device);
+    breadcrumb.href = target.href;
     breadcrumb.textContent = locale === 'en' ? 'All apps' : '全部应用';
   }
   const tabbar = document.querySelector('.tabbar');
@@ -1383,6 +1413,7 @@ function applyNavigationContext() {
 
 // Account and download state must exist before the first render, so boot last.
 applyLocale();
+applyDevice();
 applyNavigationContext();
 applyRegion({ reloadDetail: false });
 loadState();

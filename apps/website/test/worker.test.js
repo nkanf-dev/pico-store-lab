@@ -144,9 +144,18 @@ test('standalone search, catalog and detail pages render their own controls', ()
     const detailHtml = readFileSync(new URL(`${prefix}app/index.html`, dist), 'utf8');
     assert.match(searchHtml, /id="search-form"/);
     assert.match(searchHtml, /href="[^"]*\/all-apps\/"/);
-    assert.match(allAppsHtml, /id="all-apps-sort"/);
-    assert.match(allAppsHtml, /value="price_asc"/);
-    assert.match(allAppsHtml, /id="all-apps-category"/);
+    assert.match(searchHtml, /id="device-select"/);
+    assert.match(allAppsHtml, /id="all-apps-results"/);
+    assert.match(allAppsHtml, /id="device-select"/);
+    assert.match(allAppsHtml, /value="B3110"/);
+    assert.match(allAppsHtml, /value="A8A10"/);
+    assert.match(allAppsHtml, /value="A8110"/);
+    assert.doesNotMatch(allAppsHtml, /id="all-apps-query"/);
+    assert.doesNotMatch(allAppsHtml, /id="all-apps-sort"/);
+    assert.doesNotMatch(allAppsHtml, /id="all-apps-category"/);
+    assert.doesNotMatch(allAppsHtml, /id="all-apps-price"/);
+    assert.doesNotMatch(allAppsHtml, /id="all-apps-pagination"/);
+    assert.doesNotMatch(allAppsHtml, /class="store-toolbar"/);
     assert.match(detailHtml, /id="app-breadcrumb-link"/);
     assert.match(detailHtml, /class="app-guide"/);
   }
@@ -160,7 +169,11 @@ test('the page, the script, and both locales stay in agreement', () => {
   const htmlIds = new Set([...html.matchAll(/id="([^"]+)"/g)].map(match => match[1]));
   // These legacy single-page controls remain behind optional guards in app.js;
   // the standalone /all-apps/ page owns the live catalog UI now.
-  const legacyOptional = new Set(['all-apps-tools', 'all-apps-load', 'catalog-items']);
+  const legacyOptional = new Set([
+    'all-apps-tools', 'all-apps-load', 'catalog-items',
+    'all-apps-query', 'all-apps-sort', 'all-apps-category', 'all-apps-price',
+    'all-apps-pagination', 'all-apps-page', 'all-apps-prev', 'all-apps-next',
+  ]);
   for (const [, name] of source.matchAll(/\$\('([^']+)'\)/g)) {
     if (legacyOptional.has(name)) continue;
     assert.ok(htmlIds.has(name), `app.js references #${name}, which no built page defines`);
@@ -469,6 +482,31 @@ test('the China all-apps list merges games and apps without duplicates', async (
       assert.deepEqual(body.items.map(item => item.name), ['App', 'Game', 'Shared']);
       assert.deepEqual(seenSections.sort(), [96, 97]);
       assert.deepEqual([...seenDevices], ['A9210']);
+    });
+  } finally { env.DB.close(); }
+});
+
+test('the all-apps endpoint validates and forwards the selected headset', async () => {
+  const env = testEnv();
+  const seenDevices = new Set();
+  const stub = async (url, init = {}) => {
+    seenDevices.add(new URL(String(url)).searchParams.get('device_name'));
+    return Response.json({ code: 0, data: { items: [{
+      item_id: 1, package_name: 'com.example.device', name: 'Device App', version_code: 1,
+      price: '0', currency: 'CNY', score: 4, detail: { app_update_time: '100' },
+    }], has_more: false } });
+  };
+  try {
+    await withFetch(stub, async () => {
+      const response = await worker.fetch(request('/api/apps?region=cn&device=A8A10&lang=zh'), env);
+      assert.equal(response.status, 200);
+      const body = await response.json();
+      assert.equal(body.device, 'A8A10');
+      assert.deepEqual([...seenDevices], ['A8A10']);
+
+      const invalid = await worker.fetch(request('/api/apps?region=cn&device=pico-unknown'), env);
+      assert.equal(invalid.status, 400);
+      assert.equal((await invalid.json()).error, 'invalid_device');
     });
   } finally { env.DB.close(); }
 });

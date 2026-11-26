@@ -25,11 +25,17 @@ const locale = document.documentElement.lang === 'zh-CN' ? 'zh-CN' : 'en';
 const t = key => copy[locale][key] ?? copy.en[key] ?? key;
 const params = new URLSearchParams(location.search);
 const base = locale === 'en' ? '/en' : '';
+const DEVICE_CODES = ['B3110', 'A9210', 'A8A10', 'A8110'];
+const DEFAULT_DEVICE = 'A9210';
 let region = params.get('region') === 'cn' ? 'cn'
   : params.get('region') === 'global' ? 'global'
     : localStorage.getItem('pico-store-region') === 'global' ? 'global'
       : localStorage.getItem('pico-store-region') === 'cn' ? 'cn'
         : locale === 'zh-CN' ? 'cn' : 'global';
+const storedDevice = localStorage.getItem('pico-store-device');
+let device = DEVICE_CODES.includes(params.get('device') || '') ? params.get('device')
+  : DEVICE_CODES.includes(storedDevice || '') ? storedDevice
+    : DEFAULT_DEVICE;
 let priceFilter = localStorage.getItem('pico-store-price-filter');
 if (!['all', 'free', 'paid'].includes(priceFilter)) priceFilter = 'all';
 
@@ -47,8 +53,8 @@ function safeImage(value) {
 
 function detailHref(item) {
   const slug = slugs[item.itemId];
-  if (slug) return `${base}/apps/${slug}/?region=${region}&from=search`;
-  const query = new URLSearchParams({ itemId: item.itemId, package: item.packageName, region, from: 'search' });
+  if (slug) return `${base}/apps/${slug}/?region=${region}&device=${device}&from=search`;
+  const query = new URLSearchParams({ itemId: item.itemId, package: item.packageName, region, device, from: 'search' });
   return `${base}/app/?${query}`;
 }
 
@@ -68,6 +74,18 @@ function renderRegion() {
     element.setAttribute('aria-selected', String(region === value));
     element.classList.toggle('active', region === value);
   }
+}
+
+function renderDevice() {
+  const select = $('device-select');
+  if (select) select.value = device;
+}
+
+function syncLocation() {
+  const url = new URL(location.href);
+  url.searchParams.set('region', region);
+  url.searchParams.set('device', device);
+  history.replaceState(null, '', url);
 }
 
 function renderPrice() {
@@ -140,7 +158,7 @@ async function search() {
   }
   try {
     const price = priceFilter === 'all' ? '' : `&price=${priceFilter}`;
-    const response = await fetch(`/api/search?region=${region}&q=${encodeURIComponent(word)}${price}&lang=${locale === 'zh-CN' ? 'zh' : 'en'}`);
+    const response = await fetch(`/api/search?region=${region}&device=${device}&q=${encodeURIComponent(word)}${price}&lang=${locale === 'zh-CN' ? 'zh' : 'en'}`);
     if (!response.ok) throw new Error('search unavailable');
     const payload = await response.json();
     renderResults(Array.isArray(payload.items) ? payload.items : []);
@@ -169,12 +187,25 @@ for (const [id, value] of [['region-global', 'global'], ['region-cn', 'cn']]) {
     region = value;
     localStorage.setItem('pico-store-region', region);
     renderRegion();
+    syncLocation();
     if ($('search-word').value.trim()) search();
   });
 }
 
+$('device-select')?.addEventListener('change', event => {
+  const next = DEVICE_CODES.includes(event.target.value) ? event.target.value : DEFAULT_DEVICE;
+  if (next === device) return;
+  device = next;
+  localStorage.setItem('pico-store-device', device);
+  renderDevice();
+  syncLocation();
+  if ($('search-word').value.trim()) search();
+});
+
 renderRegion();
+renderDevice();
 renderPrice();
+syncLocation();
 const initialQuery = params.get('q');
 if (initialQuery) {
   $('search-word').value = initialQuery;

@@ -28,6 +28,15 @@ function regionFrom(value) {
   return value === 'cn' ? 'cn' : 'global';
 }
 
+const DEVICE_CODES = new Set(['B3110', 'A9210', 'A8A10', 'A8110']);
+const DEFAULT_DEVICE = 'A9210';
+
+function deviceFrom(value, fallback = DEFAULT_DEVICE) {
+  if (!value) return fallback;
+  if (!DEVICE_CODES.has(value)) throw new DeliveryError('invalid_device', 400, { field: 'device' });
+  return value;
+}
+
 function storeOptions(region, language = null) {
   const options = storeOptionsForRegion(regionFrom(region));
   return language ? { ...options, language } : options;
@@ -46,14 +55,8 @@ const APP_LIST_MAX_PAGES = 20;
 const APP_LIST_PAGE_SIZE = 100;
 const APP_LIST_CACHE_SECONDS = 300;
 
-async function fetchSectionPageItems(sectionId, region, language, fetchImpl = fetch) {
-  const storeRegion = regionFrom(region);
-  const baseOptions = storeOptions(region, language);
-  // The China client identity is validated for account traffic (B3110 / Space
-  // Pro), but the public catalog should describe the PICO 4 Ultra the site
-  // targets. Ask the section endpoint for A9210 so the list and its compatibility
-  // note describe the same headset.
-  const options = storeRegion === 'cn' ? { ...baseOptions, deviceName: 'A9210' } : baseOptions;
+async function fetchSectionPageItems(sectionId, region, language, deviceName, fetchImpl = fetch) {
+  const options = { ...storeOptions(region, language), deviceName };
   const items = [];
   for (let page = 1; page <= APP_LIST_MAX_PAGES; page++) {
     const spec = makeSectionRequest(sectionId, options, page, APP_LIST_PAGE_SIZE);
@@ -85,9 +88,9 @@ function sortAppList(items, sort, region) {
   return items.sort((a, b) => byUpdated(a, b) || byName(a, b));
 }
 
-async function loadAllApps(region, language = 'zh', fetchImpl = fetch) {
+async function loadAllApps(region, language = 'zh', device = DEFAULT_DEVICE, fetchImpl = fetch) {
   const cache = typeof globalThis.caches !== 'undefined' ? globalThis.caches?.default : null;
-  const cacheKey = new Request(`https://pico-store-lab.invalid/api/apps/${region}/${language}/A9210`);
+  const cacheKey = new Request(`https://pico-store-lab.invalid/api/apps/${region}/${language}/${device}`);
   if (cache) {
     const hit = await cache.match(cacheKey);
     if (hit) {
@@ -95,7 +98,7 @@ async function loadAllApps(region, language = 'zh', fetchImpl = fetch) {
     }
   }
   const sections = APP_SECTIONS[region] ?? APP_SECTIONS.global;
-  const lists = await Promise.all(sections.map(id => fetchSectionPageItems(id, region, language, fetchImpl)));
+  const lists = await Promise.all(sections.map(id => fetchSectionPageItems(id, region, language, device, fetchImpl)));
   const seen = new Set();
   const items = [];
   for (const item of lists.flat()) {
@@ -105,7 +108,7 @@ async function loadAllApps(region, language = 'zh', fetchImpl = fetch) {
   }
   if (!items.length) throw new DeliveryError('apps_unavailable', 502);
   sortAppList(items, 'updated', region);
-  const payload = { region, total: items.length, refreshedAt: new Date().toISOString(), items };
+  const payload = { region, device, total: items.length, refreshedAt: new Date().toISOString(), items };
   if (cache) {
     await cache.put(cacheKey, Response.json(payload, {
       headers: { 'Cache-Control': `public, max-age=${APP_LIST_CACHE_SECONDS}` },
@@ -506,8 +509,17 @@ export default {
           return Response.json({ error: 'invalid_price_filter' }, { status: 400 });
         }
       }
+      let device = null;
+      if (url.searchParams.get('device')) {
+        try {
+          device = deviceFrom(url.searchParams.get('device'));
+        } catch (error) {
+          return fail(error);
+        }
+      }
       try {
-        const spec = makeSearchRequest(word, storeOptions(region, languageFrom(url.searchParams.get('lang'))));
+        const base = storeOptions(region, languageFrom(url.searchParams.get('lang')));
+        const spec = makeSearchRequest(word, device ? { ...base, deviceName: device } : base);
         const upstream = await fetch(spec.url, { ...spec, signal: AbortSignal.timeout(15000) });
         if (!upstream.ok) throw new Error('upstream search unavailable');
         const parsed = parseSearchResults(parseOfficialJson(await upstream.text()));
@@ -543,8 +555,14 @@ export default {
       if (!['updated', 'name', 'rating'].includes(sort)) {
         return Response.json({ error: 'invalid_sort' }, { status: 400 });
       }
+      let device;
       try {
-        const result = await loadAllApps(region, language);
+        device = deviceFrom(url.searchParams.get('device'));
+      } catch (error) {
+        return fail(error);
+      }
+      try {
+        const result = await loadAllApps(region, language, device);
         const items = sortAppList([...result.items], sort, region);
         return Response.json({ ...result, sort, items }, {
           headers: { 'Cache-Control': `public, max-age=${APP_LIST_CACHE_SECONDS}` },
