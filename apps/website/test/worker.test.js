@@ -293,15 +293,18 @@ test('China SMS uses the official SSO web flow and logs in with its mobile ticke
   const calls = [];
   const stub = async (url, init = {}) => {
     const target = String(url);
-    calls.push({ url: target, body: String(init.body ?? '') });
+    calls.push({ url: target, body: String(init.body ?? ''), headers: init.headers ?? {} });
     if (target.includes('/send_activation_code/v2/')) {
       assert.match(target, /aid=264297/);
       assert.match(calls.at(-1).body, /mix_mode=1/);
       assert.match(calls.at(-1).body, /mobile=[0-9a-f]+/);
-      return Response.json({ error_code: 0, mobile_ticket: 'mobile_ticket_TESTTICKET123' });
+      return Response.json({ error_code: 0, mobile_ticket: 'mobile_ticket_TESTTICKET123' }, {
+        headers: { 'set-cookie': 'passport_csrf_token=send-cookie; Path=/; HttpOnly' },
+      });
     }
     if (target.includes('/quick_login/v2/')) {
       assert.match(calls.at(-1).body, /mobile_ticket=mobile_ticket_TESTTICKET123/);
+      assert.match(String(calls.at(-1).headers.Cookie), /passport_csrf_token=send-cookie/);
       return Response.json({ error_code: 0, data: { user_id_str: '4711' } }, {
         headers: { 'set-cookie': 'sessionid=web-session; Domain=.picoxr.com; Path=/; HttpOnly' },
       });
@@ -315,9 +318,11 @@ test('China SMS uses the official SSO web flow and logs in with its mobile ticke
       assert.equal(sent.status, 200);
       const sentBody = await sent.json();
       assert.equal(sentBody.mobileTicket, 'mobile_ticket_TESTTICKET123');
+      assert.equal(sentBody.ssoCookies.passport_csrf_token, 'send-cookie');
 
       const login = await worker.fetch(request('/api/account/cn/login', json({
         mobile: '13000000000', countryCode: '86', code: '123456', mobileTicket: sentBody.mobileTicket,
+        ssoCookies: sentBody.ssoCookies,
       })), env);
       assert.equal(login.status, 200);
       assert.match(login.headers.get('set-cookie'), /psl_session=/);
@@ -328,6 +333,48 @@ test('China SMS uses the official SSO web flow and logs in with its mobile ticke
       assert.equal(state.regions.cn.authenticated, true);
       assert.equal(state.regions.cn.label, '+86 13000000000');
       assert.equal(calls.filter(call => call.url.includes('matrix-cn')).length, 0);
+    });
+  } finally { env.DB.close(); }
+});
+
+test('China SMS follows the SSO service redirect to collect store cookies', async () => {
+  const env = testEnv();
+  const calls = [];
+  const stub = async (url, init = {}) => {
+    const target = String(url);
+    calls.push({ url: target, headers: init.headers ?? {} });
+    if (target.includes('/send_activation_code/v2/')) {
+      return Response.json({ error_code: 0, mobile_ticket: 'mobile_ticket_REDIRECT123' });
+    }
+    if (target.includes('/quick_login/v2/')) {
+      return Response.json({
+        error_code: 0, user_id: '4711', redirect_url: 'https://store.picoxr.com/',
+      });
+    }
+    if (target === 'https://store.picoxr.com/') {
+      return new Response('', {
+        status: 200,
+        headers: { 'set-cookie': 'sessionid=store-session; Domain=.picoxr.com; Path=/; HttpOnly' },
+      });
+    }
+    throw new Error(`unexpected upstream request: ${target}`);
+  };
+  try {
+    await withFetch(stub, async () => {
+      const sent = await worker.fetch(
+        request('/api/account/cn/send-code', json({ mobile: '13000000000', countryCode: '86' })), env);
+      const sentBody = await sent.json();
+      const login = await worker.fetch(request('/api/account/cn/login', json({
+        mobile: '13000000000', countryCode: '86', code: '123456',
+        mobileTicket: sentBody.mobileTicket, ssoCookies: sentBody.ssoCookies,
+      })), env);
+      assert.equal(login.status, 200);
+      assert.ok(calls.some(call => call.url === 'https://store.picoxr.com/'));
+      const session = await worker.fetch(request('/api/account/session', {
+        headers: { cookie: login.headers.get('set-cookie').split(';')[0] },
+      }), env);
+      const state = await session.json();
+      assert.equal(state.regions.cn.authenticated, true);
     });
   } finally { env.DB.close(); }
 });
@@ -503,7 +550,7 @@ test('downloads require a session and a configured secret, and reject a malforme
       const cookie = await signIn(env);
       for (const [query, error] of [
         ['itemId=not-an-id&package=x.y', 'invalid_item_id'],
-        ['itemId=1300000000023456789', 'invalid_package'],
+        ['itemId=1234567890123456789', 'invalid_package'],
         [`itemId=${PICO_ITEM_ID}&package=not-a-package`, 'invalid_package'],
       ]) {
         const response = await worker.fetch(request(`/api/download?${query}`, { headers: { cookie } }), env);
@@ -517,13 +564,13 @@ test('downloads require a session and a configured secret, and reject a malforme
 test('an app outside our catalog downloads with its package name', async () => {
   const env = testEnv();
   const { stub, calls } = upstreamStub({
-    itemId: '1300000000023456789', packageName: 'com.example.delisted', name: 'Delisted App',
+    itemId: '1234567890123456789', packageName: 'com.example.delisted', name: 'Delisted App',
   });
   try {
     await withFetch(stub, async () => {
       const cookie = await signIn(env);
       const info = await worker.fetch(
-        request('/api/download/info?itemId=1300000000023456789&package=com.example.delisted', { headers: { cookie } }), env,
+        request('/api/download/info?itemId=1234567890123456789&package=com.example.delisted', { headers: { cookie } }), env,
       );
       assert.equal(info.status, 200);
       const metadata = await info.json();

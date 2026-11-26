@@ -14,6 +14,7 @@ import {
 } from './session.js';
 import { readReleaseState, recordReleaseFailure, recordReleaseSuccess } from './store.js';
 import { recordMetric } from './metrics.js';
+import { sanitizeCookies } from './cn-sso.js';
 
 const ACCOUNT_WINDOW_SECONDS = 600;
 const LIMITS = {
@@ -285,18 +286,26 @@ async function handleAccount(request, env, url) {
         throw new DeliveryError('account_unavailable', 502);
       }
       // The ticket is a one-time continuation token tied to this mobile number;
-      // it is not a session and cannot be used without the SMS code.
-      return apiResponse({ sent: true, region: 'cn', mobileTicket: sent.mobileTicket });
+      // it is not a session and cannot be used without the SMS code. The
+      // short-lived SSO cookies from the send request are not credentials
+      // either, but the official flow presents them again on quick_login.
+      return apiResponse({
+        sent: true,
+        region: 'cn',
+        mobileTicket: sent.mobileTicket,
+        ssoCookies: sent.cookies ?? {},
+      });
     }
     const code = typeof body.code === 'string' ? body.code.trim() : '';
     if (!/^[0-9]{6}$/.test(code)) throw new DeliveryError('invalid_code', 400);
     const mobileTicket = typeof body.mobileTicket === 'string' ? body.mobileTicket : '';
     if (!/^mobile_ticket_[A-Za-z0-9]+$/.test(mobileTicket)) throw new DeliveryError('code_expired', 400);
+    const ssoCookies = sanitizeCookies(body.ssoCookies);
     const key = await sessionKey(env);
     await rateLimit(db, [[mobileScope, LIMITS.loginPerEmail], [ipScope, LIMITS.loginPerIp]]);
     let auth;
     try {
-      auth = await loginWithMobile(mobile, code, { ...options, mobileTicket });
+      auth = await loginWithMobile(mobile, code, { ...options, mobileTicket, cookies: ssoCookies });
     } catch (error) {
       if (error instanceof DeliveryError) throw error;
       throw new DeliveryError('account_rejected', 401);
