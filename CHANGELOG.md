@@ -16,7 +16,12 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 - Website search gains an **All / Free / Paid** price filter in both regions, with app prices shown in result cards. The region toggle appears in the page header and persists across pages.
 
+- The **All apps** page paginates through the catalog with a 20 / 50 / 100 / All page-size selector and text **Previous** / **Next** controls. The next page is prefetched near the end of the current page, and **All** loads 100-item batches while scrolling.
+- The home featured cards plus the catalog, search and favorite lists reuse the same square icon shown beside the detail-page title. `GET /api/icons` resolves up to 50 item icons per request, and every list resolves those icons before rendering, so the first paint already shows the detail icon instead of the cover.
+
 ### Changed
+
+- `GET /api/apps` accepts `page`, `pageSize`, `category`, `price` and `q` in addition to `region`, `device` and `sort`, and returns `total`, `page`, `pageSize` and `pageTotal` alongside the sliced items. List responses fall back to an in-process cache when the Worker Cache API is unavailable, keeping the Node preview responsive without re-crawling the storefront on every reload.
 
 - CI runs Python lint and tests on Ubuntu, Windows, and macOS.
 

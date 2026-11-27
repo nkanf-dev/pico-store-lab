@@ -24,3 +24,11 @@ docs/isme/
 docs/plans/
 docs/validation/
 docs/superpowers/
+
+# Local-only artifacts (downloaded APKs, patched builds, captures, virtualenv)
+.venv/
+.screenshots/
+apks/
+patched/
+png/
+README.txt
