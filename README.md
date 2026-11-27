@@ -171,7 +171,7 @@ cd pico-store-lab
 # TypeScript SDK and website — Node.js 25+
 npm ci
 npm run build:ts
-node apps/website/src/dev.js                 # http://127.0.0.1:8791
+node apps/website/src/dev.js                 # http://127.0.0.1:8787
 
 # Python SDK — Python 3.11+
 python3 -m pip install -e packages/python
