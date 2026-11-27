@@ -6,7 +6,10 @@
 // dump therefore exposes neither a usable cookie nor a usable PICO session.
 
 export const SESSION_COOKIE = 'psl_session';
-export const SESSION_TTL_SECONDS = 12 * 60 * 60;
+// A browser-held sign-in should survive restarts like the CLI keychain: the
+// server-side session rolls on every use, while the cookie itself is long-lived.
+export const SESSION_TTL_SECONDS = 30 * 24 * 60 * 60;
+export const SESSION_COOKIE_MAX_AGE = 365 * 24 * 60 * 60;
 
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
@@ -70,7 +73,7 @@ function isLocal(hostname) {
 }
 
 // `Secure` is dropped for loopback so `npm run dev` works over plain HTTP.
-export function sessionCookie(url, token, maxAge = SESSION_TTL_SECONDS) {
+export function sessionCookie(url, token, maxAge = SESSION_COOKIE_MAX_AGE) {
   const attributes = ['Path=/', 'HttpOnly', 'SameSite=Lax', `Max-Age=${maxAge}`];
   if (url.protocol === 'https:' || !isLocal(url.hostname)) attributes.push('Secure');
   return `${SESSION_COOKIE}=${token}; ${attributes.join('; ')}`;
@@ -151,9 +154,9 @@ export async function readSession(db, key, cookieHeader, now = new Date()) {
     await deleteSession(db, token);
     return null;
   }
-  await db.prepare('UPDATE sessions SET last_used_at = MAX(last_used_at, ?) WHERE token_hash = ?')
-    .bind(now.toISOString(), row.token_hash).run();
-  return { token, regions: vault, email: primaryLabel(vault, row.email), expiresAt: row.expires_at };
+  await db.prepare('UPDATE sessions SET last_used_at = MAX(last_used_at, ?), expires_at = ? WHERE token_hash = ?')
+    .bind(now.toISOString(), new Date(now.getTime() + SESSION_TTL_SECONDS * 1000).toISOString(), row.token_hash).run();
+  return { token, regions: vault, email: primaryLabel(vault, row.email), expiresAt: new Date(now.getTime() + SESSION_TTL_SECONDS * 1000).toISOString() };
 }
 
 export function regionEntry(session, region) {

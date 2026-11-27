@@ -6,28 +6,42 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-b13a22.svg)](LICENSE)
 [![Release](https://img.shields.io/github/v/release/nkanf-dev/pico-store-lab?include_prereleases&color=b13a22)](https://github.com/nkanf-dev/pico-store-lab/releases)
 
-[简体中文](README.zh-CN.md) · [Website](https://pico.kanglives.top/en/) · [Installation guide](https://pico.kanglives.top/en/guides/install-global-apps/) · [Download a client](https://pico.kanglives.top/en/download/)
+[简体中文](README.zh-CN.md) · [Website](https://pico.qn0505.cc.cd/en/) · [Installation guide](https://pico.qn0505.cc.cd/en/guides/install-global-apps/) · [Download a client](https://pico.qn0505.cc.cd/en/download/)
 
 Looking for VRChat, YouTube VR or Virtual Desktop on a PICO headset with the China-region store? PICO Store Lab helps you find the PICO version, download it with your PICO international account, and install it without changing the headset's region. Apps that use PICO accounts can use international sign-in adaptation.
 
 Use the website to save an APK to your computer, or use the Android app to download and install on your headset.
 
-**[VRChat for PICO](https://pico.kanglives.top/en/apps/vrchat/)** · **[YouTube VR for PICO](https://pico.kanglives.top/en/apps/youtube-vr/)** · **[Virtual Desktop for PICO](https://pico.kanglives.top/en/apps/virtual-desktop/)** · [Browse all apps](https://pico.kanglives.top/en/)
+**[VRChat for PICO](https://pico.qn0505.cc.cd/en/apps/vrchat/)** · **[YouTube VR for PICO](https://pico.qn0505.cc.cd/en/apps/youtube-vr/)** · **[Virtual Desktop for PICO](https://pico.qn0505.cc.cd/en/apps/virtual-desktop/)** · [Browse all apps](https://pico.qn0505.cc.cd/en/)
 
-![PICO Store Lab homepage with app search](assets/screenshots/website-home-en.webp)
+![PICO Store Lab homepage with app search](assets/screenshots/website-home-en.png)
+
+## Website
+
+The website is split into standalone **Home**, **Search**, **All apps**, and **App details** pages. The selected store region and headset stay in the URL, so switching devices refreshes the catalog and download compatibility without losing your place.
+
+- **Search** finds apps by name in the selected store, then filters results by category, price and sort order.
+- **All apps** loads the complete catalog for the selected headset. The same filter menus live behind a collapsed **Filters** button, and every column header sorts the list.
+- **App details** shows the store metadata, supported headsets, screenshots and download panel for the selected region and device. Apps listed only for another headset still open from search.
+
+On the China storefront, JigSpace and WPS Office stay in the first and third recommendation slots; the middle card switches between **PICO TV** on PICO Space Pro and **PICO Video** on other headsets.
+
+![Search page with category, price and sort menus](assets/screenshots/website-search-filters-en.png)
+
+![All apps page with the collapsed filter panel open](assets/screenshots/website-all-apps-filters-en.png)
 
 <a id="player-guide"></a>
 ## Download and install
 
 You’ll need a **PICO international account**. Don’t have one? [Register on PICO’s website](https://sso-global.picoxr.com/) by choosing **Sign Up**, then return here to sign in.
 
-The [installation guide](https://pico.kanglives.top/en/guides/install-global-apps/) covers account registration, downloading, installing, and common questions. For apps that use PICO accounts, follow the [international sign-in guide](https://pico.kanglives.top/en/guides/international-sign-in/). The [technical guide](https://pico.kanglives.top/en/guides/how-adaptation-works/) explains how adaptation works.
+The [installation guide](https://pico.qn0505.cc.cd/en/guides/install-global-apps/) covers account registration, downloading, installing, and common questions. For apps that use PICO accounts, follow the [international sign-in guide](https://pico.qn0505.cc.cd/en/guides/international-sign-in/). The [technical guide](https://pico.qn0505.cc.cd/en/guides/how-adaptation-works/) explains how adaptation works.
 
 App availability depends on your account’s region. For paid apps, purchase them in PICO Store before downloading.
 
 ### 1. Download from the website
 
-1. Open the [VRChat](https://pico.kanglives.top/en/apps/vrchat/) or [YouTube VR](https://pico.kanglives.top/en/apps/youtube-vr/) page, or [search for another app](https://pico.kanglives.top/en/).
+1. Open the [VRChat](https://pico.qn0505.cc.cd/en/apps/vrchat/) or [YouTube VR](https://pico.qn0505.cc.cd/en/apps/youtube-vr/) page, or [search for another app](https://pico.qn0505.cc.cd/en/).
 2. In **Web download**, enter your PICO account email, choose **Send code**, then enter the code from your inbox and choose **Sign in**.
 3. For a free app you haven’t added to your account yet, choose **Get free app**.
 4. Choose **Download APK**. Once it finishes, install the file on your headset using its APK installer or ADB.

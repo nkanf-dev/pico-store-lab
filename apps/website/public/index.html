@@ -11,6 +11,7 @@
   <link rel="apple-touch-icon" href="/apple-touch-icon.png">
   <link rel="stylesheet" href="/style.css">
   <link rel="stylesheet" href="/i18n.css">
+  <link rel="stylesheet" href="/store.css">
   <script type="module" src="/app.js"></script>
 </head>
 <body>
@@ -44,6 +45,34 @@
         <p id="search-status" role="status" aria-live="polite"></p>
         <div id="search-results" class="search-results"></div>
       </section>
+      <section id="all-apps" class="all-apps" aria-labelledby="all-apps-heading">
+        <div class="all-apps-header">
+          <div class="all-apps-heading-copy">
+            <p class="eyebrow"><span class="indicator"></span><span data-i18n="allAppsEyebrow">PICO STORE / FULL CATALOG</span></p>
+            <h2 id="all-apps-heading" data-i18n="allAppsLabel">All apps</h2>
+            <p class="all-apps-sub" data-i18n="allAppsHint">Every app in the store, newest update first.</p>
+          </div>
+          <div class="all-apps-stat" aria-hidden="true"><strong id="all-apps-count">—</strong><span data-i18n="allAppsCountLabel">APPS</span></div>
+        </div>
+        <div class="all-apps-controls">
+          <button id="all-apps-load" type="button" data-i18n="loadAllApps">Load all apps</button>
+          <div id="all-apps-tools" class="all-apps-tools" hidden>
+            <label class="all-apps-search" for="all-apps-query"><span data-i18n="allAppsSearchLabel">Filter</span><input id="all-apps-query" type="search" maxlength="80" placeholder="Name or publisher" data-i18n-placeholder="allAppsSearchPlaceholder"></label>
+            <label class="all-apps-sort-label" for="all-apps-sort"><span data-i18n="sortLabel">Sort</span><select id="all-apps-sort">
+              <option value="updated" data-i18n="sortUpdated">Recently updated</option>
+              <option value="name" data-i18n="sortName">Name A–Z</option>
+              <option value="rating" data-i18n="sortRating">Rating</option>
+            </select></label>
+          </div>
+          <span id="all-apps-status" class="all-apps-status" role="status" aria-live="polite"></span>
+        </div>
+        <div id="all-apps-results" class="all-apps-results" hidden></div>
+        <nav id="all-apps-pagination" class="all-apps-pagination" aria-label="All apps pages" hidden>
+          <button id="all-apps-prev" type="button" data-i18n="allAppsPrev">← Previous</button>
+          <span id="all-apps-page" class="all-apps-page">1 / 1</span>
+          <button id="all-apps-next" type="button" data-i18n="allAppsNext">Next →</button>
+        </nav>
+      </section>
       <section id="catalog" class="section-head" aria-label="Recommended apps"><span data-i18n="catalogLabel">01 / RECOMMENDED</span><span data-i18n="catalogHint">CHOOSE AN APP</span></section>
       <div id="catalog-items" class="catalog-items" role="group" aria-label="Available apps"></div>
       <section class="section-head" aria-label="Favorites"><span data-i18n="favoritesLabel">FAVORITES</span><span data-i18n="favoritesHint">SAVED ON THIS DEVICE</span></section>
@@ -51,9 +80,9 @@
       <section id="app-details" class="app-detail" aria-labelledby="release-heading" tabindex="-1">
         <div class="detail-heading-row"><p class="eyebrow"><span class="indicator"></span><span data-i18n="currentLabel">02 / APP DETAILS</span></p><span id="status-pill" class="status" role="status"></span></div>
         <div class="app-overview">
-          <div id="app-cover-frame" class="app-cover-frame" hidden><img id="app-cover" alt="" loading="lazy" referrerpolicy="no-referrer"></div>
+          <div id="app-cover-frame" class="app-cover-frame" hidden><img id="app-cover" alt=""></div>
           <div class="app-overview-copy">
-            <div class="app-identity"><img id="app-icon" alt="" width="72" height="72" hidden referrerpolicy="no-referrer"><div><p id="app-publisher" class="app-publisher"></p><h2 id="release-heading">—</h2></div></div>
+            <div class="app-identity"><img id="app-icon" alt="" width="72" height="72" hidden><div><p id="app-publisher" class="app-publisher"></p><h2 id="release-heading">—</h2></div></div>
             <p id="app-summary" class="app-summary"></p>
             <p id="adaptation-note" class="adaptation-note" hidden></p>
             <p id="app-price" class="app-price"></p>
@@ -98,17 +127,13 @@
             </form>
           </div>
           <div id="cn-login" hidden>
-            <p class="account-register">
-              <span data-i18n="cnRegisterIntro">Need a China-region PICO account?</span>
-              <a href="https://sso.picoxr.com/passport" target="_blank" rel="noopener noreferrer" data-i18n="cnRegisterLink">Register on PICO’s China website ↗</a>
-              <span class="register-hint" data-i18n="cnRegisterHint">New numbers must finish registration on the official website before signing in here.</span>
-            </p>
-            <button id="cn-browser-login" type="button" class="primary" data-i18n="cnBrowserLogin">Sign in through the official PICO window (recommended)</button>
-            <p id="cn-browser-status" role="status" aria-live="polite" class="muted"></p>
-            <div class="login-divider"><span data-i18n="orSmsLogin">Or sign in with an SMS code</span></div>
+            <div class="login-region-head">
+              <p class="eyebrow"><span class="indicator"></span><span data-i18n="cnLoginEyebrow">PICO CHINA / ACCOUNT</span></p>
+              <span class="login-region-code">CN</span>
+            </div>
             <form id="cn-account-form" class="account-form" autocomplete="off">
-              <label for="cn-mobile" data-i18n="mobileLabel">China mobile number</label>
-              <div class="field-row">
+              <label for="cn-mobile" data-i18n="mobileLabel">Mobile number</label>
+              <div class="field-row phone-row">
                 <input id="cn-country" class="country-code" inputmode="numeric" pattern="[1-9][0-9]{0,2}" maxlength="3" value="86" aria-label="Country code">
                 <input id="cn-mobile" required inputmode="numeric" pattern="[0-9]{5,14}" maxlength="14" placeholder="13800138000" data-i18n-placeholder="mobilePlaceholder" aria-describedby="cn-account-status">
                 <button id="cn-send-code" type="button" data-i18n="sendCode">Send code</button>
@@ -117,8 +142,10 @@
                 <input id="cn-code" required inputmode="numeric" pattern="[0-9]{6}" maxlength="6" placeholder="SMS code" data-i18n-placeholder="smsCodePlaceholder" aria-describedby="cn-account-status">
                 <button id="cn-sign-in" type="submit" data-i18n="signIn">Sign in</button>
               </div>
-              <p id="cn-account-status" role="status" aria-live="polite" class="muted"></p>
+              <p id="cn-account-status" class="account-status" role="status" aria-live="polite"></p>
             </form>
+            <p class="login-register"><span data-i18n="cnRegisterIntro">Need a China-region PICO account?</span> <a href="https://sso.picoxr.com/passport" target="_blank" rel="noopener noreferrer" data-i18n="cnRegisterLink">Register on PICO’s China site ↗</a></p>
+            <p class="login-note" data-i18n="cnLoginNote">This device stays signed in for 30 days and renews when you use it.</p>
           </div>
           <div id="download-card" class="download-card" hidden>
             <p class="label" data-i18n="apkLabel">APK</p>
