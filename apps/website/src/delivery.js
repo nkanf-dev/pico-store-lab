@@ -11,10 +11,11 @@
 
 import {
   makeAccountItemRequest, makeAccountRequest, makeDownloadInfoRequest, makeFreeAcquisitionRequest,
-  makeMobileAccountRequest, parseDownloadInfo, parseFreeAcquisition, parseOfficialJson, parsePublicItem,
+  parseDownloadInfo, parseFreeAcquisition, parseOfficialJson, parsePublicItem,
 } from '@nkanf-dev/pico-store-sdk/pico';
 import { responseLength } from './apk-stream.js';
 import { DeliveryError } from './delivery-error.js';
+import { loginWithCnSso, sendCnSsoCode } from './cn-sso.js';
 export { DeliveryError } from './delivery-error.js';
 
 const MAX_JSON_BYTES = 4 * 1024 * 1024;
@@ -101,24 +102,15 @@ export async function loginWithCode(email, code, storeOptions = {}, fetchImpl = 
   return parseLoginAuth(await sendJson(request, fetchImpl));
 }
 
-// China-region SMS. The direct Matrix endpoint is known to answer with PICO
-// error 7 (rate limited) for some networks; the numeric code is surfaced so the
-// UI can report it honestly instead of resending automatically.
+// China-region SMS uses PICO's official SSO web endpoints. The headset Matrix
+// endpoint is device-risk-controlled and answers error 7 for server-side
+// callers; the SSO web endpoint is the one the official sign-in page uses.
 export async function sendMobileVerificationCode(mobile, options = {}, fetchImpl = fetch) {
-  const { countryCode = '86', storeOptions = {} } = options;
-  const request = makeMobileAccountRequest('send-code', mobile, undefined, { countryCode, storeOptions });
-  const response = await sendJson(request, fetchImpl);
-  if (response.data?.message !== 'success') {
-    const code = response.data?.data?.error_code;
-    throw new DeliveryError('account_unavailable', 502,
-      Number.isInteger(code) ? { upstreamCode: code } : {});
-  }
+  return sendCnSsoCode(mobile, options, fetchImpl);
 }
 
 export async function loginWithMobile(mobile, code, options = {}, fetchImpl = fetch) {
-  const { countryCode = '86', storeOptions = {} } = options;
-  const request = makeMobileAccountRequest('login', mobile, code, { countryCode, storeOptions });
-  return parseLoginAuth(await sendJson(request, fetchImpl));
+  return loginWithCnSso(mobile, code, options, fetchImpl);
 }
 
 export async function fetchAccountItem(target, auth, storeOptions = {}, fetchImpl = fetch) {

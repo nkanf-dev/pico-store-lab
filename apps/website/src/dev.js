@@ -12,7 +12,7 @@ if (!process.env.SESSION_SECRET) console.warn('SESSION_SECRET unset; using a loc
 const env = { DB: db, SESSION_SECRET: devSecret };
 const server = createDevServer(env);
 
-const port = Number(process.env.PORT || 8787);
+const port = Number(process.env.PORT || 8791);
 server.listen(port, '127.0.0.1', () => console.log(`Release page: http://127.0.0.1:${port}`));
 checkForRelease(env).then(result => {
   console.log(result.ok ? 'PICO public release checked' : 'PICO public release unavailable; showing last snapshot');

@@ -1,4 +1,7 @@
 const $ = id => document.getElementById(id);
+// Detail pages intentionally contain only the detail/downloader sections. The
+// shared script still runs there, so optional controls are bound defensively.
+const on = (id, event, handler) => { const element = $(id); if (element) element.addEventListener(event, handler); };
 const translations = {
   "en": {
     "indexLabel": "PICO APP CATALOG",
@@ -14,6 +17,30 @@ const translations = {
     "priceAll": "All",
     "priceFree": "Free",
     "pricePaid": "Paid",
+    "allAppsLabel": "All apps",
+    "allAppsEyebrow": "PICO STORE / FULL CATALOG",
+    "allAppsHint": "Every app in the store, newest update first.",
+    "allAppsCountLabel": "APPS",
+    "loadAllApps": "Load all apps",
+    "allAppsLoading": "Loading the full store…",
+    "allAppsLoaded": "apps",
+    "allAppsEmpty": "No apps found.",
+    "allAppsFailed": "Could not load the app list. Please try again.",
+    "allAppsNoMatch": "No app matches this filter.",
+    "allAppsSearchLabel": "Filter",
+    "allAppsSearchPlaceholder": "Name or publisher",
+    "allAppsPrev": "← Previous",
+    "allAppsNext": "Next →",
+    "allAppsRange": "Showing {start}–{end} of {total}",
+    "allAppsTableApp": "App / publisher",
+    "allAppsTableCategory": "Category",
+    "allAppsTableUpdated": "Updated",
+    "allAppsTableRating": "Rating",
+    "allAppsTablePrice": "Price",
+    "sortLabel": "Sort",
+    "sortUpdated": "Recently updated",
+    "sortName": "Name A–Z",
+    "sortRating": "Rating",
     "favoritesLabel": "FAVORITES",
     "favoritesHint": "SAVED ON THIS DEVICE",
     "favoriteAdd": "Add to favorites ☆",
@@ -91,6 +118,7 @@ const translations = {
     "errInvalidCode": "Enter the verification code from your email.",
     "errAccountRejected": "Sign-in failed. Check your email address and code, or request a new code.",
     "errAccountUnavailable": "PICO sign-in is unavailable. Please try again later.",
+    "errAccountSessionMissing": "PICO accepted the code but did not return a web session. Please request a new code; if it repeats, sign in through the official PICO app first.",
     "errInvalidItemId": "Could not load this app. Please select it again.",
     "errInvalidPackage": "Could not load this app. Please select it again.",
     "errEntitlementRequired": "Get this app in PICO Store first, then return here to download it.",
@@ -113,6 +141,8 @@ const translations = {
     "aboutApp": "About this app",
     "free": "Free",
     "noAdaptation": "No sign-in adaptation needed",
+    "compatibility": "Compatibility notice",
+    "spaceProOnly": "PICO Space Pro only. It is not in the PICO 4 Ultra catalog; open it from search instead.",
     "publisher": "Publisher",
     "genres": "Category",
     "ageRating": "Age rating",
@@ -140,16 +170,11 @@ const translations = {
     "errInvalidMobile": "Enter a valid mobile number, without the country code.",
     "errInvalidCountryCode": "Enter a valid country code.",
     "errAccountRegistrationRequired": "This number is not registered. Finish sign-up on PICO’s website, then sign in here.",
-    "errSmsRateLimited": "PICO risk control blocked this SMS request (error 7). Official sign-in completes a browser human-verification step this page cannot perform, so requesting codes repeatedly will not help; use the official-window sign-in above instead.",
-    "cnBrowserLogin": "Sign in through the official PICO window (recommended)",
-    "orSmsLogin": "Or sign in with an SMS code",
-    "cnBrowserStarting": "Opening the official PICO sign-in window…",
-    "cnBrowserWaiting": "Complete phone + SMS sign-in (and any slider) in the pop-up PICO window. It closes automatically when done.",
-    "cnBrowserSuccess": "Signed in to the China store.",
-    "cnBrowserCancelled": "The sign-in window was closed before signing in.",
-    "cnBrowserTimeout": "Sign-in timed out. Start again and finish within 5 minutes.",
-    "cnBrowserLocalOnly": "Official-window sign-in only works when running this site locally (npm run dev). On the hosted site, use the Python CLI: pico-store-py --region cn login-window.",
-    "cnBrowserError": "Could not complete official-window sign-in. Make sure Edge or Chrome (or another Chromium browser) is installed and try again."
+    "errSmsRateLimited": "PICO temporarily blocked SMS sending. Wait a few minutes, then try again.",
+    "errInvalidSmsCode": "The SMS code is incorrect. Check it and try again.",
+    "cnLoginEyebrow": "PICO CHINA / ACCOUNT",
+    "cnLoginNote": "This device stays signed in for 30 days and renews when you use it.",
+    "errCodeExpired": "The code request expired. Request a new SMS code."
   },
   "zh-CN": {
     "indexLabel": "PICO 应用目录",
@@ -165,6 +190,30 @@ const translations = {
     "priceAll": "全部",
     "priceFree": "免费",
     "pricePaid": "付费",
+    "allAppsLabel": "全部应用",
+    "allAppsEyebrow": "PICO 商店 / 全量目录",
+    "allAppsHint": "商店里的每一款应用，按最近更新时间排列。",
+    "allAppsCountLabel": "款应用",
+    "loadAllApps": "拉取全部应用",
+    "allAppsLoading": "正在拉取商店全量目录…",
+    "allAppsLoaded": "款应用",
+    "allAppsEmpty": "没有找到应用。",
+    "allAppsFailed": "无法加载应用列表，请稍后重试。",
+    "allAppsNoMatch": "没有符合筛选条件的应用。",
+    "allAppsSearchLabel": "筛选",
+    "allAppsSearchPlaceholder": "名称或发行商",
+    "allAppsPrev": "← 上一页",
+    "allAppsNext": "下一页 →",
+    "allAppsRange": "显示 {start}–{end} / 共 {total} 款",
+    "allAppsTableApp": "应用 / 发行商",
+    "allAppsTableCategory": "分类",
+    "allAppsTableUpdated": "更新",
+    "allAppsTableRating": "评分",
+    "allAppsTablePrice": "价格",
+    "sortLabel": "排序",
+    "sortUpdated": "最近更新",
+    "sortName": "名称 A–Z",
+    "sortRating": "评分",
     "favoritesLabel": "收藏",
     "favoritesHint": "保存在此设备",
     "favoriteAdd": "加入收藏 ☆",
@@ -242,6 +291,7 @@ const translations = {
     "errInvalidCode": "请输入邮件中的验证码。",
     "errAccountRejected": "登录失败，请检查邮箱和验证码，或重新获取验证码。",
     "errAccountUnavailable": "暂时无法登录 PICO，请稍后重试。",
+    "errAccountSessionMissing": "PICO 已接受验证码，但没有返回网页登录状态。请重新获取验证码；若仍失败，请先用官方 PICO 客户端登录一次。",
     "errInvalidItemId": "无法加载这款应用，请重新选择。",
     "errInvalidPackage": "无法加载这款应用，请重新选择。",
     "errEntitlementRequired": "请先在 PICO 商店获取这款应用，再回到这里下载。",
@@ -264,6 +314,8 @@ const translations = {
     "aboutApp": "应用介绍",
     "free": "免费",
     "noAdaptation": "无需登录适配",
+    "compatibility": "兼容性提示",
+    "spaceProOnly": "仅支持 PICO Space Pro，不会出现在按 PICO 4 Ultra 生成的“全部应用”列表；仍可从搜索结果进入详情。",
     "publisher": "开发商",
     "genres": "类型",
     "ageRating": "年龄分级",
@@ -291,16 +343,11 @@ const translations = {
     "errInvalidMobile": "请输入有效的手机号（不含国家码）。",
     "errInvalidCountryCode": "请输入有效的国家码。",
     "errAccountRegistrationRequired": "该手机号尚未注册，请先在 PICO 官网完成注册，再回到这里登录。",
-    "errSmsRateLimited": "PICO 风控拦截了本次短信请求（错误 7）。官方登录需要在浏览器中完成人机验证，本页面无法代为完成，重复请求也不会成功；请改用上方的官网窗口登录。",
-    "cnBrowserLogin": "使用官网窗口登录（推荐）",
-    "orSmsLogin": "或使用短信验证码登录",
-    "cnBrowserStarting": "正在打开 PICO 官方登录窗口…",
-    "cnBrowserWaiting": "请在弹出的 PICO 窗口中完成手机号 + 短信验证码登录（含滑块验证），完成后窗口会自动关闭。",
-    "cnBrowserSuccess": "已登录国区商店。",
-    "cnBrowserCancelled": "登录窗口在完成登录前被关闭。",
-    "cnBrowserTimeout": "登录超时，请重新发起并在 5 分钟内完成。",
-    "cnBrowserLocalOnly": "官网窗口登录仅在本地运行本网站（npm run dev）时可用；在线部署请改用命令行：pico-store-py --region cn login-window。",
-    "cnBrowserError": "官网窗口登录未能完成，请确认已安装 Edge 或 Chrome（或其他 Chromium 浏览器）后重试。"
+    "errSmsRateLimited": "PICO 暂时限制了短信发送频率，请等待几分钟后重试。",
+    "errInvalidSmsCode": "短信验证码不正确，请核对后重试。",
+    "errCodeExpired": "验证码请求已过期，请重新获取短信验证码。",
+    "cnLoginEyebrow": "PICO 中国区 / 账号",
+    "cnLoginNote": "登录状态会保存在此设备 30 天，使用时会自动续期。"
   }
 };
 
@@ -315,6 +362,13 @@ let locale = requested === 'en' || requested === 'zh-CN'
 let currentState = null;
 let catalogItems = initialCatalog;
 let searchItems = [];
+let allApps = [];
+let allAppsLoaded = false;
+let allAppsLoading = false;
+let allAppsSort = 'updated';
+let allAppsPage = 1;
+let allAppsQuery = '';
+const ALL_APPS_PAGE_SIZE = 24;
 const selectedQuery = new URL(location.href).searchParams;
 let selectedId = pageContext.itemId || (/^[0-9]{1,20}$/.test(selectedQuery.get('itemId') || '') ? selectedQuery.get('itemId') : null);
 let fromSnapshot = false;
@@ -323,12 +377,25 @@ let detailRequest = 0;
 let favorites = [];
 try { favorites = JSON.parse(localStorage.getItem('pico-store-favorites') || '[]'); } catch { favorites = []; }
 if (!Array.isArray(favorites)) favorites = [];
-let region = localStorage.getItem('pico-store-region') === 'cn' ? 'cn' : 'global';
+let region = selectedQuery.get('region') === 'cn' ? 'cn'
+  : selectedQuery.get('region') === 'global' ? 'global'
+    : localStorage.getItem('pico-store-region') === 'cn' ? 'cn' : 'global';
 const storedPrice = localStorage.getItem('pico-store-price-filter');
 let priceFilter = storedPrice === 'free' || storedPrice === 'paid' ? storedPrice : 'all';
+const DEVICE_CODES = ['B3110', 'A9210', 'A8A10', 'A8110', 'A7H10'];
+const DEFAULT_DEVICE = 'A9210';
+const SPACE_PRO_VERIFIED = new Set(['com.JigSpace.JigViewer', 'cn.wps.moffice_eng']);
+const storedDevice = localStorage.getItem('pico-store-device');
+let device = DEVICE_CODES.includes(selectedQuery.get('device') || '') ? selectedQuery.get('device')
+  : DEVICE_CODES.includes(storedDevice || '') ? storedDevice
+    : DEFAULT_DEVICE;
 let sessions = { global: { authenticated: false, label: '' }, cn: { authenticated: false, label: '' } };
 
-function t(key) { return translations[locale][key]; }
+function t(key, vars = null) {
+  let text = translations[locale][key] ?? translations.en[key] ?? key;
+  if (vars) for (const [name, value] of Object.entries(vars)) text = text.replaceAll(`{${name}}`, String(value));
+  return text;
+}
 
 function formatTime(value) {
   if (!value) return t('never');
@@ -337,24 +404,30 @@ function formatTime(value) {
     : new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' }).format(date);
 }
 
+function formatTableDate(value) {
+  if (!value) return '—';
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? '—' : new Intl.DateTimeFormat(locale, { dateStyle: 'medium' }).format(date);
+}
+
 function applyLocale() {
   document.documentElement.lang = locale;
   for (const element of document.querySelectorAll('[data-i18n]')) {
     element.textContent = t(element.dataset.i18n);
   }
   for (const element of document.querySelectorAll('[data-i18n-placeholder]')) element.placeholder = t(element.dataset.i18nPlaceholder);
-  $('language').textContent = t('language');
-  $('language').setAttribute('aria-label', t('languageLabel'));
-  const guide = `${locale === 'en' ? '/en' : ''}/guides/install-global-apps/`;
-  if ($('guide-link')) $('guide-link').href = guide;
-  $('workflow-guide-link').href = guide;
+  if ($('language')) {
+    $('language').textContent = t('language');
+    $('language').setAttribute('aria-label', t('languageLabel'));
+  }
   if (!pageContext.seo) document.title = locale === 'en' ? 'PICO Store Lab — Browse and download PICO apps' : 'PICO Store Lab — 浏览与下载 PICO 应用';
-  if (currentState) render(currentState, fromSnapshot);
+  if (currentState && $('app-details')) render(currentState, fromSnapshot);
+  if (allAppsLoaded && $('all-apps-results')) renderAllApps();
   renderAccount();
   renderDownload();
 }
 
-function renderCards(container, items) {
+function renderCards(container, items, showUpdated = false, showScore = false) {
   container.replaceChildren();
   for (const item of items) {
     const button = document.createElement('a');
@@ -366,7 +439,10 @@ function renderCards(container, items) {
     const name = document.createElement('strong');
     name.textContent = item.name;
     const subtitle = document.createElement('span');
-    subtitle.textContent = t('viewApp');
+    const details = [t('viewApp')];
+    if (showUpdated && item.updatedAt) details.push(formatTime(item.updatedAt * 1000));
+    if (showScore && typeof item.score === 'number' && Number.isFinite(item.score)) details.push(`★ ${item.score.toFixed(2)}`);
+    subtitle.textContent = details.join(' · ');
     button.append(name, subtitle);
     if (typeof item.price === 'string' && item.price.trim() !== '') {
       const price = document.createElement('em');
@@ -384,19 +460,194 @@ function renderCards(container, items) {
 }
 
 function renderCatalog() {
-  renderCards($('catalog-items'), catalogItems);
-  renderCards($('search-results'), searchItems);
-  renderCards($('favorite-items'), favorites);
+  // Kept for the legacy template in public/index.html; the generated site uses
+  // dedicated search and catalog pages instead.
+  if ($('catalog-items')) renderCards($('catalog-items'), catalogItems);
 }
 
+function allAppsHref(item) {
+  const base = locale === 'en' ? '/en' : '';
+  const slug = publicPaths[item.itemId];
+  return slug ? `${base}/apps/${slug}/` : `${base}/?itemId=${encodeURIComponent(item.itemId)}&package=${encodeURIComponent(item.packageName)}#app-details`;
+}
+
+function sortedAllApps() {
+  const items = [...allApps];
+  const byUpdated = (a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0);
+  const byName = (a, b) => a.name.localeCompare(b.name, locale);
+  if (allAppsSort === 'name') return items.sort((a, b) => byName(a, b) || byUpdated(a, b));
+  if (allAppsSort === 'rating') return items.sort((a, b) => (b.score ?? -1) - (a.score ?? -1) || byUpdated(a, b));
+  return items.sort((a, b) => byUpdated(a, b) || byName(a, b));
+}
+
+function filteredAllApps() {
+  const query = allAppsQuery.trim().toLocaleLowerCase(locale);
+  const items = sortedAllApps();
+  if (!query) return items;
+  return items.filter(item => [item.name, item.publisher, item.genres]
+    .some(value => String(value ?? '').toLocaleLowerCase(locale).includes(query)));
+}
+
+function allAppsPrice(item) {
+  const price = String(item.price ?? '').trim();
+  if (/^0+(?:\.0+)?$/.test(price)) return t('free');
+  if (!price) return '—';
+  if (item.currency === 'CNY') return `¥${price}`;
+  if (item.currency === 'USD') return `$${price}`;
+  return item.currency ? `${price} ${item.currency}` : price;
+}
+
+function renderAllApps() {
+  if (!allAppsLoaded || !$('all-apps-results')) return;
+  const container = $('all-apps-results');
+  const items = filteredAllApps();
+  const totalPages = Math.max(1, Math.ceil(items.length / ALL_APPS_PAGE_SIZE));
+  allAppsPage = Math.min(Math.max(1, allAppsPage), totalPages);
+  const start = (allAppsPage - 1) * ALL_APPS_PAGE_SIZE;
+  const pageItems = items.slice(start, start + ALL_APPS_PAGE_SIZE);
+  $('all-apps-count').textContent = String(allApps.length);
+  $('all-apps-tools').hidden = false;
+  container.replaceChildren();
+  container.hidden = false;
+
+  if (!items.length) {
+    const empty = document.createElement('p');
+    empty.className = 'all-apps-empty';
+    empty.textContent = allAppsQuery.trim() ? t('allAppsNoMatch') : t('allAppsEmpty');
+    container.append(empty);
+    $('all-apps-status').textContent = '0 / 0';
+    $('all-apps-pagination').hidden = true;
+    return;
+  }
+
+  const header = document.createElement('div');
+  header.className = 'app-row app-row-head';
+  for (const label of ['#', t('allAppsTableApp'), t('allAppsTableCategory'), t('allAppsTableUpdated'), t('allAppsTableRating'), t('allAppsTablePrice'), '']) {
+    const cell = document.createElement('span');
+    cell.textContent = label;
+    header.append(cell);
+  }
+  container.append(header);
+
+  pageItems.forEach((item, index) => {
+    const row = document.createElement('a');
+    row.className = `app-row${item.itemId === selectedId ? ' selected' : ''}`;
+    row.href = allAppsHref(item);
+    if (item.itemId === selectedId) row.setAttribute('aria-current', 'page');
+    row.addEventListener('click', event => {
+      if (pageContext.seo) return;
+      event.preventDefault();
+      selectItem(item.itemId, true);
+    });
+
+    const rank = document.createElement('span');
+    rank.className = 'app-rank';
+    rank.textContent = String(start + index + 1).padStart(3, '0');
+
+    const main = document.createElement('span');
+    main.className = 'app-main';
+    const name = document.createElement('strong');
+    name.textContent = item.name;
+    const publisher = document.createElement('span');
+    publisher.className = 'app-row-publisher';
+    publisher.textContent = item.publisher || t('publicDetail');
+    main.append(name, publisher);
+
+    const category = document.createElement('span');
+    category.className = 'app-category';
+    category.textContent = item.genres || '—';
+
+    const updated = document.createElement('span');
+    updated.className = 'app-updated';
+    updated.textContent = item.updatedAt ? formatTableDate(item.updatedAt * 1000) : '—';
+
+    const rating = document.createElement('span');
+    rating.className = `app-rating${allAppsSort === 'rating' ? ' accent' : ''}`;
+    rating.textContent = typeof item.score === 'number' && Number.isFinite(item.score) ? `★ ${item.score.toFixed(2)}` : '—';
+
+    const price = document.createElement('span');
+    price.className = 'app-price-cell';
+    price.textContent = allAppsPrice(item);
+
+    const arrow = document.createElement('span');
+    arrow.className = 'app-arrow';
+    arrow.textContent = '↗';
+    arrow.setAttribute('aria-hidden', 'true');
+
+    row.append(rank, main, category, updated, rating, price, arrow);
+    container.append(row);
+  });
+
+  $('all-apps-status').textContent = t('allAppsRange', {
+    start: start + 1, end: Math.min(start + ALL_APPS_PAGE_SIZE, items.length), total: items.length,
+  });
+  $('all-apps-page').textContent = `${allAppsPage} / ${totalPages}`;
+  $('all-apps-pagination').hidden = totalPages <= 1;
+  $('all-apps-prev').disabled = allAppsPage <= 1;
+  $('all-apps-next').disabled = allAppsPage >= totalPages;
+}
+
+async function loadAllApps() {
+  if (allAppsLoading) return;
+  allAppsLoading = true;
+  $('all-apps-load').disabled = true;
+  $('all-apps-status').textContent = t('allAppsLoading');
+  try {
+    const response = await fetch(`/api/apps?region=${region}&device=${device}&sort=updated&lang=${locale === 'zh-CN' ? 'zh' : 'en'}`);
+    if (!response.ok) throw new Error('apps unavailable');
+    const result = await response.json();
+    allApps = Array.isArray(result.items) ? result.items : [];
+    allAppsLoaded = true;
+    allAppsPage = 1;
+    allAppsQuery = '';
+    $('all-apps-query').value = '';
+    renderAllApps();
+  } catch {
+    allAppsLoaded = false;
+    allApps = [];
+    $('all-apps-count').textContent = '—';
+    $('all-apps-tools').hidden = true;
+    $('all-apps-results').hidden = true;
+    $('all-apps-pagination').hidden = true;
+    $('all-apps-status').textContent = t('allAppsFailed');
+  } finally {
+    allAppsLoading = false;
+    $('all-apps-load').disabled = false;
+  }
+}
+
+on('all-apps-load', 'click', loadAllApps);
+on('all-apps-sort', 'change', () => {
+  allAppsSort = $('all-apps-sort').value;
+  allAppsPage = 1;
+  renderAllApps();
+});
+on('all-apps-query', 'input', () => {
+  allAppsQuery = $('all-apps-query').value;
+  allAppsPage = 1;
+  renderAllApps();
+});
+on('all-apps-prev', 'click', () => {
+  if (allAppsPage <= 1) return;
+  allAppsPage -= 1;
+  renderAllApps();
+  $('all-apps-results').scrollIntoView({ behavior: 'smooth', block: 'start' });
+});
+on('all-apps-next', 'click', () => {
+  allAppsPage += 1;
+  renderAllApps();
+  $('all-apps-results').scrollIntoView({ behavior: 'smooth', block: 'start' });
+});
+
 async function selectItem(itemId, scroll = false) {
-  const item = [...catalogItems, ...searchItems, ...favorites].find(entry => entry.itemId === itemId);
+  const item = [...catalogItems, ...searchItems, ...favorites, ...allApps].find(entry => entry.itemId === itemId);
   if (!item) return;
   selectedId = itemId;
   document.body?.classList.add('has-selection');
   const request = ++detailRequest;
   invalidateDownload();
   renderCatalog();
+  if (allAppsLoaded) renderAllApps();
   const base = item.state ?? { ...item, latestVersionCode: item.versionCode, releases: [], stale: true };
   render({ ...base, ...itemDetails.get(itemId) }, !item.state);
   if (scroll) {
@@ -405,7 +656,7 @@ async function selectItem(itemId, scroll = false) {
   }
   refreshDownload();
   try {
-    const url = `/api/item?region=${region}&itemId=${encodeURIComponent(item.itemId)}&package=${encodeURIComponent(item.packageName)}`;
+    const url = `/api/item?region=${region}&device=${device}&itemId=${encodeURIComponent(item.itemId)}&package=${encodeURIComponent(item.packageName)}&lang=${locale === 'zh-CN' ? 'zh' : 'en'}`;
     const response = await fetch(url);
     if (!response.ok) throw new Error('item unavailable');
     const detail = await response.json();
@@ -452,8 +703,13 @@ function renderDetails(state) {
   $('app-publisher').textContent = state.publisher || '';
   $('app-summary').textContent = readableText(state.summary);
   const adaptationNote = $('adaptation-note');
-  adaptationNote.hidden = !state.noAdaptationReason;
-  adaptationNote.textContent = state.noAdaptationReason ? `${t('noAdaptation')}: ${state.noAdaptationReason}` : '';
+  const platforms = String(state.supportedPlatforms || '');
+  const spaceProOnly = /space pro/i.test(platforms) && !/4 ultra|pico 4|neo/i.test(platforms);
+  const compatibility = state.noAdaptationReason
+    ? `${t('noAdaptation')}: ${state.noAdaptationReason}`
+    : spaceProOnly && !SPACE_PRO_VERIFIED.has(state.packageName) ? `${t('compatibility')}: ${t('spaceProOnly')}` : '';
+  adaptationNote.hidden = !compatibility;
+  adaptationNote.textContent = compatibility;
   $('app-price').textContent = state.price !== undefined && state.price !== ''
     ? Number(state.price) === 0 ? t('free') : `${state.price} ${state.currency || ''}` : '';
   $('download-selected-name').textContent = state.name || '';
@@ -469,7 +725,7 @@ function renderDetails(state) {
     link.href = url; link.target = '_blank'; link.rel = 'noopener noreferrer';
     const image = document.createElement('img');
     image.src = url; image.alt = `${state.name || ''} — ${t('screenshot')} ${index + 1}`;
-    image.loading = 'lazy'; image.referrerPolicy = 'no-referrer';
+    image.loading = 'eager';
     link.append(image); gallery.append(link);
   }
   gallery.hidden = !gallery.children.length;
@@ -535,16 +791,15 @@ async function search() {
   $('search-status').textContent = t('searching');
   try {
     const priceQuery = priceFilter === 'all' ? '' : `&price=${priceFilter}`;
-    const response = await fetch(`/api/search?region=${region}&q=${encodeURIComponent(word)}${priceQuery}`);
+    const response = await fetch(`/api/search?region=${region}&device=${device}&q=${encodeURIComponent(word)}${priceQuery}`);
     if (!response.ok) throw new Error('search unavailable');
     const result = await response.json();
     searchItems = result.items ?? [];
-    renderCatalog();
     $('search-status').textContent = searchItems.length ? '' : t('searchEmpty');
   } catch { $('search-status').textContent = t('searchFailed'); }
 }
 
-$('search-form').addEventListener('submit', event => { event.preventDefault(); search(); });
+on('search-form', 'submit', event => { event.preventDefault(); search(); });
 
 function renderPriceFilter() {
   for (const button of document.querySelectorAll('.price-option')) {
@@ -565,17 +820,31 @@ for (const button of document.querySelectorAll('.price-option')) {
   });
 }
 renderPriceFilter();
-$('favorite-toggle').addEventListener('click', () => {
+on('favorite-toggle', 'click', () => {
   if (!currentState?.itemId) return;
-  favorites = favorites.some(item => item.itemId === currentState.itemId)
-    ? favorites.filter(item => item.itemId !== currentState.itemId)
-    : [...favorites, { itemId: currentState.itemId, packageName: currentState.packageName, name: currentState.name }];
+  favorites = favorites.some(item => String(item.itemId) === String(currentState.itemId))
+    ? favorites.filter(item => String(item.itemId) !== String(currentState.itemId))
+    : [...favorites, {
+      itemId: currentState.itemId,
+      packageName: currentState.packageName,
+      name: currentState.name,
+      slug: currentState.slug,
+      iconUrl: currentState.iconUrl,
+      publisher: currentState.publisher,
+      genres: currentState.genres,
+      price: currentState.price,
+      currency: currentState.currency,
+      score: currentState.score,
+      updatedAt: currentState.updatedAt,
+    }];
   localStorage.setItem('pico-store-favorites', JSON.stringify(favorites));
-  renderCatalog();
-  $('favorite-toggle').textContent = t(favorites.some(item => item.itemId === currentState.itemId) ? 'favoriteRemove' : 'favoriteAdd');
+  if ($('favorite-toggle')) $('favorite-toggle').textContent = t(favorites.some(item => String(item.itemId) === String(currentState.itemId)) ? 'favoriteRemove' : 'favoriteAdd');
 });
 
 async function loadState() {
+  // The home page only needs the shared region/language chrome; its cards are
+  // already server-rendered, so do not fetch the release catalog there.
+  if (pageContext.page === 'home' && !selectedId) return;
   // Curated public content is immediately useful even when an upstream lookup fails.
   if (pageContext.seo && selectedId) {
     const initial = initialCatalog.find(item => item.itemId === selectedId);
@@ -585,7 +854,6 @@ async function loadState() {
     }
   }
   function chooseSelection() {
-    renderCatalog();
     if (selectedId && !catalogItems.some(item => item.itemId === selectedId)) {
       const packageName = selectedQuery.get('package') || '';
       if (/^[A-Za-z0-9_]+(?:\.[A-Za-z0-9_]+)+$/.test(packageName)) {
@@ -649,19 +917,23 @@ $('language').addEventListener('click', event => {
 const ERROR_KEYS = {
   not_authenticated: 'errNotAuthenticated', rate_limited: 'errRateLimited', invalid_email: 'errInvalidEmail',
   invalid_code: 'errInvalidCode', account_rejected: 'errAccountRejected', account_unavailable: 'errAccountUnavailable',
+  account_session_missing: 'errAccountSessionMissing',
   invalid_mobile: 'errInvalidMobile', invalid_country_code: 'errInvalidCountryCode',
-  account_registration_required: 'errAccountRegistrationRequired',
+  account_registration_required: 'errAccountRegistrationRequired', code_expired: 'errCodeExpired',
   invalid_item_id: 'errInvalidItemId', invalid_package: 'errInvalidPackage',
   entitlement_required: 'errEntitlementRequired',
   apk_unavailable: 'errUnavailable', apk_metadata_unavailable: 'errUnavailable', entitlement_unconfirmed: 'errUnavailable',
   upstream_unreachable: 'errUnavailable', upstream_response_too_large: 'errUnavailable',
   upstream_invalid_response: 'errUnavailable',
   storage_not_configured: 'errMisconfigured', session_secret_missing: 'errMisconfigured',
-  browser_login_local_only: 'cnBrowserLocalOnly',
 };
+const cnErrorKey = payload => payload?.error === 'invalid_code' ? 'errInvalidSmsCode' : errorKey(payload);
 
 let account = { authenticated: false, email: null };
 let cnAccountStatusKey = null;
+let cnMobileTicket = '';
+let cnTicketMobile = '';
+let cnSsoCookies = {};
 
 function syncActiveAccount() {
   const active = sessions[region] ?? { authenticated: false, label: '' };
@@ -702,7 +974,9 @@ function newDownloadReport(itemId, packageName) {
 }
 
 function renderReport() {
-  $('download-diagnostics').hidden = !downloadReport;
+  const diagnostics = $('download-diagnostics');
+  if (!diagnostics) return;
+  diagnostics.hidden = !downloadReport;
   $('report-reference').hidden = !downloadReport?.failure;
   $('report-reference').textContent = downloadReport ? `${t('reportReference')}: ${downloadReport.reportId}` : '';
   $('diagnostic-report').textContent = downloadReport ? JSON.stringify(downloadReport, null, 2) : '';
@@ -713,7 +987,7 @@ async function collectDownloadReport() {
   if (!report) return null;
   if (!report.connection && !report.failure) {
     $('download-status').textContent = t('preparingReport');
-    const query = new URLSearchParams({ itemId: report.application.itemId, region });
+    const query = new URLSearchParams({ itemId: report.application.itemId, region, device });
     if (report.application.packageName) query.set('package', report.application.packageName);
     try {
       const result = await api(`/api/download/diagnostics?${query}`, { signal: AbortSignal.timeout(20_000) });
@@ -763,9 +1037,11 @@ async function api(path, options = {}) {
 }
 
 function renderAccount() {
-  $('account-status').textContent = accountStatusKey ? t(accountStatusKey)
-    : account.authenticated ? `${t('signedInAs')}${account.email ?? ''}` : t('signedOut');
-  $('download-card').hidden = !account.authenticated;
+  if ($('account-status')) {
+    $('account-status').textContent = accountStatusKey ? t(accountStatusKey)
+      : account.authenticated ? `${t('signedInAs')}${account.email ?? ''}` : t('signedOut');
+  }
+  if ($('download-card')) $('download-card').hidden = !account.authenticated;
 }
 
 function setAccountStatus(key = null) {
@@ -774,7 +1050,9 @@ function setAccountStatus(key = null) {
 }
 
 function renderDownload() {
-  $('download-card').hidden = !account.authenticated;
+  const downloadCard = $('download-card');
+  if (!downloadCard) return;
+  downloadCard.hidden = !account.authenticated;
   renderReport();
   const button = $('download-apk');
   const direct = $('download-direct');
@@ -809,39 +1087,107 @@ function renderDownload() {
 function invalidateDownload(message) {
   apkRequest += 1;
   downloadReport = null;
-  $('download-diagnostics').open = false;
+  if ($('download-diagnostics')) $('download-diagnostics').open = false;
   apk = message ? { available: false, message } : null;
   renderDownload();
 }
 
 function setAccountBusy(busy) {
   accountBusy = busy;
-  for (const id of ['send-code', 'sign-in', 'cn-send-code', 'cn-sign-in', 'cn-browser-login', 'sign-out']) $(id).disabled = busy;
+  for (const id of ['send-code', 'sign-in', 'cn-send-code', 'cn-sign-in', 'sign-out']) $(id).disabled = busy;
 }
 
 function setCnAccountStatus(key = null) {
   cnAccountStatusKey = key;
-  $('cn-account-status').textContent = key ? t(key) : '';
+  const status = $('cn-account-status');
+  if (!status) return;
+  status.textContent = key ? t(key) : '';
+  status.classList.toggle('is-error', Boolean(key?.startsWith('err')));
 }
 
-function setCnBrowserStatus(key = null) {
-  $('cn-browser-status').textContent = key ? t(key) : '';
+function syncContextLocation() {
+  const current = new URL(location.href);
+  current.searchParams.set('region', region);
+  current.searchParams.set('device', device);
+  history.replaceState(null, '', current);
+}
+
+// Detail pages own their download state. Reloading them makes the app metadata
+// and the APK entitlement lookup use the newly selected store and headset.
+function navigateForContext() {
+  localStorage.setItem('pico-store-region', region);
+  localStorage.setItem('pico-store-device', device);
+  const target = new URL(location.href);
+  target.searchParams.set('region', region);
+  target.searchParams.set('device', device);
+  location.assign(target.href);
+}
+
+function renderHomeRegion() {
+  if (pageContext.page !== 'home') return;
+  for (const slot of document.querySelectorAll('.home-region[data-home-region]')) {
+    slot.hidden = slot.dataset.homeRegion !== region;
+    const anchor = slot.querySelector('[data-catalog-anchor]');
+    if (anchor) anchor.id = slot.hidden ? '' : 'catalog';
+  }
+  renderCnFeatured();
+}
+
+function renderCnFeatured() {
+  if (pageContext.page !== 'home') return;
+  const spacePro = device === 'B3110';
+  for (const card of document.querySelectorAll('.home-region[data-home-region="cn"] .featured-card')) {
+    if (card.dataset.cnFeatured) {
+      card.hidden = card.dataset.cnFeatured !== (spacePro ? 'space' : 'other');
+    }
+    const target = new URL(card.href, location.href);
+    if (target.searchParams.get('region') === 'cn') {
+      target.searchParams.set('device', device);
+      card.href = target.href;
+    }
+  }
+}
+
+function applyDevice() {
+  localStorage.setItem('pico-store-device', device);
+  if ($('device-select')) $('device-select').value = device;
+  renderCnFeatured();
+  syncContextLocation();
 }
 
 // Toggle the international email form vs the China SMS form, and reflect the
 // active region's sign-in state in the shared download card.
 function applyRegion({ reloadDetail = true } = {}) {
   localStorage.setItem('pico-store-region', region);
-  $('global-login').hidden = region !== 'global';
-  $('cn-login').hidden = region !== 'cn';
-  $('region-global').setAttribute('aria-selected', String(region === 'global'));
-  $('region-cn').setAttribute('aria-selected', String(region === 'cn'));
-  $('region-global').classList.toggle('active', region === 'global');
-  $('region-cn').classList.toggle('active', region === 'cn');
+  if ($('global-login')) $('global-login').hidden = region !== 'global';
+  if ($('cn-login')) $('cn-login').hidden = region !== 'cn';
+  for (const [id, value] of [['region-global', 'global'], ['region-cn', 'cn']]) {
+    if (!$(`${id}`)) continue;
+    $(`${id}`).setAttribute('aria-selected', String(region === value));
+    $(`${id}`).classList.toggle('active', region === value);
+  }
   const intro = $('download-intro-text');
   if (intro) intro.textContent = region === 'cn' ? t('cnDownloadIntro') : t('downloadIntro');
   const regionTag = $('download-region-tag');
   if (regionTag) regionTag.textContent = `${t('regionLabel')}: ${region === 'cn' ? t('regionCn') : t('regionGlobal')}`;
+  allApps = [];
+  allAppsLoaded = false;
+  allAppsLoading = false;
+  allAppsPage = 1;
+  allAppsQuery = '';
+  for (const id of ['all-apps-query', 'all-apps-tools', 'all-apps-count', 'all-apps-results', 'all-apps-pagination', 'all-apps-status', 'all-apps-load']) {
+    if (!$(id)) continue;
+    if (id === 'all-apps-query') $(id).value = '';
+    if (id === 'all-apps-tools') $(id).hidden = true;
+    if (id === 'all-apps-count') $(id).textContent = '—';
+    if (id === 'all-apps-results') { $(id).replaceChildren(); $(id).hidden = true; }
+    if (id === 'all-apps-pagination') $(id).hidden = true;
+    if (id === 'all-apps-status') $(id).textContent = '';
+    if (id === 'all-apps-load') $(id).disabled = false;
+  }
+  cnMobileTicket = '';
+  cnSsoCookies = {};
+  cnTicketMobile = '';
   syncActiveAccount();
   setAccountStatus();
   setCnAccountStatus();
@@ -851,12 +1197,30 @@ function applyRegion({ reloadDetail = true } = {}) {
 }
 
 for (const [id, value] of [['region-global', 'global'], ['region-cn', 'cn']]) {
-  $(id).addEventListener('click', () => {
+  on(id, 'click', () => {
     if (region === value || accountBusy) return;
     region = value;
+    if (pageContext.page === 'app') {
+      navigateForContext();
+      return;
+    }
     applyRegion();
+    syncContextLocation();
+    renderHomeRegion();
   });
 }
+
+on('device-select', 'change', event => {
+  const next = DEVICE_CODES.includes(event.target.value) ? event.target.value : DEFAULT_DEVICE;
+  if (next === device) return;
+  device = next;
+  if (pageContext.page === 'app') {
+    navigateForContext();
+    return;
+  }
+  applyDevice();
+  syncContextLocation();
+});
 
 function downloadError(error) {
   const canAcquire = error.payload?.canAcquire === true;
@@ -866,7 +1230,7 @@ function downloadError(error) {
 // The app ID alone is not enough to ask PICO for a download, so pair it with
 // whichever package name the catalog, the search results, or the snapshot has.
 function selectedPackage() {
-  const entry = [...catalogItems, ...searchItems, ...favorites]
+  const entry = [...catalogItems, ...searchItems, ...favorites, ...allApps]
     .find(item => item.itemId === selectedId);
   return currentState?.itemId === selectedId ? currentState.packageName : entry?.packageName;
 }
@@ -877,7 +1241,7 @@ async function refreshDownload() {
   const itemId = selectedId;
   const ticket = apkRequest;
   const accountTicket = accountRequest;
-  const query = new URLSearchParams({ itemId, region });
+  const query = new URLSearchParams({ itemId, region, device });
   const packageName = selectedPackage();
   if (packageName) query.set('package', packageName);
   $('download-status').textContent = t('checkingEntitlement');
@@ -936,7 +1300,7 @@ async function refreshAccount() {
   if (account.authenticated) await refreshDownload();
 }
 
-$('send-code').addEventListener('click', async () => {
+on('send-code', 'click', async () => {
   setAccountStatus('sendingCode');
   try {
     await api('/api/account/send-code', { method: 'POST', body: JSON.stringify({ email: $('account-email').value.trim() }) });
@@ -947,7 +1311,7 @@ $('send-code').addEventListener('click', async () => {
   }
 });
 
-$('account-form').addEventListener('submit', async event => {
+on('account-form', 'submit', async event => {
   event.preventDefault();
   if (accountBusy) return;
   accountRequest += 1;
@@ -970,7 +1334,7 @@ $('account-form').addEventListener('submit', async event => {
   }
 });
 
-$('sign-out').addEventListener('click', async () => {
+on('sign-out', 'click', async () => {
   if (accountBusy) return;
   accountRequest += 1;
   setAccountBusy(true);
@@ -990,87 +1354,58 @@ $('sign-out').addEventListener('click', async () => {
   }
 });
 
-$('cn-browser-login').addEventListener('click', async () => {
-  if (accountBusy) return;
-  accountRequest += 1;
-  setAccountBusy(true);
-  invalidateDownload();
-  setCnBrowserStatus('cnBrowserStarting');
-  let authenticated = null;
-  let timer = null;
-  try {
-    const started = await api('/api/local/browser-login/start', { method: 'POST', body: '{}' });
-    setCnBrowserStatus('cnBrowserWaiting');
-    authenticated = await new Promise((resolvePromise) => {
-      const tick = async () => {
-        try {
-          const status = await api(`/api/local/browser-login/status?jobId=${encodeURIComponent(started.jobId)}`);
-          if (status.state === 'authenticated') return resolvePromise(status);
-          if (status.state === 'cancelled') { setCnBrowserStatus('cnBrowserCancelled'); return resolvePromise(null); }
-          if (status.state === 'timeout') { setCnBrowserStatus('cnBrowserTimeout'); return resolvePromise(null); }
-          if (status.state === 'error') { setCnBrowserStatus('cnBrowserError'); return resolvePromise(null); }
-          timer = setTimeout(tick, 1200);
-        } catch (error) {
-          setCnBrowserStatus(errorKey(error.payload) === 'cnBrowserLocalOnly' ? 'cnBrowserLocalOnly' : 'cnBrowserError');
-          resolvePromise(null);
-        }
-      };
-      timer = setTimeout(tick, 800);
-    });
-    if (authenticated) {
-      sessions.cn = { authenticated: true, label: authenticated.label ?? '' };
-      syncActiveAccount();
-      if (pageContext.seo) window.picoTrack?.('login_success');
-      setCnBrowserStatus('cnBrowserSuccess');
-    }
-  } catch (error) {
-    setCnBrowserStatus(errorKey(error.payload) === 'cnBrowserLocalOnly' ? 'cnBrowserLocalOnly' : 'cnBrowserError');
-  } finally {
-    clearTimeout(timer);
-    setAccountBusy(false);
-    await refreshDownload();
-  }
-});
-
-$('cn-send-code').addEventListener('click', async () => {
+on('cn-send-code', 'click', async () => {
   const mobile = $('cn-mobile').value.trim();
   const countryCode = $('cn-country').value.trim() || '86';
   setCnAccountStatus('smsSending');
   try {
-    await api('/api/account/cn/send-code', { method: 'POST', body: JSON.stringify({ mobile, countryCode }) });
+    const payload = await api('/api/account/cn/send-code', { method: 'POST', body: JSON.stringify({ mobile, countryCode }) });
+    cnMobileTicket = typeof payload.mobileTicket === 'string' ? payload.mobileTicket : '';
+    cnSsoCookies = payload.ssoCookies && typeof payload.ssoCookies === 'object' ? payload.ssoCookies : {};
+    cnTicketMobile = mobile;
     setCnAccountStatus('smsSent');
     $('cn-code').focus();
   } catch (error) {
-    setCnAccountStatus(error.payload?.upstreamCode === 7 ? 'errSmsRateLimited' : errorKey(error.payload));
+    cnMobileTicket = '';
+    cnSsoCookies = {};
+    cnTicketMobile = '';
+    setCnAccountStatus(error.payload?.upstreamCode === 7 ? 'errSmsRateLimited' : cnErrorKey(error.payload));
   }
 });
 
-$('cn-account-form').addEventListener('submit', async event => {
+on('cn-account-form', 'submit', async event => {
   event.preventDefault();
   if (accountBusy) return;
-  accountRequest += 1;
-  setAccountBusy(true);
-  invalidateDownload();
   const mobile = $('cn-mobile').value.trim();
   const countryCode = $('cn-country').value.trim() || '86';
   const code = $('cn-code').value.trim();
+  if (!cnMobileTicket || cnTicketMobile !== mobile) {
+    setCnAccountStatus('errCodeExpired');
+    return;
+  }
+  accountRequest += 1;
+  setAccountBusy(true);
+  invalidateDownload();
   setCnAccountStatus('signingIn');
   try {
-    await api('/api/account/cn/login', { method: 'POST', body: JSON.stringify({ mobile, countryCode, code }) });
+    await api('/api/account/cn/login', { method: 'POST', body: JSON.stringify({ mobile, countryCode, code, mobileTicket: cnMobileTicket, ssoCookies: cnSsoCookies }) });
     sessions.cn = { authenticated: true, label: `+${countryCode} ${mobile}` };
     syncActiveAccount();
     if (pageContext.seo) window.picoTrack?.('login_success');
     $('cn-code').value = '';
+    cnMobileTicket = '';
+    cnSsoCookies = {};
+    cnTicketMobile = '';
     setCnAccountStatus();
   } catch (error) {
-    setCnAccountStatus(error.payload?.upstreamCode === 7 ? 'errSmsRateLimited' : errorKey(error.payload));
+    setCnAccountStatus(error.payload?.upstreamCode === 7 ? 'errSmsRateLimited' : cnErrorKey(error.payload));
   } finally {
     setAccountBusy(false);
     await refreshDownload();
   }
 });
 
-$('acquire-apk').addEventListener('click', async () => {
+on('acquire-apk', 'click', async () => {
   if (!account.authenticated || accountBusy || !apk?.canAcquire || !selectedId) return;
   const itemId = selectedId;
   const packageName = selectedPackage();
@@ -1080,7 +1415,7 @@ $('acquire-apk').addEventListener('click', async () => {
   let next;
   const report = newDownloadReport(itemId, packageName);
   try {
-    next = await api('/api/download/acquire', { method: 'POST', body: JSON.stringify({ itemId, packageName, region }) });
+    next = await api('/api/download/acquire', { method: 'POST', body: JSON.stringify({ itemId, packageName, region, device }) });
     report.events.push({ stage: 'acquisition', result: 'ready' });
   } catch (error) {
     next = downloadError(error);
@@ -1093,7 +1428,7 @@ $('acquire-apk').addEventListener('click', async () => {
   renderDownload();
 });
 
-$('copy-report').addEventListener('click', async () => {
+on('copy-report', 'click', async () => {
   const report = await collectDownloadReport();
   if (!report) return;
   try {
@@ -1104,9 +1439,9 @@ $('copy-report').addEventListener('click', async () => {
     $('download-status').textContent = t('reportSaveHint');
   }
 });
-$('save-report').addEventListener('click', async () => { saveDownloadReport(await collectDownloadReport()); });
+on('save-report', 'click', async () => { saveDownloadReport(await collectDownloadReport()); });
 
-$('copy-md5').addEventListener('click', async () => {
+on('copy-md5', 'click', async () => {
   if (!apk?.available) return;
   try {
     await navigator.clipboard.writeText(apk.md5);
@@ -1116,8 +1451,37 @@ $('copy-md5').addEventListener('click', async () => {
   }
 });
 
+// A detail opened from the catalog should keep the catalog's navigation context
+// instead of claiming it was reached through search.
+function applyNavigationContext() {
+  if (new URLSearchParams(location.search).get('from') !== 'all-apps') return;
+  const basePath = locale === 'en' ? '/en' : '';
+  const breadcrumb = $('app-breadcrumb-link');
+  if (breadcrumb) {
+    const target = new URL(`${basePath}/all-apps/`, location.origin);
+    target.searchParams.set('region', region);
+    target.searchParams.set('device', device);
+    breadcrumb.href = target.href;
+    breadcrumb.textContent = locale === 'en' ? 'All apps' : '全部应用';
+  }
+  const tabbar = document.querySelector('.tabbar');
+  if (!tabbar) return;
+  const allApps = [...tabbar.querySelectorAll('a')].find(link => link.getAttribute('href')?.endsWith('/all-apps/'));
+  if (!allApps) return;
+  for (const link of tabbar.querySelectorAll('a')) {
+    link.classList.remove('active');
+    link.removeAttribute('aria-current');
+  }
+  allApps.classList.add('active');
+  allApps.setAttribute('aria-current', 'page');
+}
+
 // Account and download state must exist before the first render, so boot last.
 applyLocale();
+applyDevice();
+applyNavigationContext();
 applyRegion({ reloadDetail: false });
+syncContextLocation();
+renderHomeRegion();
 loadState();
 refreshAccount();
