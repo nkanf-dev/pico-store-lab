@@ -1,6 +1,6 @@
 import {
-  filterSearchItems, makePublicItemRequest, makeSearchRequest, parseOfficialJson, parsePublicItem,
-  parseSearchResults, storeOptionsForRegion, validatePriceFilter,
+  filterSearchItems, makePublicItemRequest, makeSearchRequest, makeSectionRequest, parseOfficialJson,
+  parsePublicItem, parseSearchResults, parseSectionPage, storeOptionsForRegion, validatePriceFilter,
 } from '@nkanf-dev/pico-store-sdk/pico';
 import catalog from '../../../contracts/v1/catalog.json' with { type: 'json' };
 import {
@@ -14,6 +14,7 @@ import {
 } from './session.js';
 import { readReleaseState, recordReleaseFailure, recordReleaseSuccess } from './store.js';
 import { recordMetric } from './metrics.js';
+import { sanitizeCookies } from './cn-sso.js';
 
 const ACCOUNT_WINDOW_SECONDS = 600;
 const LIMITS = {
@@ -27,10 +28,181 @@ function regionFrom(value) {
   return value === 'cn' ? 'cn' : 'global';
 }
 
-function storeOptions(region) {
-  return storeOptionsForRegion(regionFrom(region));
+const DEVICE_CODES = new Set(['B3110', 'A9210', 'A8A10', 'A8110', 'A7H10']);
+const DEFAULT_DEVICE = 'A9210';
+
+function deviceFrom(value, fallback = DEFAULT_DEVICE) {
+  if (!value) return fallback;
+  if (!DEVICE_CODES.has(value)) throw new DeliveryError('invalid_device', 400, { field: 'device' });
+  return value;
+}
+
+function optionalDevice(value) {
+  if (!value) return null;
+  return deviceFrom(value);
+}
+
+// Search pages carry category, rating and update metadata inside each item's
+// detail block. Keep those fields so the search filters can work client-side.
+function enrichSearchItems(payload, parsed) {
+  const details = new Map();
+  for (const block of payload?.data?.search_list ?? []) {
+    for (const raw of block?.items ?? []) {
+      const itemId = String(raw?.item_id ?? '');
+      if (!itemId) continue;
+      const detail = raw?.detail && typeof raw.detail === 'object' ? raw.detail : {};
+      const genres = String(detail.app_genres ?? raw?.genres ?? '').trim();
+      const score = Number(raw?.score ?? detail.app_score ?? detail.score);
+      const updatedAt = Number(detail.app_update_time ?? raw?.app_update_time ?? detail.update_time);
+      const currency = String(raw?.currency ?? '').trim();
+      const extra = {};
+      if (genres) extra.genres = genres;
+      if (Number.isFinite(score) && score > 0) extra.score = score;
+      if (Number.isFinite(updatedAt) && updatedAt > 0) extra.updatedAt = updatedAt;
+      if (currency) extra.currency = currency;
+      if (Object.keys(extra).length) details.set(itemId, extra);
+    }
+  }
+  return {
+    ...parsed,
+    items: parsed.items.map(item => {
+      const extra = details.get(item.itemId);
+      return extra ? { ...item, ...extra } : item;
+    }),
+  };
+}
+
+function storeOptions(region, language = null, device = null) {
+  const options = storeOptionsForRegion(regionFrom(region));
+  return {
+    ...options,
+    ...(language ? { language } : {}),
+    ...(device ? { deviceName: device } : {}),
+  };
 }
 const MAX_REQUEST_BODY_BYTES = 4 * 1024;
+
+function languageFrom(value) {
+  return value === 'en' ? 'en' : 'zh';
+}
+
+// Section IDs differ by storefront. Global's "see all" section is 51; the
+// China store has separate game (96) and app (97) sections but no single all-
+// apps section, so the list is the deduplicated union of both.
+const APP_SECTIONS = { global: [51], cn: [96, 97] };
+const APP_LIST_MAX_PAGES = 20;
+const APP_LIST_PAGE_SIZE = 100;
+const APP_LIST_CACHE_SECONDS = 300;
+const appListMemoryCache = new Map();
+const iconMemoryCache = new Map();
+const ICON_CACHE_SECONDS = 600;
+
+const CATEGORY_ALIASES = {
+  sports: ['运动', 'Sports'], simulation: ['模拟', 'Simulation'], action: ['动作', 'Action'],
+  shooter: ['射击', 'Shooting', 'Shooter'], adventure: ['冒险', 'Adventure'], puzzle: ['解谜', 'Puzzle'],
+  casual: ['休闲', 'Casual'], relax: ['放松', 'Relaxation', 'Relax'], space: ['太空', 'Space'],
+  explore: ['探索', 'Explore', 'Exploration'], role: ['角色', '角色扮演', 'Role', 'RPG'],
+  play: ['扮演', '角色扮演', 'Role-playing', 'RPG'], strategy: ['策略', 'Strategy'],
+  racing: ['竞速', 'Racing'], cartoon: ['卡通', 'Cartoon'], scifi: ['科幻', 'Sci-fi', 'Sci-Fi', 'Science Fiction'],
+  horror: ['恐怖', 'Horror'], video: ['视频', 'Video'], music: ['音乐', 'Music'], social: ['社交', 'Social'],
+  education: ['教育', 'Education'], news: ['新闻', 'News'],
+};
+
+function genresOf(item) {
+  return String(item?.genres ?? '').split(/[,、·:：]/).map(part => part.trim()).filter(Boolean);
+}
+
+function matchesCategory(item, category) {
+  if (!category || category === 'all') return true;
+  const aliases = (CATEGORY_ALIASES[category] ?? []).map(alias => alias.toLowerCase());
+  return genresOf(item).some(genre => {
+    const value = genre.toLowerCase();
+    return aliases.some(alias => value.includes(alias) || alias.includes(value));
+  });
+}
+
+function matchesText(item, terms) {
+  if (!terms.length) return true;
+  const haystack = [item.name, item.publisher, item.genres].filter(Boolean).join(' ').toLocaleLowerCase();
+  return terms.every(term => haystack.includes(term));
+}
+
+function matchesPrice(item, price) {
+  if (!price || price === 'all') return true;
+  const value = Number(item.price);
+  const free = !Number.isFinite(value) || value === 0;
+  return price === 'free' ? free : !free;
+}
+
+async function fetchSectionPageItems(sectionId, region, language, deviceName, fetchImpl = fetch) {
+  const options = { ...storeOptions(region, language), deviceName };
+  const items = [];
+  for (let page = 1; page <= APP_LIST_MAX_PAGES; page++) {
+    const spec = makeSectionRequest(sectionId, options, page, APP_LIST_PAGE_SIZE);
+    let response;
+    try {
+      response = await fetchImpl(spec.url, { ...spec, signal: AbortSignal.timeout(20000) });
+    } catch {
+      throw new DeliveryError('upstream_unreachable', 502);
+    }
+    if (!response.ok) throw new DeliveryError('upstream_unreachable', 502, { upstreamStatus: response.status });
+    let parsed;
+    try {
+      parsed = parseSectionPage(parseOfficialJson(await response.text()));
+    } catch {
+      throw new DeliveryError('upstream_invalid_response', 502);
+    }
+    items.push(...parsed.items);
+    // Some storefront pages report has_more=true but then return an empty page.
+    if (!parsed.hasMore || parsed.items.length === 0) break;
+  }
+  return items;
+}
+
+function sortAppList(items, sort, region) {
+  const byUpdated = (a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0);
+  const byName = (a, b) => a.name.localeCompare(b.name, region === 'cn' ? 'zh-CN' : 'en');
+  if (sort === 'name') return items.sort((a, b) => byName(a, b) || byUpdated(a, b));
+  if (sort === 'rating') return items.sort((a, b) => (b.score ?? -1) - (a.score ?? -1) || byUpdated(a, b));
+  return items.sort((a, b) => byUpdated(a, b) || byName(a, b));
+}
+
+async function loadAllApps(region, language = 'zh', device = DEFAULT_DEVICE, fetchImpl = fetch) {
+  const cache = typeof globalThis.caches !== 'undefined' ? globalThis.caches?.default : null;
+  const cacheKey = new Request(`https://pico-store-lab.invalid/api/apps/${region}/${language}/${device}`);
+  const memoryKey = `${region}/${language}/${device}`;
+  const memory = appListMemoryCache.get(memoryKey);
+  if (memory && Date.now() - memory.at < APP_LIST_CACHE_SECONDS * 1000) return memory.payload;
+  if (cache) {
+    const hit = await cache.match(cacheKey);
+    if (hit) {
+      try {
+        const payload = await hit.json();
+        appListMemoryCache.set(memoryKey, { at: Date.now(), payload });
+        return payload;
+      } catch { /* fall through to a fresh read */ }
+    }
+  }
+  const sections = APP_SECTIONS[region] ?? APP_SECTIONS.global;
+  const lists = await Promise.all(sections.map(id => fetchSectionPageItems(id, region, language, device, fetchImpl)));
+  const seen = new Set();
+  const items = [];
+  for (const item of lists.flat()) {
+    if (seen.has(item.itemId)) continue;
+    seen.add(item.itemId);
+    items.push(item);
+  }
+  if (!items.length) throw new DeliveryError('apps_unavailable', 502);
+  sortAppList(items, 'updated', region);
+  const payload = { region, device, total: items.length, refreshedAt: new Date().toISOString(), items };
+  appListMemoryCache.set(memoryKey, { at: Date.now(), payload });
+  if (cache) {
+    await cache.put(cacheKey, Response.json(payload, {
+      headers: { 'Cache-Control': `public, max-age=${APP_LIST_CACHE_SECONDS}` },
+    }));
+  }
+  return payload;
+}
 
 export async function checkForRelease(env, fetchImpl = fetch, now = () => new Date(), target = catalog[0]) {
   if (!env.DB) throw new Error('D1 DB binding is required for release tracking');
@@ -207,21 +379,34 @@ async function handleAccount(request, env, url) {
     await pruneSessions(db);
     if (url.pathname === '/api/account/cn/send-code') {
       await rateLimit(db, [[mobileScope, LIMITS.sendCodePerEmail], [ipScope, LIMITS.sendCodePerIp]]);
+      let sent;
       try {
-        await sendMobileVerificationCode(mobile, options);
+        sent = await sendMobileVerificationCode(mobile, options);
       } catch (error) {
         if (error instanceof DeliveryError) throw error;
         throw new DeliveryError('account_unavailable', 502);
       }
-      return apiResponse({ sent: true, region: 'cn' });
+      // The ticket is a one-time continuation token tied to this mobile number;
+      // it is not a session and cannot be used without the SMS code. The
+      // short-lived SSO cookies from the send request are not credentials
+      // either, but the official flow presents them again on quick_login.
+      return apiResponse({
+        sent: true,
+        region: 'cn',
+        mobileTicket: sent.mobileTicket,
+        ssoCookies: sent.cookies ?? {},
+      });
     }
     const code = typeof body.code === 'string' ? body.code.trim() : '';
     if (!/^[0-9]{6}$/.test(code)) throw new DeliveryError('invalid_code', 400);
+    const mobileTicket = typeof body.mobileTicket === 'string' ? body.mobileTicket : '';
+    if (!/^mobile_ticket_[A-Za-z0-9]+$/.test(mobileTicket)) throw new DeliveryError('code_expired', 400);
+    const ssoCookies = sanitizeCookies(body.ssoCookies);
     const key = await sessionKey(env);
     await rateLimit(db, [[mobileScope, LIMITS.loginPerEmail], [ipScope, LIMITS.loginPerIp]]);
     let auth;
     try {
-      auth = await loginWithMobile(mobile, code, options);
+      auth = await loginWithMobile(mobile, code, { ...options, mobileTicket, cookies: ssoCookies });
     } catch (error) {
       if (error instanceof DeliveryError) throw error;
       throw new DeliveryError('account_rejected', 401);
@@ -300,21 +485,24 @@ async function handleDownload(request, env, url) {
     if (request.headers.get('origin') !== url.origin) throw new DeliveryError('origin_rejected', 403);
     const body = await readBody(request);
     const region = regionFrom(body.region);
+    const device = optionalDevice(typeof body.device === 'string' ? body.device : '');
     const entry = await requireRegionAuth(request, env, region);
     const targetUrl = new URL('/api/download', url);
     if (typeof body.itemId === 'string') targetUrl.searchParams.set('itemId', body.itemId);
     if (typeof body.packageName === 'string') targetUrl.searchParams.set('package', body.packageName);
     targetUrl.searchParams.set('region', region);
+    if (device) targetUrl.searchParams.set('device', device);
     const target = downloadTarget(targetUrl);
-    const resolved = await resolveDownload(target, entry.auth, { acquire: true, storeOptions: storeOptions(region) });
+    const resolved = await resolveDownload(target, entry.auth, { acquire: true, storeOptions: storeOptions(region, null, device) });
     return apiResponse(apkMetadata(resolved, targetUrl));
   }
   if (request.method !== 'GET') throw new DeliveryError('method_not_allowed', 405);
   if (!env.DB) throw new DeliveryError('storage_not_configured', 503);
   const region = regionFrom(url.searchParams.get('region'));
+  const device = optionalDevice(url.searchParams.get('device'));
   const target = downloadTarget(url);
   const entry = await requireRegionAuth(request, env, region);
-  let resolved = await resolveDownload(target, entry.auth, { storeOptions: storeOptions(region) });
+  let resolved = await resolveDownload(target, entry.auth, { storeOptions: storeOptions(region, null, device) });
   if (url.pathname === '/api/download/info') {
     return apiResponse(apkMetadata(resolved, relativeUrl(url, '/api/download')));
   }
@@ -341,7 +529,7 @@ async function handleDownload(request, env, url) {
     // A signed CDN link can expire during a rollout. Re-read entitlement and
     // metadata before trying again; never turn an ownership rejection into a download.
     try {
-      resolved = await resolveDownload(target, entry.auth, { storeOptions: storeOptions(region) });
+      resolved = await resolveDownload(target, entry.auth, { storeOptions: storeOptions(region, null, device) });
       return await apkResponse(resolved.info, resolved.fileName, request);
     } catch (retryError) {
       if (!(retryError instanceof DeliveryError) || retryError.status < 500) throw retryError;
@@ -411,11 +599,21 @@ export default {
           return Response.json({ error: 'invalid_price_filter' }, { status: 400 });
         }
       }
+      let device = null;
+      if (url.searchParams.get('device')) {
+        try {
+          device = deviceFrom(url.searchParams.get('device'));
+        } catch (error) {
+          return fail(error);
+        }
+      }
       try {
-        const spec = makeSearchRequest(word, storeOptions(region));
+        const base = storeOptions(region, languageFrom(url.searchParams.get('lang')), device);
+        const spec = makeSearchRequest(word, base);
         const upstream = await fetch(spec.url, { ...spec, signal: AbortSignal.timeout(15000) });
         if (!upstream.ok) throw new Error('upstream search unavailable');
-        const parsed = parseSearchResults(parseOfficialJson(await upstream.text()));
+        const raw = parseOfficialJson(await upstream.text());
+        const parsed = enrichSearchItems(raw, parseSearchResults(raw));
         const result = priceFilter ? { ...parsed, items: filterSearchItems(parsed.items, priceFilter) } : parsed;
         return Response.json(result, {
           headers: { 'Cache-Control': 'public, max-age=60' },
@@ -424,19 +622,129 @@ export default {
         return Response.json({ error: 'search_unavailable' }, { status: 502 });
       }
     }
+    if (url.pathname === '/api/icons') {
+      if (request.method !== 'GET') return new Response('Method Not Allowed', { status: 405 });
+      const region = regionFrom(url.searchParams.get('region'));
+      const language = languageFrom(url.searchParams.get('lang'));
+      let device;
+      try {
+        device = optionalDevice(url.searchParams.get('device'));
+      } catch (error) {
+        return fail(error);
+      }
+      const requested = (url.searchParams.get('items') ?? '').split(',')
+        .map(entry => entry.split(':'))
+        .filter(([itemId, packageName]) => /^[0-9]{1,20}$/.test(itemId ?? '') &&
+          /^[A-Za-z0-9_]+(?:\.[A-Za-z0-9_]+)+$/.test(packageName ?? ''))
+        .slice(0, 50);
+      if (!requested.length) return Response.json({ icons: {} });
+      const options = storeOptions(region, language, device);
+      const icons = {};
+      await Promise.all(requested.map(async ([itemId, packageName]) => {
+        const key = `${region}|${itemId}`;
+        const cached = iconMemoryCache.get(key);
+        if (cached && Date.now() - cached.at < ICON_CACHE_SECONDS * 1000) {
+          if (cached.url) icons[itemId] = cached.url;
+          return;
+        }
+        try {
+          const spec = makePublicItemRequest(options, { itemId, packageName });
+          const upstream = await fetch(spec.url, { ...spec, signal: AbortSignal.timeout(8000) });
+          if (!upstream.ok) return;
+          const item = parsePublicItem(parseOfficialJson(await upstream.text()), { itemId, packageName }, options);
+          const iconUrl = item.iconUrl ?? null;
+          iconMemoryCache.set(key, { at: Date.now(), url: iconUrl });
+          if (iconUrl) icons[itemId] = iconUrl;
+        } catch { /* Skip an item whose detail lookup failed. */ }
+      }));
+      return Response.json({ icons }, { headers: { 'Cache-Control': 'public, max-age=600' } });
+    }
     if (url.pathname === '/api/item') {
       if (request.method !== 'GET') return new Response('Method Not Allowed', { status: 405 });
       const region = regionFrom(url.searchParams.get('region'));
       const target = { itemId: url.searchParams.get('itemId') ?? '', packageName: url.searchParams.get('package') ?? '' };
+      const language = languageFrom(url.searchParams.get('lang'));
+      let device;
       try {
-        const spec = makePublicItemRequest(storeOptions(region), target);
+        device = optionalDevice(url.searchParams.get('device'));
+      } catch (error) {
+        return fail(error);
+      }
+      const options = storeOptions(region, language, device);
+      try {
+        const spec = makePublicItemRequest(options, target);
         const upstream = await fetch(spec.url, { ...spec, signal: AbortSignal.timeout(15000) });
         if (!upstream.ok) throw new Error('upstream item unavailable');
-        return Response.json(parsePublicItem(parseOfficialJson(await upstream.text()), target, storeOptions(region)), {
+        return Response.json(parsePublicItem(parseOfficialJson(await upstream.text()), target, options), {
           headers: { 'Cache-Control': 'public, max-age=60' },
         });
       } catch {
         return Response.json({ error: 'item_unavailable' }, { status: 502 });
+      }
+    }
+    if (url.pathname === '/api/apps') {
+      if (request.method !== 'GET') return new Response('Method Not Allowed', { status: 405 });
+      const region = regionFrom(url.searchParams.get('region'));
+      const language = languageFrom(url.searchParams.get('lang'));
+      const sort = url.searchParams.get('sort') ?? 'updated';
+      if (!['updated', 'name', 'rating'].includes(sort)) {
+        return Response.json({ error: 'invalid_sort' }, { status: 400 });
+      }
+      let device;
+      try {
+        device = deviceFrom(url.searchParams.get('device'));
+      } catch (error) {
+        return fail(error);
+      }
+      const pageParam = url.searchParams.get('page');
+      const pageSizeParam = url.searchParams.get('pageSize');
+      const paginate = pageParam !== null || pageSizeParam !== null;
+      const page = Math.max(1, Number.parseInt(pageParam ?? '1', 10) || 1);
+      const pageSize = Math.min(500, Math.max(1, Number.parseInt(pageSizeParam ?? '20', 10) || 20));
+      const category = url.searchParams.get('category') ?? 'all';
+      if (category !== 'all' && !CATEGORY_ALIASES[category]) {
+        return Response.json({ error: 'invalid_category' }, { status: 400 });
+      }
+      const price = url.searchParams.get('price') ?? 'all';
+      if (!['all', 'free', 'paid'].includes(price)) {
+        return Response.json({ error: 'invalid_price_filter' }, { status: 400 });
+      }
+      const q = url.searchParams.get('q')?.trim() ?? '';
+      if (q.length > 100) return Response.json({ error: 'invalid_search_query' }, { status: 400 });
+      try {
+        const result = await loadAllApps(region, language, device);
+        let items = [...result.items];
+        if (q) {
+          const terms = q.toLocaleLowerCase().split(/\s+/).filter(Boolean);
+          let matches = items.filter(item => matchesText(item, terms));
+          if (!matches.length) {
+            // Keep the all-apps search capable of surfacing store results that
+            // are not part of the aggregated catalog.
+            const base = storeOptions(region, language, device);
+            const spec = makeSearchRequest(q, base);
+            const upstream = await fetch(spec.url, { ...spec, signal: AbortSignal.timeout(15000) });
+            if (upstream.ok) {
+              const raw = parseOfficialJson(await upstream.text());
+              const parsed = enrichSearchItems(raw, parseSearchResults(raw));
+              matches = (parsed.items ?? []).filter(item => matchesText(item, terms));
+            }
+          }
+          items = matches;
+        }
+        items = items.filter(item => matchesCategory(item, category)).filter(item => matchesPrice(item, price));
+        const sorted = sortAppList(items, sort, region);
+        const total = sorted.length;
+        const pageTotal = paginate ? Math.max(1, Math.ceil(total / pageSize)) : 1;
+        const pageItems = paginate ? sorted.slice((page - 1) * pageSize, page * pageSize) : sorted;
+        return Response.json({
+          ...result, sort, total, page: paginate ? page : 1,
+          pageSize: paginate ? pageSize : total, pageTotal, items: pageItems,
+        }, {
+          headers: { 'Cache-Control': `public, max-age=${APP_LIST_CACHE_SECONDS}` },
+        });
+      } catch (error) {
+        return fail(error instanceof DeliveryError ? error
+          : new DeliveryError('apps_unavailable', 502));
       }
     }
     if (url.pathname === '/api/releases' || url.pathname === '/api/catalog') {

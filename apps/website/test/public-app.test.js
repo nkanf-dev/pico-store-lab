@@ -173,7 +173,7 @@ test('an unowned free app is acquired only after the explicit button click', asy
     if (path.startsWith('/api/download/info')) return Response.json({ error: 'entitlement_required', canAcquire: true }, { status: 402 });
     if (path === '/api/download/acquire') {
       assert.equal(init.method, 'POST');
-      assert.deepEqual(JSON.parse(init.body), { itemId: '111', packageName: 'com.example.a', region: 'global' });
+      assert.deepEqual(JSON.parse(init.body), { itemId: '111', packageName: 'com.example.a', region: 'global', device: 'A9210' });
       return Response.json(metadata(items[0]));
     }
   });

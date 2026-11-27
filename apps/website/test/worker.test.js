@@ -87,13 +87,12 @@ async function signIn(env, email = 'player@example.com') {
 
 test('player path links the website to the repo, guide, and clients', () => {
   const html = readFileSync(new URL('../dist/index.html', import.meta.url), 'utf8');
-  const script = readFileSync(new URL('../public/app.js', import.meta.url), 'utf8');
   const english = readFileSync(new URL('../../../README.md', import.meta.url), 'utf8');
   const chinese = readFileSync(new URL('../../../README.zh-CN.md', import.meta.url), 'utf8');
   assert.match(html, /href="https:\/\/github\.com\/nkanf-dev\/pico-store-lab"/);
-  assert.match(html, /id="guide-link"/);
+  assert.match(html, /href="\/guides\/install-global-apps\/"/);
   assert.match(html, /href="\/download\/"/);
-  assert.match(script, /\/guides\/install-global-apps\//);
+  assert.match(html, /aria-label="主导航"/);
   for (const guide of [english, chinese]) {
     assert.match(guide, /<a id="player-guide"><\/a>/);
     assert.match(guide, /send-code --email you@example\.com/);
@@ -125,6 +124,16 @@ test('Virtual Desktop and sign-in guides are available in both languages', () =>
     const guide = readFileSync(new URL('guides/international-sign-in/index.html', root), 'utf8');
     const technical = readFileSync(new URL('guides/how-adaptation-works/index.html', root), 'utf8');
     assert.match(home, /Virtual Desktop/);
+    assert.match(home, /data-home-region="cn"/);
+    assert.match(home, /JigSpace/);
+    assert.match(home, /data-cn-featured="space"/);
+    assert.match(home, /data-cn-featured="other"/);
+    assert.match(home, /WPS Office/);
+    assert.match(home, /(?:推荐应用|FEATURED APPS)/);
+    assert.match(home, /class="hero-art"/);
+    assert.doesNotMatch(home, /class="art-caption"/);
+    assert.doesNotMatch(home, /PICO STORE LAB \/ OPEN SOURCE/);
+    if (!prefix) assert.match(home, /官方写着“不兼容”/);
     assert.match(app, /Virtual Desktop/);
     assert.match(app, /"price":""/);
     assert.match(app, /class="adapted-download-notice"/);
@@ -137,12 +146,80 @@ test('Virtual Desktop and sign-in guides are available in both languages', () =>
   }
 });
 
+test('standalone search, catalog and detail pages render their own controls', () => {
+  const dist = new URL('../dist/', import.meta.url);
+  for (const prefix of ['', 'en/']) {
+    const searchHtml = readFileSync(new URL(`${prefix}search/index.html`, dist), 'utf8');
+    const allAppsHtml = readFileSync(new URL(`${prefix}all-apps/index.html`, dist), 'utf8');
+    const favoritesHtml = readFileSync(new URL(`${prefix}favorites/index.html`, dist), 'utf8');
+    const guideHtml = readFileSync(new URL(`${prefix}guides/install-global-apps/index.html`, dist), 'utf8');
+    const allAppsScript = readFileSync(new URL('all-apps.js', dist), 'utf8');
+    const detailHtml = readFileSync(new URL(`${prefix}app/index.html`, dist), 'utf8');
+    assert.match(searchHtml, /id="search-form"/);
+    assert.match(searchHtml, /href="[^"]*\/all-apps\/"/);
+    assert.match(searchHtml, /id="device-select"/);
+    assert.match(searchHtml, /id="search-category"/);
+    assert.match(searchHtml, /id="search-price"/);
+    assert.match(searchHtml, /id="search-sort"/);
+    assert.match(searchHtml, /<option value="role">(?:角色|Role)<\/option>/);
+    assert.match(searchHtml, /<option value="play">(?:扮演|Play)<\/option>/);
+    assert.match(searchHtml, /<option value="news">(?:新闻|News)<\/option>/);
+    assert.doesNotMatch(searchHtml, /<label for="search-word">/);
+    assert.doesNotMatch(searchHtml, /class="price-option"/);
+    assert.match(searchHtml, /id="search-word"[^>]*placeholder="(?:应用名称|App name)"/);
+    assert.match(allAppsHtml, /id="all-apps-search-word"[^>]*placeholder="(?:应用名称|App name)"/);
+    assert.match(allAppsHtml, /id="all-apps-results"/);
+    assert.match(favoritesHtml, /id="favorites-results"/);
+    assert.match(favoritesHtml, /id="favorites-count"/);
+    assert.match(favoritesHtml, /href="[^"]*\/favorites\/"[^>]*class="active"/);
+    assert.match(favoritesHtml, /PICO STORE LAB \/ (?:收藏|FAVORITES)/);
+    assert.match(guideHtml, /<p class="eyebrow"><span class="indicator"><\/span>PICO STORE LAB \//);
+    assert.match(allAppsHtml, /<p class="eyebrow"><span class="indicator"><\/span>PICO STORE LAB \//);
+    assert.match(allAppsHtml, /id="device-select"/);
+    assert.doesNotMatch(allAppsHtml, /all-apps-filter-toggle|all-apps-filter-panel/);
+    assert.match(allAppsHtml, /class="all-apps-filter">\s*<form id="all-apps-search-form"/);
+    assert.match(allAppsHtml, /id="all-apps-search-word"/);
+    assert.ok(allAppsHtml.indexOf('id="all-apps-search-form"') < allAppsHtml.indexOf('id="all-apps-category"'), 'search form precedes filters');
+    assert.match(allAppsHtml, /id="all-apps-category"/);
+    assert.match(allAppsHtml, /id="all-apps-price"/);
+    assert.match(allAppsHtml, /id="all-apps-sort"/);
+    assert.match(allAppsHtml, /<option value="role">(?:角色|Role)<\/option>/);
+    assert.match(allAppsHtml, /<option value="play">(?:扮演|Play)<\/option>/);
+    assert.match(allAppsHtml, /<option value="news">(?:新闻|News)<\/option>/);
+    assert.match(allAppsHtml, /value="B3110"/);
+    assert.match(allAppsHtml, /value="A8A10"/);
+    assert.match(allAppsHtml, /value="A8110"/);
+    assert.match(allAppsHtml, /value="A7H10">PICO Neo3<\/option>/);
+    assert.doesNotMatch(allAppsHtml, /PICO 4 Ultra \(A9210\)/);
+    assert.ok(allAppsHtml.indexOf('id="device-select"') < allAppsHtml.indexOf('id="region-global"'), 'device control precedes store region');
+    assert.match(allAppsScript, /store-sort/);
+    assert.match(allAppsScript, /A7H10/);
+    assert.match(allAppsScript, /\/api\/apps\?/);
+    assert.match(allAppsScript, /pageSize/);
+    assert.doesNotMatch(allAppsHtml, /id="all-apps-query"/);
+    assert.doesNotMatch(allAppsHtml, /id="all-apps-pagination"/);
+    assert.doesNotMatch(allAppsHtml, /class="store-toolbar"/);
+    assert.match(detailHtml, /id="app-breadcrumb-link"/);
+    assert.match(detailHtml, /class="app-guide"/);
+  }
+});
+
 test('the page, the script, and both locales stay in agreement', () => {
-  const html = readFileSync(new URL('../dist/index.html', import.meta.url), 'utf8');
+  const dist = new URL('../dist/', import.meta.url);
+  const html = ['index.html', 'app/index.html', 'search/index.html', 'all-apps/index.html', 'apps/vrchat/index.html']
+    .map(path => readFileSync(new URL(path, dist), 'utf8')).join('\n');
   const source = readFileSync(new URL('../public/app.js', import.meta.url), 'utf8');
   const htmlIds = new Set([...html.matchAll(/id="([^"]+)"/g)].map(match => match[1]));
+  // These legacy single-page controls remain behind optional guards in app.js;
+  // the standalone /all-apps/ page owns the live catalog UI now.
+  const legacyOptional = new Set([
+    'all-apps-tools', 'all-apps-load', 'catalog-items',
+    'all-apps-query', 'all-apps-sort', 'all-apps-category', 'all-apps-price',
+    'all-apps-pagination', 'all-apps-page', 'all-apps-prev', 'all-apps-next',
+  ]);
   for (const [, name] of source.matchAll(/\$\('([^']+)'\)/g)) {
-    assert.ok(htmlIds.has(name), `app.js references #${name}, which index.html does not define`);
+    if (legacyOptional.has(name)) continue;
+    assert.ok(htmlIds.has(name), `app.js references #${name}, which no built page defines`);
   }
   const start = source.indexOf('const translations = {');
   const literal = source.slice(source.indexOf('{', start), source.indexOf('\n};', start) + 3);
@@ -288,6 +365,201 @@ test('China SMS rejects malformed mobile numbers before contacting PICO', async 
   } finally { env.DB.close(); }
 });
 
+test('China SMS uses the official SSO web flow and logs in with its mobile ticket', async () => {
+  const env = testEnv();
+  const calls = [];
+  const stub = async (url, init = {}) => {
+    const target = String(url);
+    calls.push({ url: target, body: String(init.body ?? ''), headers: init.headers ?? {} });
+    if (target.includes('/send_activation_code/v2/')) {
+      assert.match(target, /aid=264297/);
+      assert.match(calls.at(-1).body, /mix_mode=1/);
+      assert.match(calls.at(-1).body, /mobile=[0-9a-f]+/);
+      return Response.json({ error_code: 0, mobile_ticket: 'mobile_ticket_TESTTICKET123' }, {
+        headers: { 'set-cookie': 'passport_csrf_token=send-cookie; Path=/; HttpOnly' },
+      });
+    }
+    if (target.includes('/quick_login/v2/')) {
+      assert.match(calls.at(-1).body, /mobile_ticket=mobile_ticket_TESTTICKET123/);
+      assert.match(String(calls.at(-1).headers.Cookie), /passport_csrf_token=send-cookie/);
+      return Response.json({ error_code: 0, data: { user_id_str: '4711' } }, {
+        headers: { 'set-cookie': 'sessionid=web-session; Domain=.picoxr.com; Path=/; HttpOnly' },
+      });
+    }
+    throw new Error(`unexpected upstream request: ${target}`);
+  };
+  try {
+    await withFetch(stub, async () => {
+      const sent = await worker.fetch(
+        request('/api/account/cn/send-code', json({ mobile: '13000000000', countryCode: '86' })), env);
+      assert.equal(sent.status, 200);
+      const sentBody = await sent.json();
+      assert.equal(sentBody.mobileTicket, 'mobile_ticket_TESTTICKET123');
+      assert.equal(sentBody.ssoCookies.passport_csrf_token, 'send-cookie');
+
+      const login = await worker.fetch(request('/api/account/cn/login', json({
+        mobile: '13000000000', countryCode: '86', code: '123456', mobileTicket: sentBody.mobileTicket,
+        ssoCookies: sentBody.ssoCookies,
+      })), env);
+      assert.equal(login.status, 200);
+      assert.match(login.headers.get('set-cookie'), /psl_session=/);
+      const session = await worker.fetch(request('/api/account/session', {
+        headers: { cookie: login.headers.get('set-cookie').split(';')[0] },
+      }), env);
+      const state = await session.json();
+      assert.equal(state.regions.cn.authenticated, true);
+      assert.equal(state.regions.cn.label, '+86 13000000000');
+      assert.equal(calls.filter(call => call.url.includes('matrix-cn')).length, 0);
+    });
+  } finally { env.DB.close(); }
+});
+
+test('China SMS follows the SSO service redirect to collect store cookies', async () => {
+  const env = testEnv();
+  const calls = [];
+  const stub = async (url, init = {}) => {
+    const target = String(url);
+    calls.push({ url: target, headers: init.headers ?? {} });
+    if (target.includes('/send_activation_code/v2/')) {
+      return Response.json({ error_code: 0, mobile_ticket: 'mobile_ticket_REDIRECT123' });
+    }
+    if (target.includes('/quick_login/v2/')) {
+      return Response.json({
+        error_code: 0, user_id: '4711', redirect_url: 'https://store.picoxr.com/',
+      });
+    }
+    if (target === 'https://store.picoxr.com/') {
+      return new Response('', {
+        status: 200,
+        headers: { 'set-cookie': 'sessionid=store-session; Domain=.picoxr.com; Path=/; HttpOnly' },
+      });
+    }
+    throw new Error(`unexpected upstream request: ${target}`);
+  };
+  try {
+    await withFetch(stub, async () => {
+      const sent = await worker.fetch(
+        request('/api/account/cn/send-code', json({ mobile: '13000000000', countryCode: '86' })), env);
+      const sentBody = await sent.json();
+      const login = await worker.fetch(request('/api/account/cn/login', json({
+        mobile: '13000000000', countryCode: '86', code: '123456',
+        mobileTicket: sentBody.mobileTicket, ssoCookies: sentBody.ssoCookies,
+      })), env);
+      assert.equal(login.status, 200);
+      assert.ok(calls.some(call => call.url === 'https://store.picoxr.com/'));
+      const session = await worker.fetch(request('/api/account/session', {
+        headers: { cookie: login.headers.get('set-cookie').split(';')[0] },
+      }), env);
+      const state = await session.json();
+      assert.equal(state.regions.cn.authenticated, true);
+    });
+  } finally { env.DB.close(); }
+});
+
+test('China SMS login requires the ticket returned by send-code', async () => {
+  const env = testEnv();
+  try {
+    const response = await worker.fetch(request('/api/account/cn/login', json({
+      mobile: '13000000000', countryCode: '86', code: '123456',
+    })), env);
+    assert.equal(response.status, 400);
+    assert.equal((await response.json()).error, 'code_expired');
+  } finally { env.DB.close(); }
+});
+
+test('the all-apps endpoint aggregates section pages and supports time/name/rating sorts', async () => {
+  const env = testEnv();
+  const items = [
+    { item_id: 1, package_name: 'com.example.alpha', name: 'Alpha', version_code: 1, price: '0', currency: 'USD', score: 4.0, cover: { square: 'https://cdn.example/a.png' }, detail: { app_update_time: '100', app_publisher: 'A', app_genres: 'Game' } },
+    { item_id: 2, package_name: 'com.example.beta', name: 'Beta', version_code: 2, price: '5.99', currency: 'USD', score: 4.8, cover: { square: 'https://cdn.example/b.png' }, detail: { app_update_time: '200', app_publisher: 'B', app_genres: 'App' } },
+    { item_id: 3, package_name: 'com.example.gamma', name: 'Gamma', version_code: 3, price: '0', currency: 'USD', score: 0, detail: { app_update_time: '150' } },
+  ];
+  const sectionCalls = [];
+  const stub = async (url, init = {}) => {
+    const body = JSON.parse(init.body ?? '{}');
+    sectionCalls.push({ section: body.section_id, page: body.pageable?.page });
+    return Response.json({ code: 0, data: { items, has_more: false } });
+  };
+  try {
+    await withFetch(stub, async () => {
+      const updated = await worker.fetch(request('/api/apps?region=global&sort=updated'), env);
+      assert.equal(updated.status, 200);
+      const updatedBody = await updated.json();
+      assert.deepEqual(updatedBody.items.map(item => item.name), ['Beta', 'Gamma', 'Alpha']);
+      assert.equal(updatedBody.items[0].updatedAt, 200);
+      assert.deepEqual(sectionCalls, [{ section: 51, page: 1 }]);
+
+      const rating = await (await worker.fetch(request('/api/apps?region=global&sort=rating'), env)).json();
+      assert.deepEqual(rating.items.map(item => item.name), ['Beta', 'Alpha', 'Gamma']);
+
+      const named = await (await worker.fetch(request('/api/apps?region=global&sort=name'), env)).json();
+      assert.deepEqual(named.items.map(item => item.name), ['Alpha', 'Beta', 'Gamma']);
+
+      const invalid = await worker.fetch(request('/api/apps?region=global&sort=wat'), env);
+      assert.equal(invalid.status, 400);
+      assert.equal((await invalid.json()).error, 'invalid_sort');
+    });
+  } finally { env.DB.close(); }
+});
+
+test('the China all-apps list merges games and apps without duplicates', async () => {
+  const env = testEnv();
+  const seenSections = [];
+  const seenDevices = new Set();
+  const stub = async (url, init = {}) => {
+    const body = JSON.parse(init.body ?? '{}');
+    seenSections.push(body.section_id);
+    seenDevices.add(new URL(String(url)).searchParams.get('device_name'));
+    const shared = { item_id: 10, package_name: 'com.example.shared', name: 'Shared', version_code: 1, price: '0', currency: 'CNY', score: 4.1, detail: { app_update_time: '300' } };
+    const own = body.section_id === 96
+      ? { item_id: 11, package_name: 'com.example.game', name: 'Game', version_code: 1, price: '0', currency: 'CNY', score: 4.4, detail: { app_update_time: '310' } }
+      : { item_id: 12, package_name: 'com.example.app', name: 'App', version_code: 1, price: '0', currency: 'CNY', score: 4.2, detail: { app_update_time: '320' } };
+    return Response.json({ code: 0, data: { items: [shared, own], has_more: false } });
+  };
+  try {
+    await withFetch(stub, async () => {
+      const response = await worker.fetch(request('/api/apps?region=cn&sort=updated'), env);
+      assert.equal(response.status, 200);
+      const body = await response.json();
+      assert.equal(body.total, 3);
+      assert.deepEqual(body.items.map(item => item.name), ['App', 'Game', 'Shared']);
+      assert.deepEqual(seenSections.sort(), [96, 97]);
+      assert.deepEqual([...seenDevices], ['A9210']);
+    });
+  } finally { env.DB.close(); }
+});
+
+test('the all-apps endpoint validates and forwards the selected headset', async () => {
+  const env = testEnv();
+  const seenDevices = new Set();
+  const stub = async (url, init = {}) => {
+    seenDevices.add(new URL(String(url)).searchParams.get('device_name'));
+    return Response.json({ code: 0, data: { items: [{
+      item_id: 1, package_name: 'com.example.device', name: 'Device App', version_code: 1,
+      price: '0', currency: 'CNY', score: 4, detail: { app_update_time: '100' },
+    }], has_more: false } });
+  };
+  try {
+    await withFetch(stub, async () => {
+      const response = await worker.fetch(request('/api/apps?region=cn&device=A8A10&lang=zh'), env);
+      assert.equal(response.status, 200);
+      const body = await response.json();
+      assert.equal(body.device, 'A8A10');
+      assert.deepEqual([...seenDevices], ['A8A10']);
+
+      const invalid = await worker.fetch(request('/api/apps?region=cn&device=pico-unknown'), env);
+      assert.equal(invalid.status, 400);
+      assert.equal((await invalid.json()).error, 'invalid_device');
+
+      seenDevices.clear();
+      const neo3 = await worker.fetch(request('/api/apps?region=cn&device=A7H10'), env);
+      assert.equal(neo3.status, 200);
+      assert.equal((await neo3.json()).device, 'A7H10');
+      assert.deepEqual([...seenDevices], ['A7H10']);
+    });
+  } finally { env.DB.close(); }
+});
+
 test('China downloads require a China-region session independent of the global one', async () => {
   const env = testEnv();
   try {
@@ -417,6 +689,25 @@ test('an app outside our catalog downloads with its package name', async () => {
       assert.equal(metadata.packageName, 'com.example.delisted');
       assert.equal(metadata.fileName, 'com.example.delisted-972240.apk');
       assert.equal(calls.some(call => call.url.includes('/api/app/v1/download/info')), true);
+    });
+  } finally { env.DB.close(); }
+});
+
+test('download lookup and browser target carry the selected headset', async () => {
+  const env = testEnv();
+  const { stub, calls } = upstreamStub();
+  try {
+    await withFetch(stub, async () => {
+      const cookie = await signIn(env);
+      const info = await worker.fetch(
+        request(`/api/download/info?itemId=${PICO_ITEM_ID}&package=com.vrchat.android&device=A8110`, { headers: { cookie } }), env,
+      );
+      assert.equal(info.status, 200);
+      const metadata = await info.json();
+      assert.match(metadata.downloadUrl, /device=A8110/);
+      const lookup = calls.find(call => call.url.includes('/api/app/v1/download/info'));
+      assert.ok(lookup, 'download info upstream was called');
+      assert.equal(new URL(lookup.url).searchParams.get('device_name'), 'A8110');
     });
   } finally { env.DB.close(); }
 });
@@ -738,7 +1029,7 @@ function searchStub() {
       search_list: [{
         has_more: false,
         items: [
-          { item_id: '7000000000000000001', package_name: 'com.example.free', name: 'Free App', version_code: 1, price: '0', cover: { square: '' } },
+          { item_id: '7000000000000000001', package_name: 'com.example.free', name: 'Free App', version_code: 1, price: '0', cover: { square: '' }, score: 4.8, detail: { app_genres: '工具', app_update_time: 1700000000 } },
           { item_id: '7000000000000000002', package_name: 'com.example.paid', name: 'Paid App', version_code: 2, price: '68.00', cover: { square: '' } },
           { item_id: '7000000000000000003', package_name: 'com.example.alsofree', name: 'Also Free', version_code: 1, price: '0.00', cover: { square: '' } },
         ],
@@ -759,6 +1050,19 @@ test('search returns every app without a price filter', async () => {
       const body = await response.json();
       assert.deepEqual(body.items.map(item => item.packageName),
         ['com.example.free', 'com.example.paid', 'com.example.alsofree']);
+    });
+  } finally { env.DB.close(); }
+});
+
+test('search carries category, rating and update metadata for client-side filters', async () => {
+  const env = testEnv();
+  try {
+    await withFetch(searchStub(), async () => {
+      const body = await (await worker.fetch(request('/api/search?region=cn&q=demo'), env)).json();
+      const item = body.items.find(entry => entry.itemId === '7000000000000000001');
+      assert.equal(item.genres, '工具');
+      assert.equal(item.score, 4.8);
+      assert.equal(item.updatedAt, 1700000000);
     });
   } finally { env.DB.close(); }
 });

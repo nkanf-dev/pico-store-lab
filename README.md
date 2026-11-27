@@ -16,6 +16,20 @@ Use the website to save an APK to your computer, or use the Android app to downl
 
 ![PICO Store Lab homepage with app search](assets/screenshots/website-home-en.webp)
 
+## Website
+
+The website is split into standalone **Home**, **Search**, **All apps**, and **App details** pages. The selected store region and headset stay in the URL, so switching devices refreshes the catalog and download compatibility without losing your place.
+
+- **Search** finds apps by name in the selected store, then filters results by category, price and sort order.
+- **All apps** loads one page at a time for the selected headset, with 20, 50, 100 or all items per page. Category, price and sort filters are applied by the API, the next page is prefetched near the end of the current page, and every column header sorts the list.
+- **App details** shows the store metadata, supported headsets, screenshots and download panel for the selected region and device. Apps listed only for another headset still open from search.
+
+On the China storefront, JigSpace and WPS Office stay in the first and third recommendation slots; the middle card switches between **PICO TV** on PICO Space Pro and **PICO Video** on other headsets.
+
+![Search page with category, price and sort menus](assets/screenshots/website-search-filters-en.webp)
+
+![All apps page with category, price and sort filters](assets/screenshots/website-all-apps-filters-en.webp)
+
 <a id="player-guide"></a>
 ## Download and install
 

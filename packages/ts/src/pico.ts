@@ -128,6 +128,23 @@ export interface SearchItem extends StoreTarget {
 
 export interface SearchResults { items: SearchItem[]; nextId: number | null }
 
+export interface SectionApp extends StoreTarget {
+  name: string;
+  versionCode: number | null;
+  // PICO's display version (for example 26.6.0) when the section row carries it.
+  appVersion?: string;
+  price: string;
+  currency: string;
+  iconUrl: string | null;
+  score: number | null;
+  // Unix seconds from PICO's `detail.app_update_time`.
+  updatedAt: number | null;
+  publisher: string;
+  genres: string;
+}
+
+export interface SectionPage { items: SectionApp[]; hasMore: boolean }
+
 function object(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('invalid PICO response');
   return value as Record<string, unknown>;
@@ -242,6 +259,64 @@ export function parseSearchResults(response: unknown): SearchResults {
       nextId ??= group.next_id as number;
   }
   return { items, nextId };
+}
+
+export function makeSectionRequest(
+  sectionId: number, options: StoreOptions = {}, page = 1, size = 100,
+): RequestSpec {
+  if (!Number.isSafeInteger(sectionId) || sectionId <= 0) throw new Error('valid section id required');
+  if (!Number.isSafeInteger(page) || page < 1 || page > 100) throw new Error('invalid section page');
+  if (!Number.isSafeInteger(size) || size < 1 || size > 100) throw new Error('invalid section page size');
+  return {
+    url: storeUrl('/api/app/v1/section/info', options), method: 'POST',
+    headers: storeHeaders(options.language),
+    body: JSON.stringify({ section_id: sectionId, pageable: { page, size } }),
+  };
+}
+
+// Section listings use the same item shape as search, plus the release metadata
+// needed to sort a full-store list by time. Malformed entries are skipped rather
+// than failing the whole page: a storefront sometimes carries stale rows.
+export function parseSectionPage(response: unknown): SectionPage {
+  const root = object(response);
+  // The China storefront reports 110203 once a section is exhausted instead of
+  // returning an empty page. It is the end of the list, not a failed lookup.
+  if (root.code === 110203) return { items: [], hasMore: false };
+  if (root.code !== 0) throw new Error('PICO section lookup failed');
+  const data = object(root.data);
+  // PICO omits `items` entirely on a page past the end while still echoing the
+  // requested page; that is an empty page, not a malformed response.
+  const rawItems = Array.isArray(data.items) ? data.items : [];
+  const seen = new Set<string>();
+  const items: SectionApp[] = [];
+  for (const itemValue of rawItems) {
+    if (!itemValue || typeof itemValue !== 'object' || Array.isArray(itemValue)) continue;
+    const item = itemValue as Record<string, unknown>;
+    const itemId = String(item.item_id ?? item.safe_item_id ?? '');
+    const packageName = item.package_name;
+    if (!/^[0-9]{1,20}$/.test(itemId) || typeof packageName !== 'string' ||
+        !/^[A-Za-z0-9_]+(?:\.[A-Za-z0-9_]+)+$/.test(packageName) || seen.has(itemId)) continue;
+    seen.add(itemId);
+    const cover = item.cover && typeof item.cover === 'object' ? item.cover as Record<string, unknown> : null;
+    const detail = item.detail && typeof item.detail === 'object' ? item.detail as Record<string, unknown> : {};
+    const versionCode = Number(item.version_code);
+    const appVersion = String(detail.app_version ?? item.version ?? '').trim();
+    const updatedAt = Number(detail.app_update_time ?? item.app_update_time);
+    const score = Number(item.score);
+    items.push({
+      itemId, packageName, name: String(item.name || packageName),
+      versionCode: Number.isSafeInteger(versionCode) && versionCode > 0 ? versionCode : null,
+      ...(appVersion ? { appVersion } : {}),
+      price: String(item.price ?? ''),
+      currency: String(item.currency ?? ''),
+      iconUrl: parseImageUrl(cover?.square ?? item.icon),
+      score: Number.isFinite(score) && score > 0 ? score : null,
+      updatedAt: Number.isSafeInteger(updatedAt) && updatedAt > 0 ? updatedAt : null,
+      publisher: String(detail.app_publisher ?? ''),
+      genres: String(detail.app_genres ?? item.genres ?? ''),
+    });
+  }
+  return { items, hasMore: data.has_more === true };
 }
 
 export type PriceFilter = 'free' | 'paid';

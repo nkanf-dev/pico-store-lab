@@ -16,6 +16,20 @@
 
 ![PICO Store Lab 中文首页与应用搜索](assets/screenshots/website-home-zh-CN.webp)
 
+## 网页端
+
+网站拆成独立的**首页**、**搜索**、**全部应用**和**应用详情**页面。选择的商店区域和设备会保留在网址里，切换设备时目录和下载兼容性会跟着刷新，不会丢掉当前页面。
+
+- **搜索**按应用名称检索当前商店，并可按分类、价格和排序筛选结果。
+- **全部应用**按页加载所选设备对应的目录，每页可选 20、50、100 条或全部；分类、价格和排序由接口处理，接近页尾时预加载下一页，点击表头也能排序。
+- **应用详情**展示当前区域和设备对应的版本、发行商、支持头显、截图与下载面板。只在其他头显上架的应用仍可从搜索结果进入详情。
+
+国区首页固定推荐 JigSpace 与 WPS Office；中间一张在 PICO Space Pro 上显示 **PICO TV**，其他机型显示 **PICO 视频**。
+
+![带分类、价格和排序菜单的搜索页](assets/screenshots/website-search-filters-zh-CN.webp)
+
+![全部应用页，支持分类、价格和排序筛选](assets/screenshots/website-all-apps-filters-zh-CN.webp)
+
 <a id="player-guide"></a>
 ## 下载与安装
 
