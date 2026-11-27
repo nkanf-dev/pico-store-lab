@@ -42,6 +42,36 @@ function optionalDevice(value) {
   return deviceFrom(value);
 }
 
+// Search pages carry category, rating and update metadata inside each item's
+// detail block. Keep those fields so the search filters can work client-side.
+function enrichSearchItems(payload, parsed) {
+  const details = new Map();
+  for (const block of payload?.data?.search_list ?? []) {
+    for (const raw of block?.items ?? []) {
+      const itemId = String(raw?.item_id ?? '');
+      if (!itemId) continue;
+      const detail = raw?.detail && typeof raw.detail === 'object' ? raw.detail : {};
+      const genres = String(detail.app_genres ?? raw?.genres ?? '').trim();
+      const score = Number(raw?.score ?? detail.app_score ?? detail.score);
+      const updatedAt = Number(detail.app_update_time ?? raw?.app_update_time ?? detail.update_time);
+      const currency = String(raw?.currency ?? '').trim();
+      const extra = {};
+      if (genres) extra.genres = genres;
+      if (Number.isFinite(score) && score > 0) extra.score = score;
+      if (Number.isFinite(updatedAt) && updatedAt > 0) extra.updatedAt = updatedAt;
+      if (currency) extra.currency = currency;
+      if (Object.keys(extra).length) details.set(itemId, extra);
+    }
+  }
+  return {
+    ...parsed,
+    items: parsed.items.map(item => {
+      const extra = details.get(item.itemId);
+      return extra ? { ...item, ...extra } : item;
+    }),
+  };
+}
+
 function storeOptions(region, language = null, device = null) {
   const options = storeOptionsForRegion(regionFrom(region));
   return {
@@ -534,7 +564,8 @@ export default {
         const spec = makeSearchRequest(word, base);
         const upstream = await fetch(spec.url, { ...spec, signal: AbortSignal.timeout(15000) });
         if (!upstream.ok) throw new Error('upstream search unavailable');
-        const parsed = parseSearchResults(parseOfficialJson(await upstream.text()));
+        const raw = parseOfficialJson(await upstream.text());
+        const parsed = enrichSearchItems(raw, parseSearchResults(raw));
         const result = priceFilter ? { ...parsed, items: filterSearchItems(parsed.items, priceFilter) } : parsed;
         return Response.json(result, {
           headers: { 'Cache-Control': 'public, max-age=60' },

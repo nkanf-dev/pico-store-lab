@@ -44,42 +44,55 @@ function appState(app, lang) {
     supportedPlatforms: copy.platforms.join(' · '), releases: [] };
 }
 
-const CN_HOME_APPS = [
-  {
-    itemId: '2075', packageName: 'com.zmvr.mj', name: '梦境世界', nameEn: 'Dream World',
-    iconUrl: 'https://static.appstore.picovr.com/developer-platform/submission/assets/cover_art/square/2024-01-22/030bd09e7655ba16bbd4e919caff88b2.png',
+const CN_HOME_APPS = {
+  jigspace: {
+    itemId: '7677488165888163845', packageName: 'com.JigSpace.JigViewer', name: 'JigSpace', nameEn: 'JigSpace',
+    iconUrl: 'https://static.appstore.picovr.com/developer-platform/submission/assets/cover_art/square/2026-08-26/aadd4ac1f2603eb6d7082bf7126c9b1f.jpg',
     summary: {
-      zh: '国区商店的多人 VR 应用，和朋友一起探索、射击和创建场景。',
-      en: 'A social VR world from the China store for exploring and playing together.',
+      zh: '把 3D 模型和步骤说明放进空间里，适合演示、教学和产品讲解。',
+      en: 'Bring 3D models and step-by-step instructions into your space for demos and lessons.',
     },
   },
-  {
-    itemId: '7340942965126447123', packageName: 'com.lotushine.vrwordchopper', name: 'VR单词斩', nameEn: 'VR Word Slash',
-    iconUrl: 'https://static.appstore.picovr.com/developer-platform/submission/assets/cover_art/square/2024-03-06/647ed273bcc41782c2562abf0df6620a.png',
+  picoTv: {
+    itemId: '7633313726493491206', packageName: 'com.ss.android.picotv', name: 'PICO TV', nameEn: 'PICO TV',
+    iconUrl: 'https://static.appstore.picovr.com/developer-platform/submission/assets/cover_art/square/2026-05-18/e73dea24a67d41820d3eab194ca15d08.png',
     summary: {
-      zh: '在 VR 里练习单词的教育应用，适合碎片时间学习。',
-      en: 'A VR vocabulary trainer for short, focused study sessions.',
+      zh: 'PICO Space Pro 上的视频入口，聚合影视、音乐和直播内容。',
+      en: 'The video hub on PICO Space Pro, bringing films, music and live content together.',
     },
   },
-  {
-    itemId: '2209', packageName: 'com.Appnori.AllInOneSports', name: '多合一运动 VR', nameEn: 'All-in-One Sports VR',
-    iconUrl: 'https://static.appstore.picovr.com/developer-platform/submission/assets/cover_art/square/2026-11-13/22584c9c28c6b0d43d5b88acbde70ade.png',
+  picoVideo: {
+    itemId: '3159', packageName: 'com.ss.android.ttvr', name: 'PICO 视频', nameEn: 'PICO Video',
+    iconUrl: 'https://static.appstore.picovr.com/developer-platform/submission/assets/cover_art/square/2024-05-13/7fcdacf67faa451b92b6d744486976ad.png',
     summary: {
-      zh: '集合多种运动的 VR 应用，在家也能活动起来。',
-      en: 'A collection of VR sports for staying active at home.',
+      zh: '在 PICO 头显里看电影、剧集和全景视频。',
+      en: 'Watch films, series and panoramic videos on your PICO headset.',
     },
   },
-];
+  wps: {
+    itemId: '7699788148594950180', packageName: 'cn.wps.moffice_eng', name: 'WPS Office', nameEn: 'WPS Office',
+    iconUrl: 'https://static.appstore.picovr.com/developer-platform/submission/assets/cover_art/square/2026-10-27/c73382f42cc55114a7d94e67a0e88718.jpg',
+    summary: {
+      zh: '在空间里查看、编辑文档，做演示和扫描，把办公桌带进 VR。',
+      en: 'View and edit documents, present and scan in VR, with your workspace in space.',
+    },
+  },
+};
+
+function cnFeaturedCard(item, index, lang, variant = '') {
+  const href = `${localized('/app/', lang)}?itemId=${encodeURIComponent(item.itemId)}&package=${encodeURIComponent(item.packageName)}&region=cn&from=home`;
+  const name = lang === 'zh' ? item.name : item.nameEn;
+  const summary = item.summary[lang];
+  const variantAttr = variant ? ` data-cn-featured="${variant}"` : '';
+  return `<a class="featured-card"${variantAttr} href="${escape(href)}"><div class="card-top"><span class="eyebrow">0${index + 1} / ${lang === 'zh' ? '国区' : 'CHINA'}</span><img src="${escape(item.iconUrl)}" width="64" height="64" alt=""></div><h2>${escape(name)}</h2><p>${escape(summary)}</p><span class="card-link">${lang === 'zh' ? '查看应用与下载' : 'Explore & download'} <span aria-hidden="true">↗</span></span></a>`;
+}
 
 function cards(lang, region = 'global') {
-  const items = region === 'cn' ? CN_HOME_APPS : catalog;
-  return `<div class="featured-apps">${items.map((item, index) => {
-    if (region === 'cn') {
-      const href = `${localized('/app/', lang)}?itemId=${encodeURIComponent(item.itemId)}&package=${encodeURIComponent(item.packageName)}&region=cn&from=home`;
-      const name = lang === 'zh' ? item.name : item.nameEn;
-      const summary = item.summary[lang];
-      return `<a class="featured-card" href="${escape(href)}"><div class="card-top"><span class="eyebrow">0${index + 1} / ${lang === 'zh' ? '国区' : 'CHINA'}</span><img src="${escape(item.iconUrl)}" width="64" height="64" alt=""></div><h2>${escape(name)}</h2><p>${escape(summary)}</p><span class="card-link">${lang === 'zh' ? '查看应用与下载' : 'Explore & download'} <span aria-hidden="true">↗</span></span></a>`;
-    }
+  if (region === 'cn') {
+    const cn = CN_HOME_APPS;
+    return `<div class="featured-apps">${cnFeaturedCard(cn.jigspace, 0, lang)}${cnFeaturedCard(cn.picoTv, 1, lang, 'space')}${cnFeaturedCard(cn.picoVideo, 1, lang, 'other')}${cnFeaturedCard(cn.wps, 2, lang)}</div>`;
+  }
+  return `<div class="featured-apps">${catalog.map((item, index) => {
     const app = apps.find(page => page.itemId === item.itemId);
     const state = app ? appState(app, lang) : null;
     const href = app ? localized(`/apps/${app.slug}/`, lang) : `${localized('/', lang)}?itemId=${encodeURIComponent(item.itemId)}&package=${encodeURIComponent(item.packageName)}#app-details`;
@@ -171,7 +184,6 @@ function genericAppGuide(lang) {
     ],
     guide: '查看完整安装指南',
     faq: [
-      { q: '为什么这个应用不在“全部应用”里？', a: '“全部应用”按 PICO 4 Ultra 的商店兼容性生成。只支持其他头显的应用仍可通过搜索找到，并在这里查看详情。' },
       { q: '下载按钮提示没有权限怎么办？', a: '确认当前区域与账号一致；付费应用需要账号已拥有该应用，免费应用也需要先登录再下载。' },
     ],
   } : {
@@ -183,7 +195,6 @@ function genericAppGuide(lang) {
     ],
     guide: 'Read the installation guide',
     faq: [
-      { q: 'Why is this app missing from All apps?', a: 'All apps follows PICO 4 Ultra store compatibility. Apps made only for other headsets remain searchable and keep their detail page here.' },
       { q: 'What if download says I do not have permission?', a: 'Check that the region matches your account. Paid apps must already be owned; free apps still require sign-in first.' },
     ],
   };
@@ -218,7 +229,7 @@ function homeBody(lang, region = 'global') {
 
 function homeFeatured(lang, region = 'global') {
   const zh = lang === 'zh';
-  const label = region === 'cn' ? (zh ? '国区推荐' : 'CHINA FEATURED') : (zh ? '推荐应用' : 'FEATURED APPS');
+  const label = zh ? '推荐应用' : 'FEATURED APPS';
   return `<section class="section-head"><span>${label}</span><span>01 / APPS</span></section><span class="home-catalog-anchor" data-catalog-anchor aria-hidden="true"${region === 'global' ? ' id="catalog"' : ''}></span>${cards(lang, region)}`;
 }
 
@@ -226,12 +237,22 @@ function homePageBody(lang) {
   return ['global', 'cn'].map(region => `<div class="home-region" data-home-region="${region}"${region === 'cn' ? ' hidden' : ''}>${homeBody(lang, region)}${homeFeatured(lang, region)}</div>`).join('');
 }
 
+function filterMenus(lang, prefix) {
+  const zh = lang === 'zh';
+  const menuLabel = zh ? '筛选方式' : 'Filter and sort';
+  return `<div class="store-filter-bar" role="group" aria-label="${menuLabel}">
+<label class="store-filter"><select id="${prefix}-category" aria-label="${zh ? '分类' : 'Category'}"><option value="all">${zh ? '全部分类' : 'All categories'}</option></select></label>
+<label class="store-filter"><select id="${prefix}-price" aria-label="${zh ? '价格' : 'Price'}"><option value="all">${zh ? '全部价格' : 'All prices'}</option><option value="free">${zh ? '免费' : 'Free'}</option><option value="paid">${zh ? '付费' : 'Paid'}</option></select></label>
+<label class="store-filter"><select id="${prefix}-sort" aria-label="${zh ? '排序' : 'Sort'}"><option value="comprehensive">${zh ? '综合排序' : 'Recommended'}</option><option value="updated">${zh ? '最近更新' : 'Recently updated'}</option><option value="rating">${zh ? '评分优先' : 'Top rated'}</option><option value="price">${zh ? '价格从低到高' : 'Price low to high'}</option><option value="name">${zh ? '名称 A-Z' : 'Name A-Z'}</option></select></label>
+</div>`;
+}
+
 function searchPageBody(lang) {
   const zh = lang === 'zh';
   return `<header class="page-heading"><div><p class="eyebrow"><span class="indicator"></span>${zh ? 'PICO 商店 / 搜索' : 'PICO STORE / SEARCH'}</p><h1>${zh ? '搜索应用' : 'Search apps'}</h1><p>${zh ? '输入应用名称，查看商店结果，再进入应用详情页登录并下载。' : 'Enter an app name, review store results, then open a detail page to sign in and download.'}</p></div></header>
 <section class="search-panel" aria-label="${zh ? '搜索' : 'Search'}">
-  <form id="search-form" class="store-search"><label for="search-word">${zh ? '应用名称' : 'App name'}</label><div><input id="search-word" type="search" required maxlength="100" placeholder="${zh ? '例如 WPS Office、VRChat' : 'For example WPS Office, VRChat'}"><button type="submit">${zh ? '搜索' : 'Search'}</button></div></form>
-  <div class="price-filter" role="group" aria-label="${zh ? '价格筛选' : 'Price filter'}"><button type="button" class="price-option" data-price="all" aria-pressed="true">${zh ? '全部' : 'All'}</button><button type="button" class="price-option" data-price="free" aria-pressed="false">${zh ? '免费' : 'Free'}</button><button type="button" class="price-option" data-price="paid" aria-pressed="false">${zh ? '付费' : 'Paid'}</button></div>
+  <form id="search-form" class="store-search"><div><input id="search-word" type="search" required maxlength="100" aria-label="${zh ? '应用名称' : 'App name'}" placeholder="${zh ? '应用名称，例如 WPS Office、VRChat' : 'App name, e.g. WPS Office, VRChat'}"><button type="submit">${zh ? '搜索' : 'Search'}</button></div></form>
+  ${filterMenus(lang, 'search')}
   <p id="search-status" class="search-status" role="status" aria-live="polite"></p>
   <div id="search-results" class="search-results store-search-results"></div>
 </section>`;
@@ -240,6 +261,7 @@ function searchPageBody(lang) {
 function allAppsPageBody(lang) {
   const zh = lang === 'zh';
   return `<header class="page-heading all-apps-heading"><div><p class="eyebrow"><span class="indicator"></span>${zh ? 'PICO 商店 / 全部应用' : 'PICO STORE / ALL APPS'}</p><h1>${zh ? '全部应用' : 'All apps'}</h1><p>${zh ? '浏览 PICO 商店的全部应用，按最近更新排列。' : 'Browse the complete PICO store catalog, ordered by recent updates.'}</p></div><span id="all-apps-count" class="apps-total" aria-live="polite">—</span></header>
+<div class="all-apps-filter"><button type="button" id="all-apps-filter-toggle" class="filter-toggle" aria-expanded="false" aria-controls="all-apps-filter-panel">${zh ? '筛选' : 'Filters'} <span class="filter-toggle-mark" aria-hidden="true">＋</span></button><div id="all-apps-filter-panel" class="all-apps-filter-panel" hidden>${filterMenus(lang, 'all-apps')}</div></div>
 <p id="all-apps-status" class="all-apps-status" role="status" aria-live="polite">${zh ? '正在拉取商店目录…' : 'Loading the store catalog…'}</p>
 <div id="all-apps-results" class="all-apps-results store-list" hidden></div>`;
 }

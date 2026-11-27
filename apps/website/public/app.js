@@ -384,6 +384,7 @@ const storedPrice = localStorage.getItem('pico-store-price-filter');
 let priceFilter = storedPrice === 'free' || storedPrice === 'paid' ? storedPrice : 'all';
 const DEVICE_CODES = ['B3110', 'A9210', 'A8A10', 'A8110', 'A7H10'];
 const DEFAULT_DEVICE = 'A9210';
+const SPACE_PRO_VERIFIED = new Set(['com.JigSpace.JigViewer', 'cn.wps.moffice_eng']);
 const storedDevice = localStorage.getItem('pico-store-device');
 let device = DEVICE_CODES.includes(selectedQuery.get('device') || '') ? selectedQuery.get('device')
   : DEVICE_CODES.includes(storedDevice || '') ? storedDevice
@@ -706,7 +707,7 @@ function renderDetails(state) {
   const spaceProOnly = /space pro/i.test(platforms) && !/4 ultra|pico 4|neo/i.test(platforms);
   const compatibility = state.noAdaptationReason
     ? `${t('noAdaptation')}: ${state.noAdaptationReason}`
-    : spaceProOnly ? `${t('compatibility')}: ${t('spaceProOnly')}` : '';
+    : spaceProOnly && !SPACE_PRO_VERIFIED.has(state.packageName) ? `${t('compatibility')}: ${t('spaceProOnly')}` : '';
   adaptationNote.hidden = !compatibility;
   adaptationNote.textContent = compatibility;
   $('app-price').textContent = state.price !== undefined && state.price !== ''
@@ -1117,11 +1118,28 @@ function renderHomeRegion() {
     const anchor = slot.querySelector('[data-catalog-anchor]');
     if (anchor) anchor.id = slot.hidden ? '' : 'catalog';
   }
+  renderCnFeatured();
+}
+
+function renderCnFeatured() {
+  if (pageContext.page !== 'home') return;
+  const spacePro = device === 'B3110';
+  for (const card of document.querySelectorAll('.home-region[data-home-region="cn"] .featured-card')) {
+    if (card.dataset.cnFeatured) {
+      card.hidden = card.dataset.cnFeatured !== (spacePro ? 'space' : 'other');
+    }
+    const target = new URL(card.href, location.href);
+    if (target.searchParams.get('region') === 'cn') {
+      target.searchParams.set('device', device);
+      card.href = target.href;
+    }
+  }
 }
 
 function applyDevice() {
   localStorage.setItem('pico-store-device', device);
   if ($('device-select')) $('device-select').value = device;
+  renderCnFeatured();
   syncContextLocation();
 }
 

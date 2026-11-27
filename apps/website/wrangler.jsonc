@@ -5,11 +5,13 @@
   // The downloader's account flow needs `wrangler secret put SESSION_SECRET` (32+ characters).
   "assets": { "directory": "./dist", "binding": "ASSETS", "not_found_handling": "404-page", "run_worker_first": ["/", "/en/", "/apps/*", "/en/apps/*", "/guides/*", "/en/guides/*", "/download/", "/en/download/", "/about/", "/en/about/", "/api/*"] },
   "build": { "command": "npm run build:ts --prefix ../.. && npm run build" },
-  "routes": [{ "pattern": "pico.kanglives.top", "custom_domain": true }],
+  "routes": [
+    { "pattern": "pico.qn0505.cc.cd", "custom_domain": true }
+  ],
   "d1_databases": [{
     "binding": "DB",
     "database_name": "pico-store-lab-releases",
-    "database_id": "089620c4-631f-4846-846e-b557399dce04"
+    "database_id": "fea38eab-ea03-4d25-ad88-319ca23fa124"
   }],
   "triggers": { "crons": ["0 0 * * *"] }
 }

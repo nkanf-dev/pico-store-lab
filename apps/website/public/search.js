@@ -4,6 +4,7 @@ const copy = {
   en: {
     searching: 'Searching…',
     empty: 'No apps found. Try another name.',
+    filteredEmpty: 'No apps match these filters.',
     failed: 'Search is unavailable. Please try again later.',
     results: '{count} results',
     open: 'Open',
@@ -13,6 +14,7 @@ const copy = {
   'zh-CN': {
     searching: '正在搜索…',
     empty: '没有找到应用，试试其他名称。',
+    filteredEmpty: '没有符合筛选条件的应用。',
     failed: '暂时无法搜索，请稍后重试。',
     results: '找到 {count} 款应用',
     open: '打开',
@@ -38,6 +40,9 @@ let device = DEVICE_CODES.includes(params.get('device') || '') ? params.get('dev
     : DEFAULT_DEVICE;
 let priceFilter = localStorage.getItem('pico-store-price-filter');
 if (!['all', 'free', 'paid'].includes(priceFilter)) priceFilter = 'all';
+let categoryFilter = 'all';
+let sortMode = 'comprehensive';
+let searchItems = [];
 
 let catalog = [];
 try { catalog = JSON.parse($('catalog-data')?.textContent || '[]'); } catch { catalog = []; }
@@ -67,6 +72,15 @@ function priceLabel(value) {
   return region === 'cn' ? `¥${price}` : `$${price}`;
 }
 
+function genreList(value) {
+  return String(value ?? '').split(/[,、·:：]/).map(part => part.trim()).filter(Boolean);
+}
+
+function numberValue(value) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+}
+
 function renderRegion() {
   for (const [id, value] of [['region-global', 'global'], ['region-cn', 'cn']]) {
     const element = $(id);
@@ -88,12 +102,63 @@ function syncLocation() {
   history.replaceState(null, '', url);
 }
 
-function renderPrice() {
-  for (const button of document.querySelectorAll('.price-option')) {
-    const active = button.dataset.price === priceFilter;
-    button.classList.toggle('active', active);
-    button.setAttribute('aria-pressed', String(active));
+function categoryOptions() {
+  const names = new Set();
+  for (const item of searchItems) {
+    for (const genre of genreList(item.genres)) names.add(genre);
   }
+  return [...names].sort(new Intl.Collator(locale === 'zh-CN' ? 'zh-CN' : 'en', { sensitivity: 'base' }).compare);
+}
+
+function renderFilters() {
+  const category = $('search-category');
+  if (category) {
+    const names = categoryOptions();
+    if (categoryFilter !== 'all' && !names.includes(categoryFilter)) categoryFilter = 'all';
+    const all = new Option(locale === 'zh-CN' ? '全部分类' : 'All categories', 'all');
+    const options = [all, ...names.map(name => new Option(name, name))];
+    category.replaceChildren(...options);
+    category.value = categoryFilter;
+  }
+  if ($('search-price')) $('search-price').value = priceFilter;
+  if ($('search-sort')) $('search-sort').value = sortMode;
+}
+
+function priceMatches(item) {
+  if (priceFilter === 'all') return true;
+  const price = numberValue(item.price);
+  const free = price === null || price === 0;
+  return priceFilter === 'free' ? free : !free;
+}
+
+function sortedResults(items) {
+  if (sortMode === 'comprehensive') return [...items];
+  const direction = sortMode === 'name' ? 1 : sortMode === 'price' ? 1 : -1;
+  const collator = new Intl.Collator(locale === 'zh-CN' ? 'zh-CN' : 'en', { numeric: true, sensitivity: 'base' });
+  return [...items].sort((left, right) => {
+    let leftValue;
+    let rightValue;
+    if (sortMode === 'name') {
+      leftValue = String(left.name ?? '');
+      rightValue = String(right.name ?? '');
+    } else if (sortMode === 'rating') {
+      leftValue = numberValue(left.score);
+      rightValue = numberValue(right.score);
+    } else if (sortMode === 'price') {
+      leftValue = numberValue(left.price);
+      rightValue = numberValue(right.price);
+    } else {
+      leftValue = numberValue(left.updatedAt);
+      rightValue = numberValue(right.updatedAt);
+    }
+    if (leftValue == null && rightValue == null) return collator.compare(String(left.name ?? ''), String(right.name ?? ''));
+    if (leftValue == null || rightValue == null) return leftValue == null ? 1 : -1;
+    const comparison = typeof leftValue === 'string'
+      ? collator.compare(leftValue, rightValue)
+      : leftValue - rightValue;
+    if (comparison !== 0) return comparison * direction;
+    return collator.compare(String(left.name ?? ''), String(right.name ?? ''));
+  });
 }
 
 function resultCard(item) {
@@ -124,8 +189,9 @@ function resultCard(item) {
   name.textContent = item.name || item.packageName;
   const meta = document.createElement('span');
   const version = item.appVersion ? `${t('version')} ${item.appVersion}` : '';
+  const categories = genreList(item.genres).join(' · ');
   const price = priceLabel(item.price);
-  meta.textContent = [version, price].filter(Boolean).join(' · ');
+  meta.textContent = [version, categories, price].filter(Boolean).join(' · ');
   body.append(name, meta);
 
   const arrow = document.createElement('span');
@@ -136,15 +202,22 @@ function resultCard(item) {
   return link;
 }
 
-function renderResults(items) {
+function renderResults(items, filtered = false) {
   const container = $('search-results');
   container.replaceChildren();
   if (!items.length) {
-    $('search-status').textContent = t('empty');
+    $('search-status').textContent = filtered && searchItems.length ? t('filteredEmpty') : t('empty');
     return;
   }
   $('search-status').textContent = t('results').replace('{count}', String(items.length));
   for (const item of items) container.append(resultCard(item));
+}
+
+function applyFilters() {
+  const filtered = searchItems
+    .filter(item => categoryFilter === 'all' || genreList(item.genres).includes(categoryFilter))
+    .filter(priceMatches);
+  renderResults(sortedResults(filtered), true);
 }
 
 async function search() {
@@ -157,29 +230,40 @@ async function search() {
     history.replaceState(null, '', url);
   }
   try {
-    const price = priceFilter === 'all' ? '' : `&price=${priceFilter}`;
-    const response = await fetch(`/api/search?region=${region}&device=${device}&q=${encodeURIComponent(word)}${price}&lang=${locale === 'zh-CN' ? 'zh' : 'en'}`);
+    const response = await fetch(`/api/search?region=${region}&device=${device}&q=${encodeURIComponent(word)}&lang=${locale === 'zh-CN' ? 'zh' : 'en'}`);
     if (!response.ok) throw new Error('search unavailable');
     const payload = await response.json();
-    renderResults(Array.isArray(payload.items) ? payload.items : []);
+    searchItems = Array.isArray(payload.items) ? payload.items : [];
+    renderFilters();
+    applyFilters();
   } catch {
+    searchItems = [];
     $('search-results').replaceChildren();
     $('search-status').textContent = t('failed');
+    renderFilters();
   }
 }
 
 $('search-form').addEventListener('submit', event => { event.preventDefault(); search(); });
 
-for (const button of document.querySelectorAll('.price-option')) {
-  button.addEventListener('click', () => {
-    const next = ['free', 'paid'].includes(button.dataset.price) ? button.dataset.price : 'all';
-    if (next === priceFilter) return;
-    priceFilter = next;
-    localStorage.setItem('pico-store-price-filter', priceFilter);
-    renderPrice();
-    if ($('search-word').value.trim()) search();
-  });
-}
+$('search-category')?.addEventListener('change', event => {
+  categoryFilter = event.target.value || 'all';
+  applyFilters();
+});
+
+$('search-price')?.addEventListener('change', event => {
+  const next = ['free', 'paid'].includes(event.target.value) ? event.target.value : 'all';
+  priceFilter = next;
+  localStorage.setItem('pico-store-price-filter', priceFilter);
+  renderFilters();
+  if (searchItems.length || $('search-word').value.trim()) applyFilters();
+});
+
+$('search-sort')?.addEventListener('change', event => {
+  sortMode = ['updated', 'rating', 'price', 'name'].includes(event.target.value) ? event.target.value : 'comprehensive';
+  renderFilters();
+  if (searchItems.length) applyFilters();
+});
 
 for (const [id, value] of [['region-global', 'global'], ['region-cn', 'cn']]) {
   $(id)?.addEventListener('click', () => {
@@ -188,7 +272,11 @@ for (const [id, value] of [['region-global', 'global'], ['region-cn', 'cn']]) {
     localStorage.setItem('pico-store-region', region);
     renderRegion();
     syncLocation();
+    categoryFilter = 'all';
+    searchItems = [];
+    renderFilters();
     if ($('search-word').value.trim()) search();
+    else $('search-status').textContent = '';
   });
 }
 
@@ -199,12 +287,16 @@ $('device-select')?.addEventListener('change', event => {
   localStorage.setItem('pico-store-device', device);
   renderDevice();
   syncLocation();
+  categoryFilter = 'all';
+  searchItems = [];
+  renderFilters();
   if ($('search-word').value.trim()) search();
+  else $('search-status').textContent = '';
 });
 
 renderRegion();
 renderDevice();
-renderPrice();
+renderFilters();
 syncLocation();
 const initialQuery = params.get('q');
 if (initialQuery) {

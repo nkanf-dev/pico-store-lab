@@ -4,6 +4,7 @@ const copy = {
   en: {
     loading: 'Loading the store catalog…',
     empty: 'No apps are available for this store and device.',
+    filteredEmpty: 'No apps match these filters.',
     failed: 'Could not load the app list. Please try again.',
     free: 'Free',
     version: 'Version',
@@ -16,6 +17,7 @@ const copy = {
   'zh-CN': {
     loading: '正在拉取商店目录…',
     empty: '这个商店和当前设备没有可用应用。',
+    filteredEmpty: '没有符合筛选条件的应用。',
     failed: '无法加载应用列表，请稍后重试。',
     free: '免费',
     version: '版本',
@@ -62,6 +64,64 @@ function genreList(value) {
   return String(value ?? '').split(/[,、·:：]/).map(part => part.trim()).filter(Boolean);
 }
 
+const collator = new Intl.Collator(locale === 'zh-CN' ? 'zh-CN' : 'en', { numeric: true, sensitivity: 'base' });
+let categoryFilter = 'all';
+let priceFilter = 'all';
+
+function filteredApps(items) {
+  return items
+    .filter(item => categoryFilter === 'all' || genreList(item.genres).includes(categoryFilter))
+    .filter(item => {
+      if (priceFilter === 'all') return true;
+      const price = numberValue(item.price);
+      const free = price === null || price === 0;
+      return priceFilter === 'free' ? free : !free;
+    });
+}
+
+function renderFilterOptions() {
+  const category = $('all-apps-category');
+  if (category) {
+    const names = new Set();
+    for (const item of apps) for (const genre of genreList(item.genres)) names.add(genre);
+    const sorted = [...names].sort(collator.compare);
+    if (categoryFilter !== 'all' && !sorted.includes(categoryFilter)) categoryFilter = 'all';
+    const all = new Option(locale === 'zh-CN' ? '全部分类' : 'All categories', 'all');
+    category.replaceChildren(all, ...sorted.map(name => new Option(name, name)));
+    category.value = categoryFilter;
+  }
+  if ($('all-apps-price')) $('all-apps-price').value = priceFilter;
+}
+
+function syncSortSelect() {
+  const select = $('all-apps-sort');
+  if (!select) return;
+  let mode = 'comprehensive';
+  if (sortKey === 'updated' && sortDirection === 'desc') mode = 'updated';
+  else if (sortKey === 'rating' && sortDirection === 'desc') mode = 'rating';
+  else if (sortKey === 'price' && sortDirection === 'asc') mode = 'price';
+  else if (sortKey === 'name' && sortDirection === 'asc') mode = 'name';
+  select.value = mode;
+}
+
+function setSortMode(mode) {
+  if (mode === 'rating') {
+    sortKey = 'rating';
+    sortDirection = 'desc';
+  } else if (mode === 'price') {
+    sortKey = 'price';
+    sortDirection = 'asc';
+  } else if (mode === 'name') {
+    sortKey = 'name';
+    sortDirection = 'asc';
+  } else {
+    // “综合排序” and “最近更新” both use the catalog's default update order.
+    sortKey = 'updated';
+    sortDirection = 'desc';
+  }
+  render();
+}
+
 function priceLabel(item) {
   const value = String(item.price ?? '').trim();
   if (/^0+(?:\.0+)?$/.test(value)) return t('free');
@@ -80,7 +140,6 @@ function versionLabel(item) {
 let sortKey = 'updated';
 let sortDirection = 'desc';
 const DEFAULT_DIRECTION = { name: 'asc', category: 'asc', version: 'desc', rating: 'desc', price: 'asc', updated: 'desc' };
-const collator = new Intl.Collator(locale === 'zh-CN' ? 'zh-CN' : 'en', { numeric: true, sensitivity: 'base' });
 
 function numberValue(value) {
   const number = Number(value);
@@ -128,6 +187,7 @@ function selectSort(key) {
     sortKey = key;
     sortDirection = DEFAULT_DIRECTION[key] ?? 'desc';
   }
+  syncSortSelect();
   render();
 }
 
@@ -179,11 +239,11 @@ function detailHref(item) {
   return detail.href;
 }
 
-function renderRows(items) {
+function renderRows(items, emptyKey = 'empty') {
   const container = $('all-apps-results');
   container.replaceChildren();
   if (!items.length) {
-    container.append(el('p', 'store-empty', t('empty')));
+    container.append(el('p', 'store-empty', t(emptyKey)));
     $('all-apps-count').textContent = '0';
     return;
   }
@@ -251,11 +311,9 @@ function renderRows(items) {
 }
 
 function render() {
-  if (!apps.length) {
-    renderRows([]);
-    return;
-  }
-  renderRows(apps);
+  renderFilterOptions();
+  const filtered = filteredApps(apps);
+  renderRows(filtered, apps.length && !filtered.length ? 'filteredEmpty' : 'empty');
 }
 
 async function load() {
@@ -293,6 +351,12 @@ function changeContext(nextRegion, nextDevice) {
   renderDevice();
   syncLocation();
   apps = [];
+  categoryFilter = 'all';
+  priceFilter = 'all';
+  sortKey = 'updated';
+  sortDirection = 'desc';
+  renderFilterOptions();
+  if ($('all-apps-sort')) $('all-apps-sort').value = 'comprehensive';
   $('all-apps-results').replaceChildren();
   $('all-apps-results').hidden = true;
   $('all-apps-count').textContent = '—';
@@ -312,7 +376,33 @@ $('device-select')?.addEventListener('change', event => {
   changeContext(region, next);
 });
 
+$('all-apps-filter-toggle')?.addEventListener('click', () => {
+  const panel = $('all-apps-filter-panel');
+  const button = $('all-apps-filter-toggle');
+  if (!panel || !button) return;
+  const collapsed = panel.hidden;
+  panel.hidden = !collapsed;
+  button.setAttribute('aria-expanded', String(collapsed));
+  const mark = button.querySelector('.filter-toggle-mark');
+  if (mark) mark.textContent = collapsed ? '−' : '＋';
+});
+
+$('all-apps-category')?.addEventListener('change', event => {
+  categoryFilter = event.target.value || 'all';
+  render();
+});
+
+$('all-apps-price')?.addEventListener('change', event => {
+  priceFilter = ['free', 'paid'].includes(event.target.value) ? event.target.value : 'all';
+  render();
+});
+
+$('all-apps-sort')?.addEventListener('change', event => {
+  setSortMode(['updated', 'rating', 'price', 'name'].includes(event.target.value) ? event.target.value : 'comprehensive');
+});
+
 renderRegion();
 renderDevice();
+renderFilterOptions();
 syncLocation();
 load();

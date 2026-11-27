@@ -125,8 +125,11 @@ test('Virtual Desktop and sign-in guides are available in both languages', () =>
     const technical = readFileSync(new URL('guides/how-adaptation-works/index.html', root), 'utf8');
     assert.match(home, /Virtual Desktop/);
     assert.match(home, /data-home-region="cn"/);
-    assert.match(home, /Dream World|梦境世界/);
-    assert.match(home, /(?:国区推荐|CHINA FEATURED)/);
+    assert.match(home, /JigSpace/);
+    assert.match(home, /data-cn-featured="space"/);
+    assert.match(home, /data-cn-featured="other"/);
+    assert.match(home, /WPS Office/);
+    assert.match(home, /(?:推荐应用|FEATURED APPS)/);
     assert.match(app, /Virtual Desktop/);
     assert.match(app, /"price":""/);
     assert.match(app, /class="adapted-download-notice"/);
@@ -149,8 +152,18 @@ test('standalone search, catalog and detail pages render their own controls', ()
     assert.match(searchHtml, /id="search-form"/);
     assert.match(searchHtml, /href="[^"]*\/all-apps\/"/);
     assert.match(searchHtml, /id="device-select"/);
+    assert.match(searchHtml, /id="search-category"/);
+    assert.match(searchHtml, /id="search-price"/);
+    assert.match(searchHtml, /id="search-sort"/);
+    assert.doesNotMatch(searchHtml, /<label for="search-word">/);
+    assert.doesNotMatch(searchHtml, /class="price-option"/);
     assert.match(allAppsHtml, /id="all-apps-results"/);
     assert.match(allAppsHtml, /id="device-select"/);
+    assert.match(allAppsHtml, /id="all-apps-filter-toggle"/);
+    assert.match(allAppsHtml, /id="all-apps-filter-panel"[^>]*hidden/);
+    assert.match(allAppsHtml, /id="all-apps-category"/);
+    assert.match(allAppsHtml, /id="all-apps-price"/);
+    assert.match(allAppsHtml, /id="all-apps-sort"/);
     assert.match(allAppsHtml, /value="B3110"/);
     assert.match(allAppsHtml, /value="A8A10"/);
     assert.match(allAppsHtml, /value="A8110"/);
@@ -160,9 +173,6 @@ test('standalone search, catalog and detail pages render their own controls', ()
     assert.match(allAppsScript, /store-sort/);
     assert.match(allAppsScript, /A7H10/);
     assert.doesNotMatch(allAppsHtml, /id="all-apps-query"/);
-    assert.doesNotMatch(allAppsHtml, /id="all-apps-sort"/);
-    assert.doesNotMatch(allAppsHtml, /id="all-apps-category"/);
-    assert.doesNotMatch(allAppsHtml, /id="all-apps-price"/);
     assert.doesNotMatch(allAppsHtml, /id="all-apps-pagination"/);
     assert.doesNotMatch(allAppsHtml, /class="store-toolbar"/);
     assert.match(detailHtml, /id="app-breadcrumb-link"/);
@@ -995,7 +1005,7 @@ function searchStub() {
       search_list: [{
         has_more: false,
         items: [
-          { item_id: '7000000000000000001', package_name: 'com.example.free', name: 'Free App', version_code: 1, price: '0', cover: { square: '' } },
+          { item_id: '7000000000000000001', package_name: 'com.example.free', name: 'Free App', version_code: 1, price: '0', cover: { square: '' }, score: 4.8, detail: { app_genres: '工具', app_update_time: 1700000000 } },
           { item_id: '7000000000000000002', package_name: 'com.example.paid', name: 'Paid App', version_code: 2, price: '68.00', cover: { square: '' } },
           { item_id: '7000000000000000003', package_name: 'com.example.alsofree', name: 'Also Free', version_code: 1, price: '0.00', cover: { square: '' } },
         ],
@@ -1016,6 +1026,19 @@ test('search returns every app without a price filter', async () => {
       const body = await response.json();
       assert.deepEqual(body.items.map(item => item.packageName),
         ['com.example.free', 'com.example.paid', 'com.example.alsofree']);
+    });
+  } finally { env.DB.close(); }
+});
+
+test('search carries category, rating and update metadata for client-side filters', async () => {
+  const env = testEnv();
+  try {
+    await withFetch(searchStub(), async () => {
+      const body = await (await worker.fetch(request('/api/search?region=cn&q=demo'), env)).json();
+      const item = body.items.find(entry => entry.itemId === '7000000000000000001');
+      assert.equal(item.genres, '工具');
+      assert.equal(item.score, 4.8);
+      assert.equal(item.updatedAt, 1700000000);
     });
   } finally { env.DB.close(); }
 });
